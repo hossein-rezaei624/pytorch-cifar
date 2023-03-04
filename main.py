@@ -121,7 +121,7 @@ def test(epoch):
     correct = 0
     total = 0
     with torch.no_grad():
-        print("the lenght of the testloader",testloader.size)
+        print("the lenght of the testloader",len(testloader))
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
