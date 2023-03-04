@@ -52,7 +52,7 @@ testloader = torch.utils.data.DataLoader(
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
 
-'''# Model
+# Model
 print('==> Building model..')
 # net = VGG('VGG19')
 net = ResNet18()
@@ -72,7 +72,7 @@ net = ResNet18()
 net = net.to(device)
 if device == 'cuda':
     net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True'''
+    cudnn.benchmark = True
 
 if args.resume:
     # Load checkpoint.
