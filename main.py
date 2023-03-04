@@ -130,7 +130,7 @@ def test(epoch):
         loss = criterion(outputs, label)
         test_loss += loss.item()
         _, predicted = outputs.max(1)
-        correct = predicted.eq(targets).sum().item()
+        correct = predicted.eq(label).sum().item()
         print("Loss:",test_loss,"Accuracy:",correct*100)
     
     '''with torch.no_grad():
