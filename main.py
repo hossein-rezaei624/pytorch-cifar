@@ -70,9 +70,9 @@ net = ResNet18()
 # net = RegNetX_200MF()
 # net = SimpleDLA()
 net = net.to(device)
-'''if device == 'cuda':
+if device == 'cuda':
     net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True'''
+    cudnn.benchmark = True
 
 if args.resume:
     # Load checkpoint.
@@ -115,7 +115,7 @@ def train(epoch):
 checkpoint = torch.load('./checkpoint/ckpt.pth')
 net.load_state_dict(checkpoint['net'])
 print('\n\nLayer params:')
-for param in net.linear.parameters():
+for param in net.parameters():
     print(param)
 def test(epoch):
     global best_acc
