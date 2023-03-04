@@ -123,9 +123,9 @@ def test(epoch):
     count = 0
     with torch.no_grad():
         #print("the lenght of the testloader",len(testloader))
-        for batch_idx, (inputs, targets) in enumerate(testloader):
-            count +=1
-            print("count number",count)
+        for batch_idx, (inputs, targets) in enumerate(testloader[0]):
+            #count +=1
+            #print("count number",count)
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
