@@ -115,7 +115,7 @@ def train(epoch):
 checkpoint = torch.load('./checkpoint/ckpt.pth')
 net.load_state_dict(checkpoint['net'])
 print('\n\nLayer params:')
-for param in tinymodel.linear.parameters():
+for param in net.linear.parameters():
     print(param)
 def test(epoch):
     global best_acc
