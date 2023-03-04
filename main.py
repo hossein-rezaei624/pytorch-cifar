@@ -117,7 +117,7 @@ net.load_state_dict(checkpoint['net'])
 '''print('\n\nLayer params:')
 for param in net.parameters():
     print(param)'''
-print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",model.state_dict())
+print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",net.state_dict())
 
 def test(epoch):
     global best_acc
