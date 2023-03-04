@@ -87,6 +87,7 @@ class ResNet(nn.Module):
         print('\n\nWeight and Bias parameters:')
         for param in self.linear.parameters():
             print(param)
+            print("The shape:",param.shape)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
