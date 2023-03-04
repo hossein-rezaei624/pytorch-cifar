@@ -123,7 +123,7 @@ def test(epoch):
     count = 0
     with torch.no_grad():
         img, label = testset[0]
-        img, label = img.to(device), label.to(device)
+        img = img.to(device)
         outputs = net(img)
         loss = criterion(outputs, label)
         test_loss += loss.item()
