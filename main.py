@@ -149,6 +149,6 @@ def test(epoch):
 
 
 for epoch in range(start_epoch, start_epoch+200):
-    train(epoch)
+    #train(epoch)
     test(epoch)
     scheduler.step()
