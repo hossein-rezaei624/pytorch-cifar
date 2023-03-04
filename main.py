@@ -125,7 +125,7 @@ def test(epoch):
         #img, label = testset[0]
         img, label = next(iter(testloader))
         print("img shape:",img.shape,"label",label)
-        img = img.to(device)
+        img, label = img.to(device), label.to(device)
         outputs = net(img)
         loss = criterion(outputs, label)
         test_loss += loss.item()
