@@ -118,7 +118,7 @@ print('\n\nLayer params:')
 tempp = 0
 for param in net.parameters():
     tempp +=1
-    if (tempp==62):
+    if (tempp==62 or tempp==61):
       print(param)
       print("the shapeeeeeee",param.shape)
 #print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",net.state_dict())
