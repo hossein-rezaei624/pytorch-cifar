@@ -118,10 +118,11 @@ print('\n\nLayer params:')
 tempp = 0
 for param in net.parameters():
     tempp +=1
-    print(param)
-    print("the shapeeeeeee",param.shape)
+    if (tempp==62):
+      print(param)
+      print("the shapeeeeeee",param.shape)
 #print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",net.state_dict())
-print("temppppppppp",tempp)
+#print("temppppppppp",tempp)
 def test(epoch):
     global best_acc
     net.eval()
