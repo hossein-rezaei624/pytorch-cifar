@@ -122,6 +122,16 @@ def test(epoch):
     total = 0
     count = 0
     with torch.no_grad():
+        img, label = testset[0]
+        img, label = img.to(device), label.to(device)
+        outputs = net(img)
+        loss = criterion(outputs, label)
+        test_loss += loss.item()
+        _, predicted = outputs.max(1)
+        correct = predicted.eq(targets).sum().item()
+        print("Loss:",test_loss,"Accuracy:",correct*100)
+    
+    '''with torch.no_grad():
         #print("the lenght of the testloader",len(testloader))
         for batch_idx, (inputs, targets) in enumerate(testloader[0]):
             #count +=1
@@ -150,7 +160,7 @@ def test(epoch):
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
         torch.save(state, './checkpoint/ckpt.pth')
-        best_acc = acc
+        best_acc = acc'''
 
 test(epoch=1)
 '''for epoch in range(start_epoch, start_epoch+200):
