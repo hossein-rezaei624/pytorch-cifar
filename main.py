@@ -52,7 +52,7 @@ testloader = torch.utils.data.DataLoader(
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
 
-# Model
+'''# Model
 print('==> Building model..')
 # net = VGG('VGG19')
 net = ResNet18()
@@ -72,7 +72,7 @@ net = ResNet18()
 net = net.to(device)
 if device == 'cuda':
     net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True
+    cudnn.benchmark = True'''
 
 if args.resume:
     # Load checkpoint.
@@ -112,7 +112,8 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-
+checkpoint = torch.load('./checkpoint/ckpt.pth')
+net.load_state_dict(checkpoint['net'])
 def test(epoch):
     global best_acc
     net.eval()
