@@ -114,9 +114,9 @@ def train(epoch):
 
 checkpoint = torch.load('./checkpoint/ckpt.pth')
 net.load_state_dict(checkpoint['net'])
-print('\n\nLayer params:')
+'''print('\n\nLayer params:')
 for param in net.parameters():
-    print(param)
+    print(param)'''
 def test(epoch):
     global best_acc
     net.eval()
