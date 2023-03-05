@@ -47,7 +47,7 @@ trainloader = torch.utils.data.DataLoader(
 testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
-    testset, batch_size=1, shuffle=False, num_workers=2)
+    testset, batch_size=100, shuffle=False, num_workers=2)
 print("lennnnnnnnnnn of the testloader",len(testloader))
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
@@ -141,10 +141,10 @@ def test(epoch):
     with torch.no_grad():
         #img, label = testset[0]
         
-        for i in range(324):
-          img, label = next(iter(testloader))
-        #img, label = next(iter(testloader))
-        print("img shape:",img.shape,"label",label)
+        '''for i in range(324):
+          img, label = next(iter(testloader))'''
+        img, label = next(iter(testloader))
+        print("img shape:",img.shape,img[0].shape,"label",label)
         img, label = img.to(device), label.to(device)
         outputs, rep = net(img)
         loss = criterion(outputs, label)
