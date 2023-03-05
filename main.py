@@ -149,23 +149,29 @@ def test(epoch):
         correct = predicted.eq(label).sum().item()
         print("Loss:",test_loss,"Accuracy:",correct*100)
         print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
-        a = rep[0,:]
-        b = weights_[0,:]
-        #print("aaaaa shape",a.shape)
-        #print("bbbbbbbbb shape",b.shape)
-        final = torch.matmul(a,b)+bias_[0]
-        print("final",final)
         
-        inner_product = (a * b).sum(dim=0)
-        #print(inner_product)
-        a_norm = a.pow(2).sum(dim=0).pow(0.5)
-        #print(a_norm)
-        b_norm = b.pow(2).sum(dim=0).pow(0.5)
-        cos = inner_product / (a_norm * b_norm)
-        #print(cos)
-        angle = torch.acos(cos)
+        for i in range(10):
+          
+          a = rep[i,:]
+          b = weights_[i,:]
+          #print("aaaaa shape",a.shape)
+          #print("bbbbbbbbb shape",b.shape)
+          final = torch.matmul(a,b)+bias_[i]
+          print("final",i,":",final)
 
-        print(angle*57.2958)
+          inner_product = (a * b).sum(dim=0)
+          #print(inner_product)
+          a_norm = a.pow(2).sum(dim=0).pow(0.5)
+          #print(a_norm)
+          b_norm = b.pow(2).sum(dim=0).pow(0.5)
+          cos = inner_product / (a_norm * b_norm)
+          #print(cos)
+          angle = torch.acos(cos)
+
+          print("The angle with the weights of the class",i," is:",angle*57.2958)
+        #//////////////////////////////////////////////////
+        
+        
     
     '''with torch.no_grad():
         #print("the lenght of the testloader",len(testloader))
