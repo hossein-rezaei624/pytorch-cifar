@@ -184,8 +184,8 @@ def test(epoch):
           print("The angle with the weights of the class",i," is:",angle*57.2958)
           
           
-        print(img[0][0])
-        plt.imshow(img[0].permute(1,2,0).cpu().numpy()*255.0.astype(np.uint8))
+        #print(img[0][0])
+        plt.imshow(np.clip(img[0].permute(1,2,0).cpu().numpy()), 0, 1)
         plt.show
         #//////////////////////////////////////////////////
         
