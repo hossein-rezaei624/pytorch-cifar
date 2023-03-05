@@ -139,7 +139,9 @@ def test(epoch):
     count = 0
     with torch.no_grad():
         #img, label = testset[0]
-        xx, yy = next(iter(testloader))
+        
+        for i in range(100):
+          xx, yy = next(iter(testloader))
         img, label = next(iter(testloader))
         print("img shape:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)
