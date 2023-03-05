@@ -155,7 +155,8 @@ def test(epoch):
         correct = predicted.eq(label).sum().item()
         print("Loss:",test_loss,"Accuracy:",correct*100)
         print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
-        mm_ = torch.nn.Softmax(dim=0)
+        print("manual shape",(torch.matmul(rep,weights_.transpose(0,1))+bias_).shape)
+        mm_ = torch.nn.Softmax(dim=-1)
         output__ = mm_(torch.matmul(rep,weights_.transpose(0,1))+bias_)
         print(output__)
         
