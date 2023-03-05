@@ -15,7 +15,7 @@ from models import *
 from utils import progress_bar
 
 import numpy as np
-from matplotlib import pyplot as plt
+
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
