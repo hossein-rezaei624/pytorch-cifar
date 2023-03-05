@@ -151,6 +151,8 @@ def test(epoch):
         print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
         a = rep[0,:]
         b = weights_[:,0]
+        print("aaaaa",a)
+        print("bbbbbbbbb",b)
         final = torch.matmul(a,b)+bias_
         print("final",final)
     
