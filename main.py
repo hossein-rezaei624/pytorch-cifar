@@ -153,7 +153,7 @@ def test(epoch):
         b = weights_[0,:]
         print("aaaaa shape",a.shape)
         print("bbbbbbbbb shape",b.shape)
-        final = torch.matmul(a,b)+bias_
+        final = torch.matmul(a,b)+bias_[0]
         print("final",final)
     
     '''with torch.no_grad():
