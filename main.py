@@ -1,4 +1,6 @@
 '''Train CIFAR10 with PyTorch.'''
+%matplotlib inline
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
