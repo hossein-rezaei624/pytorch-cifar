@@ -185,7 +185,7 @@ def test(epoch):
           
           
         #print(img[0][0].shape)
-        plt.imshow(img[0].permute(1,2,0).cpu().numpy()*255.0)
+        plt.imshow(img[0].permute(1,2,0).cpu().numpy()*255.0.astype(np.uint8))
         plt.show
         #//////////////////////////////////////////////////
         
