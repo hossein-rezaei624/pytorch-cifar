@@ -140,9 +140,9 @@ def test(epoch):
     with torch.no_grad():
         #img, label = testset[0]
         
-        for i in range(100):
-          xx, yy = next(iter(testloader))
-        img, label = next(iter(testloader))
+        '''for i in range(100):
+          xx, yy = next(iter(testloader))'''
+        img, label = next(next(iter(testloader)))
         print("img shape:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)
         outputs, rep = net(img)
