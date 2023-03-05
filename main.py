@@ -150,9 +150,9 @@ def test(epoch):
         print("Loss:",test_loss,"Accuracy:",correct*100)
         print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
         a = rep[0,:]
-        b = weights_[:,0]
-        print("aaaaa",a)
-        print("bbbbbbbbb",b)
+        b = weights_[0,:]
+        print("aaaaa shape",a.shape)
+        print("bbbbbbbbb shape",b.shape)
         final = torch.matmul(a,b)+bias_
         print("final",final)
     
