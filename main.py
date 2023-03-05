@@ -148,7 +148,7 @@ def test(epoch):
         _, predicted = outputs.max(1)
         correct = predicted.eq(label).sum().item()
         print("Loss:",test_loss,"Accuracy:",correct*100)
-        print(torch.matmul(rep,weights_.transpose(0,1))+bias_)
+        print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
     
     '''with torch.no_grad():
         #print("the lenght of the testloader",len(testloader))
