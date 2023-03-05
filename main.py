@@ -116,11 +116,18 @@ checkpoint = torch.load('./checkpoint/ckpt.pth')
 net.load_state_dict(checkpoint['net'])
 print('\n\nLayer params:')
 tempp = 0
+weights_ = torch.zeros((512,10))
+bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
-    if (tempp==62 or tempp==61):
+    if (tempp==61):
       print(param)
       print("the shapeeeeeee",param.shape)
+      weights_ = param
+    if (tempp==62):
+      print(param)
+      print("the shapeeeeeee",param.shape)
+      bias_ = param
 #print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",net.state_dict())
 #print("temppppppppp",tempp)
 def test(epoch):
@@ -135,12 +142,13 @@ def test(epoch):
         img, label = next(iter(testloader))
         print("img shape:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)
-        outputs = net(img)
+        outputs, rep = net(img)
         loss = criterion(outputs, label)
         test_loss += loss.item()
         _, predicted = outputs.max(1)
         correct = predicted.eq(label).sum().item()
         print("Loss:",test_loss,"Accuracy:",correct*100)
+        print(torch.matmul(rep,weights_)+bias_)
     
     '''with torch.no_grad():
         #print("the lenght of the testloader",len(testloader))
