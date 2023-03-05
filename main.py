@@ -145,7 +145,7 @@ def test(epoch):
           img, label = next(iter(testloader))'''
         img, label = next(iter(testloader))
         print("img shape:",img.shape,img[0].shape,"label",label)
-        img, label = img[11].view((1,3,32,32)), label[11].view((1))
+        img, label = img[10].view((1,3,32,32)), label[10].view((1))
         print("img shapeeeeeee:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)
         outputs, rep = net(img)
@@ -155,6 +155,9 @@ def test(epoch):
         correct = predicted.eq(label).sum().item()
         print("Loss:",test_loss,"Accuracy:",correct*100)
         print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
+        mm_ = torch.nn.Softmax(dim=0)
+        output__ = mm_(torch.matmul(rep,weights_.transpose(0,1))+bias_)
+        print(output__)
         
         for i in range(10):
           
