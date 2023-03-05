@@ -151,10 +151,21 @@ def test(epoch):
         print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
         a = rep[0,:]
         b = weights_[0,:]
-        print("aaaaa shape",a.shape)
-        print("bbbbbbbbb shape",b.shape)
+        #print("aaaaa shape",a.shape)
+        #print("bbbbbbbbb shape",b.shape)
         final = torch.matmul(a,b)+bias_[0]
         print("final",final)
+        
+        inner_product = (a * b).sum(dim=0)
+        #print(inner_product)
+        a_norm = a.pow(2).sum(dim=0).pow(0.5)
+        #print(a_norm)
+        b_norm = b.pow(2).sum(dim=0).pow(0.5)
+        cos = inner_product / (a_norm * b_norm)
+        #print(cos)
+        angle = torch.acos(cos)
+
+        print(angle*57.2958)
     
     '''with torch.no_grad():
         #print("the lenght of the testloader",len(testloader))
