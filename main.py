@@ -152,7 +152,7 @@ def test(epoch):
         
         for i in range(10):
           
-          a = rep[i,:]
+          a = rep[0,:]
           b = weights_[i,:]
           #print("aaaaa shape",a.shape)
           #print("bbbbbbbbb shape",b.shape)
