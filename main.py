@@ -1,6 +1,4 @@
 '''Train CIFAR10 with PyTorch.'''
-%matplotlib inline
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -187,7 +185,7 @@ def test(epoch):
           
           
         #print(img[0][0].shape)
-        plt.imshow(img[0].permute(1,2,0).cpu(), cmap="gray")
+        plt.imshow(img[0].permute(1,2,0).cpu().numpy()*255.0)
         plt.show
         #//////////////////////////////////////////////////
         
