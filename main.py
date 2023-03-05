@@ -14,6 +14,9 @@ import argparse
 from models import *
 from utils import progress_bar
 
+import numpy as np
+from matplotlib import pyplot as plt
+
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -179,6 +182,9 @@ def test(epoch):
           angle = torch.acos(cos)
 
           print("The angle with the weights of the class",i," is:",angle*57.2958)
+          
+          
+          plt.imshow(img)
         #//////////////////////////////////////////////////
         
         
