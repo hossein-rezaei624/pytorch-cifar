@@ -104,13 +104,13 @@ class ResNet(nn.Module):
         out = self.layer3(out)
         out = self.layer4(out)
         out = F.avg_pool2d(out, 4)
-        out = out.view(out.size(0), -1)
-        print("The representation:",out)
-        print("The shape of the representation:",out.shape)
-        out = self.linear(out)
+        out1 = out.view(out.size(0), -1)
+        print("The representation:",out1)
+        print("The shape of the representation:",out1.shape)
+        out = self.linear(out1)
         print("last layer output:",out)
         print("The shape of the last layer output:",out.shape)
-        return out
+        return out, out1
 
 
 def ResNet18():
