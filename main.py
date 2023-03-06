@@ -147,7 +147,7 @@ def test(epoch):
         
         '''for i in range(324):
           img, label = next(iter(testloader))'''
-        img, label = next(iter(trainloader))
+        img, label = next(iter(testloader))
         print("img shape:",img.shape,img[0].shape,"label",label)
         img, label = img[0].view((1,3,32,32)), label[0].view((1))
         print("img shapeeeeeee:",img.shape,"label",label)
@@ -186,7 +186,7 @@ def test(epoch):
           
           
         #print(img[0][0])
-        plt.imsave("./image.png",(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 255.0)).astype(np.uint8))
+        plt.imsave("./image.png",(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1)*255.0).astype(np.uint8))
         #print(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).max(),np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).min())
         #plt.show()
         #//////////////////////////////////////////////////
