@@ -149,7 +149,7 @@ def test(epoch):
           img, label = next(iter(testloader))'''
         img, label = next(iter(testloader))
         print("img shape:",img.shape,img[0].shape,"label",label)
-        img, label = img[0].view((1,3,32,32)), label[0].view((1))
+        img, label = img[1].view((1,3,32,32)), label[1].view((1))
         print("img shapeeeeeee:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)
         outputs, rep = net(img)
