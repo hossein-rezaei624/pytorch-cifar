@@ -187,9 +187,10 @@ def test(epoch):
           
         #print(img[0][0])
         print("ggggggggggggggggg",(img[0].permute(1,2,0).cpu().numpy()).max(),(img[0].permute(1,2,0).cpu().numpy()).min())
-        aa_ = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).mean())/((img[0].permute(1,2,0).cpu().numpy()).std()))*255.0).astype(np.uint8)))
+        #aa_ = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).mean())/((img[0].permute(1,2,0).cpu().numpy()).std()))*255.0).astype(np.uint8)))
+        aa_ = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).min())/((img[0].permute(1,2,0).cpu().numpy()).max()-(img[0].permute(1,2,0).cpu().numpy()).min()))*255.0).astype(np.uint8)))
         #plt.imsave("./image.png",(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1)*255.0).astype(np.uint8))
-        plt.imsave("./image.png", aa_, cmap="gray")
+        plt.imsave("./image.png", aa_)
         #print(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).max(),np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).min())
         #plt.show()
         #//////////////////////////////////////////////////
