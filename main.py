@@ -147,7 +147,7 @@ def test(epoch):
         
         '''for i in range(324):
           img, label = next(iter(testloader))'''
-        img, label = next(iter(trainloader))
+        img, label = next(iter(testloader))
         print("img shape:",img.shape,img[0].shape,"label",label)
         img, label = img[98].view((1,3,32,32)), label[98].view((1))
         print("img shapeeeeeee:",img.shape,"label",label)
