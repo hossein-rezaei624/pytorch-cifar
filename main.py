@@ -152,6 +152,7 @@ def test(epoch):
         img, label = img[91].view((1,3,32,32)), label[91].view((1))
         print("img shapeeeeeee:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)
+        img = img.rotate(90)
         outputs, rep = net(img)
         loss = criterion(outputs, label)
         test_loss += loss.item()
