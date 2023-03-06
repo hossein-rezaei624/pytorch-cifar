@@ -153,7 +153,7 @@ def test(epoch):
         print("img shapeeeeeee:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)
         #img = img.rotate(90)
-        ##img = torchvision.transforms.functional.rotate(img, 90)
+        img = torchvision.transforms.functional.rotate(img, 90)
         outputs, rep = net(img)
         loss = criterion(outputs, label)
         test_loss += loss.item()
