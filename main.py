@@ -102,37 +102,42 @@ def train(epoch):
         outputs, rep_1, weights_1, bias_1 = net(inputs)
         #print("the labellll:", targets, targets.shape, targets[0])
         ###print("outputs.shape", outputs.shape,"rep_1.shape", rep_1.shape, "weights_1.shape",weights_1.shape, "bias_1.shape",bias_1.shape, "inputs.shape",inputs.shape)
-        angle = []
-        for i in range(10):
-          
-          a = rep_1[0,:]
-          b = weights_1[i,:]
-          #print("aaaaa shape",a.shape)
-          #print("bbbbbbbbb shape",b.shape)
-          final = torch.matmul(a,b)+bias_1[i]
-          #print("final",i,":",final)
+        temp_1 = []
+        sum_ = []
+        for j in range(128):
+          angle = []  
+          for i in range(10):
 
-          inner_product = (a * b).sum(dim=0)
-          #print(inner_product)
-          a_norm = a.pow(2).sum(dim=0).pow(0.5)
-          #print(a_norm)
-          b_norm = b.pow(2).sum(dim=0).pow(0.5)
-          cos = inner_product / (a_norm * b_norm)
-          #print(cos)
-          angle.append(torch.acos(cos)*57.2958)
+            a = rep_1[j,:]
+            b = weights_1[i,:]
+            #print("aaaaa shape",a.shape)
+            #print("bbbbbbbbb shape",b.shape)
+            final = torch.matmul(a,b)+bias_1[i]
+            #print("final",i,":",final)
 
-          #print("The angle with the weights of the class",i," is:",angle*57.2958)
-        print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
-        
-        temp_1 = angle[targets[0]]
-        ##print("temp_1",temp_1)
-        del angle[targets[0]]
-        ##print("afterrr",angle)
-        sum_ = sum(angle)
-        ##print("sum_",sum_)
-        #print("ddd",0.1*temp_1,"aaa",(1000/sum_))
-        
-        loss = criterion(outputs, targets) + ((0.01*temp_1) + (1000/sum_))
+            inner_product = (a * b).sum(dim=0)
+            #print(inner_product)
+            a_norm = a.pow(2).sum(dim=0).pow(0.5)
+            #print(a_norm)
+            b_norm = b.pow(2).sum(dim=0).pow(0.5)
+            cos = inner_product / (a_norm * b_norm)
+            #print(cos)
+            angle.append(torch.acos(cos)*57.2958)
+
+            #print("The angle with the weights of the class",i," is:",angle*57.2958)
+          #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
+
+          temp_1.append(angle[targets[j]])
+          ##print("temp_1",temp_1)
+          del angle[targets[0]]
+          ##print("afterrr",angle)
+          sum_.append(sum(angle))
+          ##print("sum_",sum_)
+          #print("ddd",0.1*temp_1,"aaa",(1000/sum_))
+        temp_2 = sum(temp_1)
+        sum_1 = sum(sum_)
+        print("jjjjjjjjjjjj",0.0001*temp_2,"hhhhhhhhh",10000000/sum_1)
+        loss = criterion(outputs, targets) + ((0.0001*temp_2) + (10000000/sum_1))
         loss.backward()
         optimizer.step()
 
