@@ -99,7 +99,31 @@ def train(epoch):
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs = net(inputs)
+        outputs, rep_1, weights_1, bias_1 = net(inputs)
+        
+        for i in range(10):
+          
+          a = rep_1[0,:]
+          b = weights_1[i,:]
+          #print("aaaaa shape",a.shape)
+          #print("bbbbbbbbb shape",b.shape)
+          final = torch.matmul(a,b)+bias_1[i]
+          #print("final",i,":",final)
+
+          inner_product = (a * b).sum(dim=0)
+          #print(inner_product)
+          a_norm = a.pow(2).sum(dim=0).pow(0.5)
+          #print(a_norm)
+          b_norm = b.pow(2).sum(dim=0).pow(0.5)
+          cos = inner_product / (a_norm * b_norm)
+          #print(cos)
+          angle = torch.acos(cos)
+
+          print("The angle with the weights of the class",i," is:",angle*57.2958)
+        
+        
+        
+        
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
