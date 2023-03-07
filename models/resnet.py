@@ -108,6 +108,11 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
+        print('\n\nWeightttt and Bias parameters:')
+        for param in self.linear.parameters():
+            print(param)
+            print("The shape:",param.shape)
+        
         return out
 
 
