@@ -109,7 +109,7 @@ class ResNet(nn.Module):
         out1 = out.view(out.size(0), -1)
         out = self.linear(out1)
         
-        print('\n\nWeightttt and Bias parameters:')
+        ###print('\n\nWeightttt and Bias parameters:')
         weights_ = torch.zeros((512,10))
         bias_ = torch.zeros((10))
         count = 0
