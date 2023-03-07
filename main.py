@@ -122,7 +122,7 @@ def train(epoch):
           angle.append(torch.acos(cos)*57.2958)
 
           #print("The angle with the weights of the class",i," is:",angle*57.2958)
-        ##print("the angle isssss:", angle)
+        print("the angle isssss:", angle, "\n the label",angle[targets[0]])
         
         temp_1 = angle[targets[0]]
         ##print("temp_1",temp_1)
