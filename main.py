@@ -104,6 +104,7 @@ def train(epoch):
         ###print("outputs.shape", outputs.shape,"rep_1.shape", rep_1.shape, "weights_1.shape",weights_1.shape, "bias_1.shape",bias_1.shape, "inputs.shape",inputs.shape)
         temp_1 = []
         sum_ = []
+        print("representation:",rep_1[80,:],rep_1.shape)
         for j in range(128):
           angle = []  
           for i in range(10):
