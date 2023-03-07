@@ -84,10 +84,10 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.linear = nn.Linear(512*block.expansion, num_classes)
         
-        print('\n\nWeight and Bias parameters:')
+        '''print('\n\nWeight and Bias parameters:')
         for param in self.linear.parameters():
             print(param)
-            print("The shape:",param.shape)
+            print("The shape:",param.shape)'''
         
         
 
@@ -106,14 +106,23 @@ class ResNet(nn.Module):
         out = self.layer3(out)
         out = self.layer4(out)
         out = F.avg_pool2d(out, 4)
-        out = out.view(out.size(0), -1)
-        out = self.linear(out)
-        print('\n\nWeightttt and Bias parameters:')
-        for param in self.linear.parameters():
-            print(param)
-            print("The shape:",param.shape)
+        out1 = out.view(out.size(0), -1)
+        out = self.linear(out1)
         
-        return out
+        print('\n\nWeightttt and Bias parameters:')
+        weights_ = torch.zeros((512,10))
+        bias_ = torch.zeros((10))
+        count = 0
+        for param in self.linear.parameters():
+            count += 1
+            #print(param)
+            #print("The shape:",param.shape)
+            if (count == 1):
+                weights_ = param
+            if (count == 2):
+                bias_ = param
+        
+        return out, out1, weights_, bias_
 
 
 def ResNet18():
