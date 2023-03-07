@@ -100,9 +100,10 @@ def train(epoch):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs, rep_1, weights_1, bias_1 = net(inputs)
+        print("the labellll:", targets, targets.shape )
         print("outputs.shape", outputs.shape,"rep_1.shape", rep_1.shape, "weights_1.shape",weights_1.shape, "bias_1.shape",bias_1.shape, "inputs.shape",inputs.shape)
         
-        '''for i in range(10):
+        for i in range(10):
           
           a = rep_1[0,:]
           b = weights_1[i,:]
@@ -120,7 +121,7 @@ def train(epoch):
           #print(cos)
           angle = torch.acos(cos)
 
-          #print("The angle with the weights of the class",i," is:",angle*57.2958)'''
+          #print("The angle with the weights of the class",i," is:",angle*57.2958)
         
         
         
