@@ -100,7 +100,7 @@ def train(epoch):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs, rep_1, weights_1, bias_1 = net(inputs)
-        #print("the labellll:", targets, targets.shape )
+        print("the labellll:", targets, targets.shape, targets[0])
         print("outputs.shape", outputs.shape,"rep_1.shape", rep_1.shape, "weights_1.shape",weights_1.shape, "bias_1.shape",bias_1.shape, "inputs.shape",inputs.shape)
         angle = []
         for i in range(10):
