@@ -129,7 +129,7 @@ def train(epoch):
 
           temp_1.append(angle[targets[j]])
           ##print("temp_1",temp_1)
-          del angle[targets[0]]
+          del angle[targets[j]]
           ##print("afterrr",angle)
           sum_.append(sum(angle))
           ##print("sum_",sum_)
