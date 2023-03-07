@@ -130,6 +130,7 @@ def train(epoch):
         ##print("afterrr",angle)
         sum_ = sum(angle)
         ##print("sum_",sum_)
+        print("ddd",0.1*temp_1,"aaa",(1000/sum_))
         
         loss = criterion(outputs, targets) + ((0.1*temp_1) + (1000/sum_))
         loss.backward()
