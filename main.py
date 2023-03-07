@@ -100,7 +100,7 @@ def train(epoch):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs, rep_1, weights_1, bias_1 = net(inputs)
-        pritn("outputs.shape", outputs.shape,"rep_1.shape", rep_1.shape, "weights_1.shape",weights_1.shape, "bias_1.shape",bias_1.shape, "inputs.shape",inputs.shape)
+        print("outputs.shape", outputs.shape,"rep_1.shape", rep_1.shape, "weights_1.shape",weights_1.shape, "bias_1.shape",bias_1.shape, "inputs.shape",inputs.shape)
         
         '''for i in range(10):
           
