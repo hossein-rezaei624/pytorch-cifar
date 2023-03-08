@@ -138,7 +138,7 @@ def train(epoch):
         #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
 
         targets = targets.view((128,1))
-        temp_1 = angle[:,targets[:,0]]
+        temp_1 = angle[:][targets[:,0]]
         print("targets",targets.shape)
         print("temp_1",temp_1.shape)
         ###del angle[targets[j]]
