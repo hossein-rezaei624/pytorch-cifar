@@ -138,8 +138,8 @@ def train(epoch):
         #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
 
         temp_1 = angle[targets.view((128,1))]
-        print("targets",targets)
-        print("temp_1",temp_1.shape,temp_1[targets[0]])
+        print("targets",targets.shape)
+        print("temp_1",temp_1.shape)
         ###del angle[targets[j]]
         angle = torch.cat((angle[:targets[j]], angle[targets[j]+1:]), axis = 0)
         ##print("afterrr",angle)
