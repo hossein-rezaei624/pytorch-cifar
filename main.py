@@ -114,7 +114,7 @@ def train(epoch):
           for i in range(10):
 
             a = rep_1[j,:]
-            print("batch_idx",batch_idx)
+            #print("batch_idx",batch_idx)
             b = weights_1[i,:]
             #print("aaaaa shape",a.shape)
             #print("bbbbbbbbb shape",b.shape)
