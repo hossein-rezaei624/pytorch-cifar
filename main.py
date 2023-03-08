@@ -128,7 +128,7 @@ def train(epoch):
         #print('a_norm',a_norm.shape)
         b_norm = b.pow(2).sum(dim=0).pow(0.5)
         #print('b_norm',b_norm.shape)
-        hh = torch.matmul(a_norm.view((128,1)),b_norm.view((1,10)))
+        hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
         #print("torch.matmul(a_norm,b_norm) shape",hh.shape)
         cos = inner_product / hh
         #print('cos',cos,cos.shape)
