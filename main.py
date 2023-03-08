@@ -119,7 +119,7 @@ def train(epoch):
           #print("aaaaa shape",a.shape)
           #print("bbbbbbbbb shape",b.shape)
           final = torch.matmul(a,b)+bias_1
-          print("final:",final)
+          #print("final:",final)
 
           inner_product = torch.matmul(a,b)
           #print('inner_product',inner_product,inner_product.shape)
@@ -129,7 +129,7 @@ def train(epoch):
           cos = inner_product / (a_norm * b_norm)
           #print('cos',cos,cos.shape)
           angle = (torch.acos(cos)*57.2958)
-          print("angle",angle)
+          #print("angle",angle)
 
           #print("The angle with the weights of the class",i," is:",angle*57.2958)
           #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
