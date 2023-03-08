@@ -137,9 +137,8 @@ def train(epoch):
         #print("The angle with the weights of the class",i," is:",angle*57.2958)
         #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
 
-        targets = targets.view((128,1))
-        temp_1 = angle[:][targets[:,0]]
-        print("targets",targets.shape)
+        for h in range(te):
+          temp_1.append(angle[h,targets[h]])
         print("temp_1",temp_1.shape)
         ###del angle[targets[j]]
         angle = torch.cat((angle[:targets[j]], angle[targets[j]+1:]), axis = 0)
