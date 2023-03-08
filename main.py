@@ -137,7 +137,7 @@ def train(epoch):
         #print("The angle with the weights of the class",i," is:",angle*57.2958)
         #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
 
-        temp_1 = angle[: , targets]
+        temp_1 = angle[:][targets]
         print("targets",targets)
         print("temp_1",temp_1.shape,temp_1[targets[0]])
         ###del angle[targets[j]]
