@@ -106,9 +106,9 @@ def train(epoch):
         temp_1 = []
         sum_ = []
         ##print("representation:",rep_1.shape)
-        print("batch_idx",batch_idx)
-        '''if (batch_idx == 390):
-          te = 80'''
+        #print("batch_idx",batch_idx)
+        if (batch_idx == 390):
+          te = 80
         for j in range(te):
           angle = []  
           for i in range(10):
