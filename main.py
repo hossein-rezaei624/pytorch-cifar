@@ -105,6 +105,7 @@ def train(epoch):
         temp_1 = []
         sum_ = []
         ##print("representation:",rep_1.shape)
+        print("batch_idx",batch_idx)
         for j in range(batch_idx):
           angle = []  
           for i in range(10):
