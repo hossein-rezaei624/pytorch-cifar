@@ -165,7 +165,7 @@ def test(epoch):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
+            outputs, __, ___, ____ = net(inputs)
             loss = criterion(outputs, targets)
 
             test_loss += loss.item()
@@ -193,5 +193,5 @@ def test(epoch):
 
 for epoch in range(start_epoch, start_epoch+200):
     train(epoch)
-    #test(epoch)
+    test(epoch)
     scheduler.step()
