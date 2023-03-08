@@ -122,12 +122,12 @@ def train(epoch):
           print("final:",final)
 
           inner_product = torch.matmul(a,b)
-          #print(inner_product)
+          print('inner_product',inner_product,inner_product.shape)
           a_norm = a.pow(2).sum(dim=0).pow(0.5)
-          #print(a_norm)
+          print('a_norm',a_norm,a_norm.shape)
           b_norm = b.pow(2).sum(dim=0).pow(0.5)
           cos = inner_product / (a_norm * b_norm)
-          #print(cos)
+          print('cos',cos,cos.shape)
           angle = (torch.acos(cos)*57.2958)
           print("angle",angle)
 
