@@ -109,39 +109,40 @@ def train(epoch):
         #print("batch_idx",batch_idx)
         if (batch_idx == 390):
           te = 80
-        for j in range(te):
-          #angle = []  
-          #for i in range(10):
+      #for j in range(te):
+        #angle = []  
+        #for i in range(10):
 
-          a = rep_1[j,:]
-          #print("batch_idx",batch_idx)
-          b = weights_1.transpose(0,1)
-          #print("aaaaa shape",a.shape)
-          #print("bbbbbbbbb shape",b.shape)
-          final = torch.matmul(a,b)+bias_1
-          #print("final:",final)
+        a = rep_1
+        #print("batch_idx",batch_idx)
+        b = weights_1.transpose(0,1)
+        #print("aaaaa shape",a.shape)
+        #print("bbbbbbbbb shape",b.shape)
+        final = torch.matmul(a,b)+bias_1
+        #print("final:",final)
 
-          inner_product = torch.matmul(a,b)
-          #print('inner_product',inner_product,inner_product.shape)
-          a_norm = a.pow(2).sum(dim=0).pow(0.5)
-          #print('a_norm',a_norm,a_norm.shape)
-          b_norm = b.pow(2).sum(dim=0).pow(0.5)
-          cos = inner_product / (a_norm * b_norm)
-          #print('cos',cos,cos.shape)
-          angle = (torch.acos(cos)*57.2958)
-          #print("angle",angle)
+        inner_product = torch.matmul(a,b)
+        #print('inner_product',inner_product,inner_product.shape)
+        a_norm = a.pow(2, dim=1).sum(dim=1).pow(0.5,dim=1)
+        #print('a_norm',a_norm,a_norm.shape)
+        b_norm = b.pow(2).sum(dim=0).pow(0.5)
+        cos = inner_product / ((a_norm * b_norm).view((128,1)))
+        #print('cos',cos,cos.shape)
+        angle = (torch.acos(cos)*57.2958)
+        print("angle",angle)
 
-          #print("The angle with the weights of the class",i," is:",angle*57.2958)
-          #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
+        #print("The angle with the weights of the class",i," is:",angle*57.2958)
+        #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
 
-          temp_1.append(angle[targets[j]])
-          ##print("temp_1",temp_1)
-          ###del angle[targets[j]]
-          angle = torch.cat((angle[:targets[j]], angle[targets[j]+1:]), axis = 0)
-          ##print("afterrr",angle)
-          sum_.append(sum(angle))
-          ##print("sum_",sum_)
-          #print("ddd",0.1*temp_1,"aaa",(1000/sum_))
+        temp_1.append(angle[targets[j]])
+        ##print("temp_1",temp_1)
+        ###del angle[targets[j]]
+        angle = torch.cat((angle[:targets[j]], angle[targets[j]+1:]), axis = 0)
+        ##print("afterrr",angle)
+        sum_.append(sum(angle))
+        ##print("sum_",sum_)
+        #print("ddd",0.1*temp_1,"aaa",(1000/sum_))
+        #///////////////////////
         temp_2 = sum(temp_1)
         sum_1 = sum(sum_)
         print("jjjjjjjjjjjj",0.0001*temp_2,"hhhhhhhhh",100000/sum_1)
