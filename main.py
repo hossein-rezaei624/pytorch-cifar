@@ -104,6 +104,7 @@ def train(epoch):
         #print("the labellll:", targets, targets.shape, targets[0])
         ###print("outputs.shape", outputs.shape,"rep_1.shape", rep_1.shape, "weights_1.shape",weights_1.shape, "bias_1.shape",bias_1.shape, "inputs.shape",inputs.shape)
         temp_1 = []
+        temp_1_1 = []
         sum_ = []
         ##print("representation:",rep_1.shape)
         #print("batch_idx",batch_idx)
@@ -139,16 +140,16 @@ def train(epoch):
 
         for h in range(te):
           temp_1.append(angle[h,targets[h]])
-        print("temp_1",len(temp_1))
+          temp_1_1.append(torch.cat((angle[h,:targets[h]], angle[h,targets[h]+1:]), axis = 0))
+        #print("temp_1",len(temp_1))
         ###del angle[targets[j]]
-        angle = torch.cat((angle[:targets[j]], angle[targets[j]+1:]), axis = 0)
         ##print("afterrr",angle)
-        sum_.append(sum(angle))
+        #sum_ = (sum(temp_1_1))
         ##print("sum_",sum_)
         #print("ddd",0.1*temp_1,"aaa",(1000/sum_))
         #///////////////////////
         temp_2 = sum(temp_1)
-        sum_1 = sum(sum_)
+        sum_1 = sum(temp_1_1)
         print("jjjjjjjjjjjj",0.0001*temp_2,"hhhhhhhhh",100000/sum_1)
         loss = criterion(outputs, targets) + (100000/sum_1) + (0.0001*temp_2)
         loss.backward()
