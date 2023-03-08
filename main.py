@@ -111,26 +111,27 @@ def train(epoch):
           te = 80
         for j in range(te):
           angle = []  
-          for i in range(10):
+          #for i in range(10):
 
-            a = rep_1[j,:]
-            #print("batch_idx",batch_idx)
-            b = weights_1[i,:]
-            #print("aaaaa shape",a.shape)
-            #print("bbbbbbbbb shape",b.shape)
-            final = torch.matmul(a,b)+bias_1[i]
-            #print("final",i,":",final)
+          a = rep_1[j,:]
+          #print("batch_idx",batch_idx)
+          b = weights_1.transpose(0,1)
+          #print("aaaaa shape",a.shape)
+          #print("bbbbbbbbb shape",b.shape)
+          final = torch.matmul(a,b)+bias_1
+          print("final:",final)
 
-            inner_product = (a * b).sum(dim=0)
-            #print(inner_product)
-            a_norm = a.pow(2).sum(dim=0).pow(0.5)
-            #print(a_norm)
-            b_norm = b.pow(2).sum(dim=0).pow(0.5)
-            cos = inner_product / (a_norm * b_norm)
-            #print(cos)
-            angle.append(torch.acos(cos)*57.2958)
+          inner_product = torch.matmul(a,b)
+          #print(inner_product)
+          a_norm = a.pow(2).sum(dim=0).pow(0.5)
+          #print(a_norm)
+          b_norm = b.pow(2).sum(dim=0).pow(0.5)
+          cos = inner_product / (a_norm * b_norm)
+          #print(cos)
+          angle = (torch.acos(cos)*57.2958)
+          print("angle",angle)
 
-            #print("The angle with the weights of the class",i," is:",angle*57.2958)
+          #print("The angle with the weights of the class",i," is:",angle*57.2958)
           #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
 
           temp_1.append(angle[targets[j]])
