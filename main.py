@@ -141,8 +141,8 @@ def train(epoch):
         for h in range(te):
           temp_1.append(angle[h,targets[h]])
           temp_1_1.append(torch.cat((angle[h,:targets[h]], angle[h,targets[h]+1:]), axis = 0))
-        print("temp_1",len(temp_1))
-        print("temp_1_1",len(temp_1_1))
+        print("temp_1",len(temp_1),temp_1[0])
+        print("temp_1_1",len(temp_1_1),temp_1_1[0])
         ###del angle[targets[j]]
         ##print("afterrr",angle)
         #sum_ = (sum(temp_1_1))
@@ -150,9 +150,9 @@ def train(epoch):
         #print("ddd",0.1*temp_1,"aaa",(1000/sum_))
         #///////////////////////
         temp_2 = sum(temp_1)
-        print("temp_2",len(temp_2))
+        print("temp_2",(temp_2))
         sum_1 = sum(temp_1_1)
-        print("sum_1",len(sum_1))
+        print("sum_1",(sum_1))
         print("jjjjjjjjjjjj",0.0001*temp_2,"hhhhhhhhh",100000/sum_1)
         loss = criterion(outputs, targets) + (100000/sum_1) + (0.0001*temp_2)
         loss.backward()
