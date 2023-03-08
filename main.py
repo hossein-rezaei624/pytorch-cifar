@@ -110,7 +110,7 @@ def train(epoch):
         if (batch_idx == 390):
           te = 80
         for j in range(te):
-          angle = []  
+          #angle = []  
           #for i in range(10):
 
           a = rep_1[j,:]
@@ -122,12 +122,12 @@ def train(epoch):
           print("final:",final)
 
           inner_product = torch.matmul(a,b)
-          print('inner_product',inner_product,inner_product.shape)
+          #print('inner_product',inner_product,inner_product.shape)
           a_norm = a.pow(2).sum(dim=0).pow(0.5)
-          print('a_norm',a_norm,a_norm.shape)
+          #print('a_norm',a_norm,a_norm.shape)
           b_norm = b.pow(2).sum(dim=0).pow(0.5)
           cos = inner_product / (a_norm * b_norm)
-          print('cos',cos,cos.shape)
+          #print('cos',cos,cos.shape)
           angle = (torch.acos(cos)*57.2958)
           print("angle",angle)
 
@@ -136,7 +136,8 @@ def train(epoch):
 
           temp_1.append(angle[targets[j]])
           ##print("temp_1",temp_1)
-          del angle[targets[j]]
+          ###del angle[targets[j]]
+          angle = torch.cat((angle[:targets[j]], angle[targets[j]+1:]), axis = 0)
           ##print("afterrr",angle)
           sum_.append(sum(angle))
           ##print("sum_",sum_)
