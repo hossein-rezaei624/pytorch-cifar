@@ -104,7 +104,7 @@ def train(epoch):
         ###print("outputs.shape", outputs.shape,"rep_1.shape", rep_1.shape, "weights_1.shape",weights_1.shape, "bias_1.shape",bias_1.shape, "inputs.shape",inputs.shape)
         temp_1 = []
         sum_ = []
-        ##print("representation:",rep_1[82,:],rep_1.shape)
+        print("representation:",rep_1.shape)
         for j in range(128):
           angle = []  
           for i in range(10):
@@ -137,7 +137,7 @@ def train(epoch):
           #print("ddd",0.1*temp_1,"aaa",(1000/sum_))
         temp_2 = sum(temp_1)
         sum_1 = sum(sum_)
-        ####print("jjjjjjjjjjjj",0.0001*temp_2,"hhhhhhhhh",100000/sum_1)
+        print("jjjjjjjjjjjj",0.0001*temp_2,"hhhhhhhhh",100000/sum_1)
         loss = criterion(outputs, targets) + ((0.0001*temp_2) + (100000/sum_1))
         loss.backward()
         optimizer.step()
