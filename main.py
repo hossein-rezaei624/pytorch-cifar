@@ -151,7 +151,7 @@ def train(epoch):
         #///////////////////////
         temp_2 = sum(temp_1)
         print("temp_2",(temp_2))
-        sum_1 = sum(temp_1_1)
+        sum_1 = sum(sum(temp_1_1))
         print("sum_1",(sum_1))
         print("jjjjjjjjjjjj",0.0001*temp_2,"hhhhhhhhh",100000/sum_1)
         loss = criterion(outputs, targets) + (100000/sum_1) + (0.0001*temp_2)
