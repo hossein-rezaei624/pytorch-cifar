@@ -96,6 +96,7 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
+    te = 128
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
@@ -106,11 +107,14 @@ def train(epoch):
         sum_ = []
         ##print("representation:",rep_1.shape)
         print("batch_idx",batch_idx)
-        for j in range(batch_idx):
+        '''if (batch_idx == 390):
+          te = 80'''
+        for j in range(te):
           angle = []  
           for i in range(10):
 
             a = rep_1[j,:]
+            print("batch_idx",batch_idx)
             b = weights_1[i,:]
             #print("aaaaa shape",a.shape)
             #print("bbbbbbbbb shape",b.shape)
