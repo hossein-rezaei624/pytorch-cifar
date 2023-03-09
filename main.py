@@ -153,7 +153,6 @@ def train(epoch):
         #print("temp_2",(temp_2))
         sum_1 = sum(sum(temp_1_1))
         #print("sum_1",(sum_1))
-    print("jjjjjjjjjjjj",0.00005*temp_2,"hhhhhhhhh",50000/sum_1)
         #criterion(outputs, targets)
         loss = criterion(outputs, targets) + (50000/sum_1) + (0.00005*temp_2)
         loss.backward()
@@ -166,7 +165,8 @@ def train(epoch):
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
+    
+    print("jjjjjjjjjjjj",0.00005*temp_2,"hhhhhhhhh",50000/sum_1)
 
 def test(epoch):
     global best_acc
