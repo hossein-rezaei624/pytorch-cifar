@@ -154,7 +154,8 @@ def train(epoch):
         sum_1 = sum(sum(temp_1_1))
         #print("sum_1",(sum_1))
         print("jjjjjjjjjjjj",0.0001*temp_2,"hhhhhhhhh",100000/sum_1)
-        loss = criterion(outputs, targets) + (100000/sum_1) + (0.0001*temp_2)
+        #criterion(outputs, targets)
+        loss = (100000/sum_1) + (0.0001*temp_2)
         loss.backward()
         optimizer.step()
 
