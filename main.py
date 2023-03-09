@@ -166,7 +166,7 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
     
-    print("jjjjjjjjjjjj",0.01*temp_2,"hhhhhhhhh",torch.abs(0.0001*(sum_1 - (te*90))))
+    print("jjjjjjjjjjjj",0.001*temp_2,"hhhhhhhhh",torch.abs(0.001*(sum_1 - (te*90))))
 
 def test(epoch):
     global best_acc
