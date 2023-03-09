@@ -154,7 +154,7 @@ def train(epoch):
         sum_1 = sum(sum(temp_1_1))
         #print("sum_1",(sum_1))
         #criterion(outputs, targets)
-        loss = criterion(outputs, targets) + (sum_1 - (te*90)) + (0.001*temp_2)
+        loss = criterion(outputs, targets) + 0.0001*(sum_1 - (te*90)) + (0.001*temp_2)
         loss.backward()
         optimizer.step()
 
@@ -166,7 +166,7 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
     
-    print("jjjjjjjjjjjj",0.001*temp_2,"hhhhhhhhh",(sum_1 - (te*90)))
+    print("jjjjjjjjjjjj",0.001*temp_2,"hhhhhhhhh",0.0001*(sum_1 - (te*90)))
 
 def test(epoch):
     global best_acc
