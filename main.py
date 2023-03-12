@@ -154,7 +154,7 @@ def train(epoch):
         sum_1 = sum(sum(temp_1_1))
         #print("sum_1",(sum_1))
         #criterion(outputs, targets)
-        loss = (torch.abs(0.002*(sum_1 - (te*9*90))) + (0.00004*temp_2))
+        loss = criterion(outputs, targets) + 0.1*(torch.abs(0.002*(sum_1 - (te*9*90))) + (0.00004*temp_2))
         loss.backward()
         optimizer.step()
 
