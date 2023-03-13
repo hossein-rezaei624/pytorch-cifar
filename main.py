@@ -101,8 +101,8 @@ def train(epoch):
         optimizer.zero_grad()
         outputs, rep, A = net(inputs)
         print("wwwww",outputs.shape,rep.shape,A.shape)
-        A = A.view(32,32)
-        temp = rep - torch.matmul(A.transpose(0,1),rep)
+        A = A.view(128,32,32)
+        temp = rep - torch.matmul(A.transpose(1,2),rep)
         temp = ((temp.pow(2)).sum(0))**0.5
         loss = criterion(outputs, targets) + temp
         loss.backward()
