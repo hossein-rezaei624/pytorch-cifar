@@ -108,7 +108,7 @@ def train(epoch):
         print("jjjj",temp.shape,(torch.matmul(A.transpose(1,2),rep)).shape)
         temp = temp.view(128,32)
         print("kkkkk",(((temp.pow(2)).sum(1))).shape)
-        temp = ((temp.pow(2)).sum(0))**0.5
+        temp = ((temp.pow(2)).sum(1))**0.5
         loss = criterion(outputs, targets) + temp
         loss.backward()
         optimizer.step()
