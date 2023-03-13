@@ -100,6 +100,7 @@ def train(epoch):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs, rep, A = net(inputs)
+        print("wwwww",outputs.shape,rep.shape,A.shape)
         A = A.view(32,32)
         temp = rep - torch.matmul(A.transpose(0,1),rep)
         temp = ((temp.pow(2)).sum(0))**0.5
