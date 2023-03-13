@@ -140,6 +140,7 @@ def train(epoch):
         
         #normalizing
         angle = (angle - angle.mean(0)) / (angle.std(0)+1e-6)
+        print("ddddddddd",angle.min(),angle.max())
 
         for h in range(te):
           temp_1.append(angle[h,targets[h]])
