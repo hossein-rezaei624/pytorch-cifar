@@ -105,14 +105,16 @@ class ResNet(nn.Module):
         print(out.shape)
         out = out.view(1,1,out.size(0),out.size(1))
         print(out.shape)
-        out = F.avg_pool2d(out, (1,32))
+        out = F.avg_pool2d(out, (1,16))
         print(out.shape)
         out = out.view(out.size(2),out.size(3))
         print(out.shape)
-        oo = nn.Linear(out.shape[1],(512,512))
+        oo = nn.Linear(out.shape[1],512)
         out1 = oo(out)
-        ss = nn.Linear(out1.shape,out.shape[1])
+        print(out1.shape)
+        ss = nn.Linear(512,1024)
         out2 = ss(out1)
+        print(out2.shape)
         
         
         
