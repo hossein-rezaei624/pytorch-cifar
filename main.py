@@ -139,7 +139,7 @@ def train(epoch):
         #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
         
         #normalizing
-        angle = (angle - angle.mean(0)) / (angle.std(0)+1e-6)
+        angle = (angle - angle.mean(0)) / (angle.std(0))
         print("ddddddddd",angle.min(),angle.max())
 
         for h in range(te):
