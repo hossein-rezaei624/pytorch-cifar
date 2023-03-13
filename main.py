@@ -99,8 +99,10 @@ def train(epoch):
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
+        outputs, rep, A = net(inputs)
+        temp = rep - torch.matmul(A.transpose(0,1),rep)
+        temp = ((temp.pow(2)).sum(0))**0.5
+        loss = criterion(outputs, targets) + temp
         loss.backward()
         optimizer.step()
 
