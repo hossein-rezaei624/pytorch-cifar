@@ -109,10 +109,10 @@ class ResNet(nn.Module):
         print(out.shape)
         out = out.view(out.size(2),out.size(3))
         print(out.shape)
-        oo = nn.Linear(out.shape[1],512)
+        oo = nn.Linear(out.shape[1],512).to("cuda")
         out1 = oo(out)
         print(out1.shape)
-        ss = nn.Linear(512,1024)
+        ss = nn.Linear(512,1024).to("cuda")
         out2 = ss(out1)
         print(out2.shape)
         
