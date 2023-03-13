@@ -138,10 +138,6 @@ def train(epoch):
         #print("The angle with the weights of the class",i," is:",angle*57.2958)
         #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
         
-        #normalizing
-        angle = (angle - angle.mean(0)) / (angle.std(0))
-        print("ddddddddd",angle.min(),angle.max())
-
         for h in range(te):
           temp_1.append(angle[h,targets[h]])
           temp_1_1.append(torch.cat((angle[h,:targets[h]], angle[h,targets[h]+1:]), axis = 0))
