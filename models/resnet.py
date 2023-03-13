@@ -101,9 +101,9 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         
-        oo = nn.Linear(out.shape(1),(512,512))
+        oo = nn.Linear(out.shape[1],(512,512))
         out1 = oo(out)
-        ss = nn.Linear(out1.shape,out.shape(1))
+        ss = nn.Linear(out1.shape,out.shape[1])
         out2 = ss(out1)
         
         
