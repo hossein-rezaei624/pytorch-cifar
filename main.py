@@ -110,7 +110,7 @@ def train(epoch):
         temp = temp.view(targets.shape[0],32)
         #print("kkkkk",(((temp.pow(2)).sum(1))).shape)
         temp = (temp - temp.mean(0))/(temp.std(0)+1e-6)
-        temp = (((((temp.pow(2)).sum(1))**0.5).pow(2)).sum(0))**0.5
+        temp = (((temp.pow(2)).sum(1))**0.5).sum(0)
         
         #yy = torch.ones(128, dtype=float).to("cuda")
         loss = criterion(outputs, targets) + 0.001*temp
