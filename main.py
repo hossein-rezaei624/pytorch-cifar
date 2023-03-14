@@ -105,7 +105,7 @@ def train(epoch):
         A = A.view(targets.shape[0],32,32)
         #print(A.transpose(1,2).shape)
         rep = rep.view(targets.shape[0],32,1)
-        temp = rep - torch.matmul(A.transpose(1,2),rep)
+        temp = rep - F.relu(torch.matmul(A.transpose(1,2),rep), inplace=True)
         #print("jjjj",temp.shape,(torch.matmul(A.transpose(1,2),rep)).shape)
         temp = temp.view(targets.shape[0],32)
         #print("kkkkk",(((temp.pow(2)).sum(1))).shape)
