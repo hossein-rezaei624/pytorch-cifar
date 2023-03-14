@@ -113,7 +113,7 @@ def train(epoch):
         temp = (((temp.pow(2)).sum(1))**0.5).sum(0)
         
         #yy = torch.ones(128, dtype=float).to("cuda")
-        loss = criterion(outputs, targets)
+        loss = criterion(outputs, targets) + 0.001*temp
         loss.backward()
         optimizer.step()
 
@@ -124,7 +124,7 @@ def train(epoch):
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-    print(0.0005*temp)
+    print(0.001*temp)
 
 def test(epoch):
     global best_acc
