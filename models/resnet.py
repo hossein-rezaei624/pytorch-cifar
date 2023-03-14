@@ -118,7 +118,7 @@ class ResNet(nn.Module):
         out2 = ss(out1)
         #print(out2.shape)
         out2 = dd(out2)
-        print(out2.shape,"oooo")
+        #print(out2.shape,"oooo")
         
         
         A = out2.view(out2.shape[0],32,32)
