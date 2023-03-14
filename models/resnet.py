@@ -82,7 +82,7 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
-        self.linear = nn.Linear(32*block.expansion, num_classes)
+        self.linear = nn.Linear(1024*block.expansion, num_classes)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -105,7 +105,10 @@ class ResNet(nn.Module):
         #print(out.shape)
         out = out.view(1,1,out.size(0),out.size(1))
         #print(out.shape)
-        out = F.avg_pool2d(out, (1,16))
+        out = F.max_pool2d(out, (1,4))
+        out = F.max_pool2d(out, (1,4))
+        out = F.max_pool2d(out, (1,4))
+        out = F.max_pool2d(out, (1,4))
         #print(out.shape)
         out = out.view(out.size(2),out.size(3))
         #print(out.shape)
@@ -121,16 +124,11 @@ class ResNet(nn.Module):
         #print(out2.shape,"oooo")
         
         
-        A = out2.view(out2.shape[0],32,32)
-        #print(A.transpose(1,2).shape)
-        rep = out.view(out2.shape[0],32,1)
-        temp = torch.matmul(A.transpose(1,2),rep)
-        #print("jjjj",temp.shape,(torch.matmul(A.transpose(1,2),rep)).shape)
-        temp = temp.view(out2.shape[0],32)
         
         
         
-        out3 = self.linear(temp)
+        
+        out3 = self.linear(out2)
         return out3, out, out2
 
 
