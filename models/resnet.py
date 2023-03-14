@@ -116,13 +116,13 @@ class ResNet(nn.Module):
         out1 = oo(out)
         #dd = nn.ELU().to("cuda")
         #out1 = dd(out1)
-        out1 = F.relu(out1)
+        out1 = F.relu(out1, inplace=True)
         #print(out1.shape)
         ss = nn.Linear(512,1024).to("cuda")
         out2 = ss(out1)
         #print(out2.shape)
         #out2 = dd(out2)
-        out2 = F.relu(out2)
+        out2 = F.relu(out2, inplace=True)
         #print(out2.shape,"oooo")
         
         
