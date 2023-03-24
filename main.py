@@ -113,7 +113,7 @@ def train(epoch):
         temp = (((temp.pow(2)).sum(1))**0.5).sum(0)
         
         #yy = torch.ones(128, dtype=float).to("cuda")
-        loss = criterion(outputs, targets)
+        loss = criterion(outputs, targets) + 0.001*temp
         loss.backward()
         optimizer.step()
 
