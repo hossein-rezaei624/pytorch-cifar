@@ -96,24 +96,65 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
+    te = 128
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs, rep, A = net(inputs)
-        #print("sssssssssssssssssss",targets.shape[0])
-        #print("wwwww",outputs.shape,rep.shape,A.shape)
-        A = A.view(targets.shape[0],32,32)
-        #print(A.transpose(1,2).shape)
-        rep = rep.view(targets.shape[0],32,1)
-        temp = rep - F.relu(torch.matmul(A.transpose(1,2),rep), inplace=True)
-        #print("jjjj",temp.shape,(torch.matmul(A.transpose(1,2),rep)).shape)
-        temp = temp.view(targets.shape[0],32)
-        #print("kkkkk",(((temp.pow(2)).sum(1))).shape)
-        temp = (temp - temp.mean(0))/(temp.std(0)+1e-6)
-        temp = (((temp.pow(2)).sum(1))**0.5).sum(0)
+        outputs, rep_1, weights_1, bias_1 = net(inputs)
+        #print("the labellll:", targets, targets.shape, targets[0])
+        ###print("outputs.shape", outputs.shape,"rep_1.shape", rep_1.shape, "weights_1.shape",weights_1.shape, "bias_1.shape",bias_1.shape, "inputs.shape",inputs.shape)
+        temp_1 = []
+        temp_1_1 = []
+        sum_ = []
+        ##print("representation:",rep_1.shape)
+        #print("batch_idx",batch_idx)
+        if (batch_idx == 390):
+          te = 80
+      #for j in range(te):
+        #angle = []  
+        #for i in range(10):
+
+        a = rep_1
+        #print("batch_idx",batch_idx)
+        b = weights_1.transpose(0,1)
+        #print("aaaaa shape",a.shape)
+        #print("bbbbbbbbb shape",b.shape)
+        final = torch.matmul(a,b)+bias_1
+        #print("final:",final)
+
+        inner_product = torch.matmul(a,b)
+        #print('inner_product',inner_product.shape)
+        a_norm = a.pow(2).sum(dim=1).pow(0.5)
+        #print('a_norm',a_norm.shape)
+        b_norm = b.pow(2).sum(dim=0).pow(0.5)
+        #print('b_norm',b_norm.shape)
+        hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
+        #print("torch.matmul(a_norm,b_norm) shape",hh.shape)
+        cos = inner_product / hh
+        #print('cos',cos,cos.shape)
+        angle = (torch.acos(cos)*57.2958)
+        #print("angle",angle, angle.shape)
+
+        #print("The angle with the weights of the class",i," is:",angle*57.2958)
+        #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
         
-        #yy = torch.ones(128, dtype=float).to("cuda")
-        loss = criterion(outputs, targets) + 0.001*temp
+        for h in range(te):
+          temp_1.append(angle[h,targets[h]])
+          temp_1_1.append(torch.cat((angle[h,:targets[h]], angle[h,targets[h]+1:]), axis = 0))
+        #print("temp_1",len(temp_1),temp_1[0])
+        #print("temp_1_1",len(temp_1_1),temp_1_1[0])
+        ###del angle[targets[j]]
+        ##print("afterrr",angle)
+        #sum_ = (sum(temp_1_1))
+        ##print("sum_",sum_)
+        #print("ddd",0.1*temp_1,"aaa",(1000/sum_))
+        #///////////////////////
+        temp_2 = sum(temp_1)
+        #print("temp_2",(temp_2))
+        sum_1 = sum(sum(temp_1_1))
+        #print("sum_1",(sum_1))
+        #criterion(outputs, targets)
+        loss = (criterion(outputs, targets)) + 0.1*(10000/sum_1 + 0.00005*temp_2)
         loss.backward()
         optimizer.step()
 
@@ -124,7 +165,8 @@ def train(epoch):
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-    print(0.001*temp)
+    
+    print("jjjjjjjjjjjj",0.00005*temp_2,"hhhhhhhhh",10000/sum_1)
 
 def test(epoch):
     global best_acc
@@ -135,7 +177,7 @@ def test(epoch):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs, __, ___ = net(inputs)
+            outputs, __, ___, ____ = net(inputs)
             loss = criterion(outputs, targets)
 
             test_loss += loss.item()
