@@ -118,7 +118,7 @@ class ResNet(nn.Module):
         #out1 = dd(out1)
         out1 = F.relu(out1, inplace=True)
         #print(out1.shape)
-        ss = nn.Linear(2048,2048).to("cuda")
+        ss = nn.Linear(2048,1024).to("cuda")
         out2 = ss(out1)
         #print(out2.shape)
         #out2 = dd(out2)
@@ -126,7 +126,7 @@ class ResNet(nn.Module):
         #print(out2.shape,"oooo")
         
         
-        kk = nn.Linear(2048,1024).to("cuda")
+        kk = nn.Linear(1024,1024).to("cuda")
         out2 = kk(out2)
         #print(out2.shape)
         #out2 = dd(out2)
@@ -141,7 +141,7 @@ class ResNet(nn.Module):
         
         cc = torch.cat((out__,out),dim = 1)
         
-        out3 = self.linear(cc)
+        out3 = self.linear(out)
         return out3, out, out2
 
 
