@@ -133,7 +133,7 @@ def train(epoch):
         cos = inner_product / hh
         #print('cos',cos,cos.shape)
         angle = (torch.acos(cos)*57.2958)
-        print("angle",angle.shape)
+        #print("angle",angle.shape)
 
         #print("The angle with the weights of the class",i," is:",angle*57.2958)
         #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
@@ -154,12 +154,12 @@ def train(epoch):
         sum_1 = sum(sum(temp_1_1))
         #print("sum_1",(sum_1))
         #criterion(outputs, targets)
-        loss = (1/(epoch+1))*(criterion(outputs, targets)) + 0.1*(10000/sum_1 + 0.00005*temp_2)
+        loss = (criterion(outputs, targets)) + 0.1*(10000/sum_1 + 0.00005*temp_2)
         loss.backward()
         optimizer.step()
 
         train_loss += loss.item()
-        _, predicted = outputs.max(1)
+        _, predicted = angle.max(1)
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
