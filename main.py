@@ -133,7 +133,7 @@ def train(epoch):
         cos = inner_product / hh
         #print('cos',cos,cos.shape)
         angle = (torch.acos(cos)*57.2958)
-        #print("angle",angle, angle.shape)
+        print("angle",angle.shape)
 
         #print("The angle with the weights of the class",i," is:",angle*57.2958)
         #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
