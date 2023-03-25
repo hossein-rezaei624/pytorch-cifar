@@ -139,7 +139,7 @@ def train(epoch):
         #print("The angle with the weights of the class",i," is:",angle*57.2958)
         #print("the angle isssss:", angle, "\n the label",angle[targets[0]],"ddd",targets[0])
         
-        '''for h in range(te):
+        for h in range(te):
           temp_1.append(angle[h,targets[h]])
           temp_1_1.append(torch.cat((angle[h,:targets[h]], angle[h,targets[h]+1:]), axis = 0))
         #print("temp_1",len(temp_1),temp_1[0])
@@ -152,7 +152,7 @@ def train(epoch):
         #///////////////////////
         temp_2 = sum(temp_1)
         #print("temp_2",(temp_2))
-        sum_1 = sum(sum(temp_1_1))'''
+        sum_1 = sum(sum(temp_1_1))
         #print("sum_1",(sum_1))
         loss = criterion(angle, targets)
         #loss = (criterion(outputs, targets)) + 0.1*(10000/sum_1 + 0.00005*temp_2)
@@ -167,7 +167,7 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
     
-    print("jjjjjjjjjjjj",0.00005*temp_2,"hhhhhhhhh",10000/sum_1)
+    print("jjjjjjjjjjjj",temp_2,"hhhhhhhhh",sum_1)
 
 def test(epoch):
     global best_acc
