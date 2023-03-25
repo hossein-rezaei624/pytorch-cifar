@@ -154,7 +154,7 @@ def train(epoch):
         #print("temp_2",(temp_2))
         sum_1 = sum(sum(temp_1_1))
         #print("sum_1",(sum_1))
-        loss = criterion(angle, targets)
+        loss = criterion(angle, targets) + (criterion(outputs, targets))
         #loss = (criterion(outputs, targets)) + 0.1*(10000/sum_1 + 0.00005*temp_2)
         loss.backward()
         optimizer.step()
@@ -208,7 +208,7 @@ def test(epoch):
             #print("one",angle)
             angle = (-1*(angle - 90))/10
         
-            loss = criterion(angle, targets)
+            loss = criterion(angle, targets) + (criterion(outputs, targets))
             test_loss += loss.item()
             _, predicted = angle.max(1)
             total += targets.size(0)
