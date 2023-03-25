@@ -178,11 +178,39 @@ def test(epoch):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs, __, ___, ____ = net(inputs)
-            loss = criterion(outputs, targets)
+                        
+            outputs, rep_1, weights_1, bias_1 = net(inputs)
 
+            temp_1 = []
+            temp_1_1 = []
+            sum_ = []
+
+            a = rep_1
+            #print("batch_idx",batch_idx)
+            b = weights_1.transpose(0,1)
+            #print("aaaaa shape",a.shape)
+            #print("bbbbbbbbb shape",b.shape)
+            final = torch.matmul(a,b)+bias_1
+            #print("final:",final)
+
+            inner_product = torch.matmul(a,b)
+            #print('inner_product',inner_product.shape)
+            a_norm = a.pow(2).sum(dim=1).pow(0.5)
+            #print('a_norm',a_norm.shape)
+            b_norm = b.pow(2).sum(dim=0).pow(0.5)
+            #print('b_norm',b_norm.shape)
+            hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
+            #print("torch.matmul(a_norm,b_norm) shape",hh.shape)
+            cos = inner_product / hh
+            #print('cos',cos,cos.shape)
+            angle = (torch.acos(cos)*57.2958)
+            #print("angle",angle.shape)
+            #print("one",angle)
+            angle = (-1*(angle - 90))/10
+        
+            loss = criterion(angle, targets)
             test_loss += loss.item()
-            _, predicted = outputs.max(1)
+            _, predicted = angle.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
