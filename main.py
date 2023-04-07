@@ -88,7 +88,7 @@ optimizer = optim.SGD(net.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
-
+print(trainloader,"\n",len(trainloader),len(trainloader[:100]))
 # Training
 def train(epoch):
     print('\nEpoch: %d' % epoch)
@@ -112,7 +112,7 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
         
-        print(batch_idx)
+        #print(batch_idx)
         '''if batch_idx == 6:
           break'''
 
