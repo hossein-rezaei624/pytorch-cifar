@@ -112,8 +112,9 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
         
-        if batch_idx == 6:
-          break
+        print(batch_idx)
+        '''if batch_idx == 6:
+          break'''
 
 
 def test(epoch):
