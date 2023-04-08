@@ -107,11 +107,11 @@ def train(epoch):
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
-        progress_bar(batch_idx, 41, 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+        progress_bar(batch_idx, 81, 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
         
         #print(batch_idx)
-        if batch_idx == 40:
+        if batch_idx == 80:
           break
 
 
