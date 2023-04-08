@@ -155,8 +155,8 @@ def test(epoch):
         
         #img = torchvision.transforms.functional.rotate(img, 90)
         #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
-        #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
-        #img = jitter(img)
+        jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
+        img = jitter(img)
         #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
         outputs, rep = net(img)
         loss = criterion(outputs, label)
