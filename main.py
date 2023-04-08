@@ -159,7 +159,7 @@ def test(epoch):
         #img = jitter(img)
         #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
         #img = torchvision.transforms.functional.adjust_contrast(img, contrast_factor = 1)
-        img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 1)
+        img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
         outputs, rep = net(img)
         loss = criterion(outputs, label)
         test_loss += loss.item()
