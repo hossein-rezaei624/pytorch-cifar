@@ -153,7 +153,7 @@ def test(epoch):
         print("img shapeeeeeee:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)
         
-        #img = torchvision.transforms.functional.rotate(img, 90)
+        img = torchvision.transforms.functional.rotate(img, 90)
         #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
         #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
         #img = jitter(img)
