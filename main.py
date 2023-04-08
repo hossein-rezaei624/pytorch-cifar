@@ -152,8 +152,11 @@ def test(epoch):
         img, label = img[20].view((1,3,32,32)), label[20].view((1))
         print("img shapeeeeeee:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)
-        #img = img.rotate(90)
+        
         #img = torchvision.transforms.functional.rotate(img, 90)
+        #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
+        #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
+        #img = jitter(img)
         outputs, rep = net(img)
         loss = criterion(outputs, label)
         test_loss += loss.item()
