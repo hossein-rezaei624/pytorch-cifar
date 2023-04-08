@@ -160,8 +160,8 @@ def test(epoch):
         #img = torchvision.transforms.functional.adjust_contrast(img, contrast_factor = 1)
         
         #img = torchvision.transforms.functional.rotate(img, 90)
-        img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
-        #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
+        #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
+        img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
         
         outputs, rep = net(img)
         loss = criterion(outputs, label)
