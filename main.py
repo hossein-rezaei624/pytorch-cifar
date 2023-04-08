@@ -157,7 +157,7 @@ def test(epoch):
         #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
         #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
         #img = jitter(img)
-        #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
+        img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
         outputs, rep = net(img)
         loss = criterion(outputs, label)
         test_loss += loss.item()
@@ -196,7 +196,7 @@ def test(epoch):
         #aa_ = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).mean())/((img[0].permute(1,2,0).cpu().numpy()).std()))*255.0).astype(np.uint8)))
         aa_ = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).min())/((img[0].permute(1,2,0).cpu().numpy()).max()-(img[0].permute(1,2,0).cpu().numpy()).min()))*255.0).astype(np.uint8)))
         #plt.imsave("./image.png",(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1)*255.0).astype(np.uint8))
-        plt.imsave("./image.png", img)
+        plt.imsave("./image.png", aa_)
         #print(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).max(),np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).min())
         #plt.show()
         #//////////////////////////////////////////////////
