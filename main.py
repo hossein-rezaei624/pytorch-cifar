@@ -149,7 +149,7 @@ def test(epoch):
           img, label = next(iter(testloader))'''
         img, label = next(iter(testloader))
         print("img shape:",img.shape,img[0].shape,"label",label)
-        img, label = img[50].view((1,3,32,32)), label[50].view((1))
+        img, label = img[20].view((1,3,32,32)), label[20].view((1))
         print("img shapeeeeeee:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)
         
@@ -160,7 +160,7 @@ def test(epoch):
         #img = torchvision.transforms.functional.adjust_contrast(img, contrast_factor = 1)
         
         #img = torchvision.transforms.functional.rotate(img, 90)
-        img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
+        #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
         #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
         
         outputs, rep = net(img)
