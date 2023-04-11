@@ -126,11 +126,11 @@ weights_ = torch.zeros((512,10))
 bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
-    if (tempp==61):
+    if (tempp==130):
       print(param)
       print("the shapeeeeeee",param.shape)
       weights_ = param
-    if (tempp==62):
+    if (tempp==131):
       print(param)
       print("the shapeeeeeee",param.shape)
       bias_ = param
@@ -150,7 +150,7 @@ def test(epoch):
           img, label = next(iter(testloader))'''
         img, label = next(iter(testloader))
         print("img shape:",img.shape,img[0].shape,"label",label)
-        img, label = img[50].view((1,3,32,32)), label[50].view((1))
+        img, label = img[10].view((1,3,32,32)), label[10].view((1))
         print("img shapeeeeeee:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)
         
@@ -162,7 +162,7 @@ def test(epoch):
         
         #img = torchvision.transforms.functional.rotate(img, 90)
         #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
-        img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
+        #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
         
         outputs, rep = net(img)
         loss = criterion(outputs, label)
