@@ -147,7 +147,7 @@ def test(epoch):
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
         torch.save(state, './checkpoint/ckpt.pth')
-        torch.save(state, './content/drive/MyDrive/pytorch-cifar/DLA')
+        torch.save(state, '/content/drive/MyDrive/pytorch-cifar/DLA/ckpt.pth')
         best_acc = acc
 
 
