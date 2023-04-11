@@ -14,6 +14,10 @@ import argparse
 from models import *
 from utils import progress_bar
 
+import numpy as np
+from matplotlib import pyplot as plt
+
+
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -42,12 +46,13 @@ transform_test = transforms.Compose([
 trainset = torchvision.datasets.CIFAR10(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=128, shuffle=True, num_workers=2)
+    trainset, batch_size=128, shuffle=False, num_workers=2)
 
 testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2)
+print("lennnnnnnnnnn of the testloader",len(testloader))
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
@@ -113,15 +118,102 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-
+checkpoint = torch.load('./checkpoint/ckpt.pth')
+net.load_state_dict(checkpoint['net'])
+print('\n\nLayer params:')
+tempp = 0
+weights_ = torch.zeros((512,10))
+bias_ = torch.zeros((10))
+for param in net.parameters():
+    tempp +=1
+    if (tempp==61):
+      print(param)
+      print("the shapeeeeeee",param.shape)
+      weights_ = param
+    if (tempp==62):
+      print(param)
+      print("the shapeeeeeee",param.shape)
+      bias_ = param
+#print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",net.state_dict())
+#print("temppppppppp",tempp)
 def test(epoch):
     global best_acc
     net.eval()
     test_loss = 0
     correct = 0
     total = 0
+    count = 0
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(testloader):
+        #img, label = testset[0]
+        
+        '''for i in range(324):
+          img, label = next(iter(testloader))'''
+        img, label = next(iter(testloader))
+        print("img shape:",img.shape,img[0].shape,"label",label)
+        img, label = img[50].view((1,3,32,32)), label[50].view((1))
+        print("img shapeeeeeee:",img.shape,"label",label)
+        img, label = img.to(device), label.to(device)
+        
+        
+        #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
+        #img = jitter(img)
+        #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
+        #img = torchvision.transforms.functional.adjust_contrast(img, contrast_factor = 1)
+        
+        #img = torchvision.transforms.functional.rotate(img, 90)
+        #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
+        img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
+        
+        outputs, rep = net(img)
+        loss = criterion(outputs, label)
+        test_loss += loss.item()
+        _, predicted = outputs.max(1)
+        correct = predicted.eq(label).sum().item()
+        print("Loss:",test_loss,"Accuracy:",correct*100)
+        print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
+        print("manual shape",(torch.matmul(rep,weights_.transpose(0,1))+bias_).shape)
+        mm_ = torch.nn.Softmax(dim=-1)
+        output__ = mm_(torch.matmul(rep,weights_.transpose(0,1))+bias_)
+        print(output__)
+        
+        for i in range(10):
+          
+          a = rep[0,:]
+          b = weights_[i,:]
+          #print("aaaaa shape",a.shape)
+          #print("bbbbbbbbb shape",b.shape)
+          final = torch.matmul(a,b)+bias_[i]
+          print("final",i,":",final)
+
+          inner_product = (a * b).sum(dim=0)
+          #print(inner_product)
+          a_norm = a.pow(2).sum(dim=0).pow(0.5)
+          #print(a_norm)
+          b_norm = b.pow(2).sum(dim=0).pow(0.5)
+          cos = inner_product / (a_norm * b_norm)
+          #print(cos)
+          angle = torch.acos(cos)
+
+          print("The angle with the weights of the class",i," is:",angle*57.2958)
+          
+          
+        #print(img[0][0])
+        print("ggggggggggggggggg",(img[0].permute(1,2,0).cpu().numpy()).max(),(img[0].permute(1,2,0).cpu().numpy()).min())
+        #aa_ = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).mean())/((img[0].permute(1,2,0).cpu().numpy()).std()))*255.0).astype(np.uint8)))
+        aa_ = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).min())/((img[0].permute(1,2,0).cpu().numpy()).max()-(img[0].permute(1,2,0).cpu().numpy()).min()))*255.0).astype(np.uint8)))
+        #plt.imsave("./image.png",(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1)*255.0).astype(np.uint8))
+        plt.imsave("./image.png", aa_)
+        #print(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).max(),np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).min())
+        #plt.show()
+        #//////////////////////////////////////////////////
+        
+        
+    
+    '''with torch.no_grad():
+        #print("the lenght of the testloader",len(testloader))
+        for batch_idx, (inputs, targets) in enumerate(testloader[0]):
+            #count +=1
+            #print("count number",count)
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
@@ -146,10 +238,10 @@ def test(epoch):
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
         torch.save(state, './checkpoint/ckpt.pth')
-        best_acc = acc
+        best_acc = acc'''
 
-
-for epoch in range(start_epoch, start_epoch+200):
-    train(epoch)
+test(epoch=1)
+'''for epoch in range(start_epoch, start_epoch+200):
+    #train(epoch)
     test(epoch)
-    scheduler.step()
+    scheduler.step()'''
