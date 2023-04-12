@@ -256,7 +256,7 @@ def test(epoch):
             break'''
         print("some_new", sum(some_new)/100)
         print("some_accuracy",sum(some_accuracy)/100)
-        print("cc_",cc_/100)
+        print("cc_",sum(cc_)/100)
           
         '''#print(img[0][0])
         print("ggggggggggggggggg",(img[0].permute(1,2,0).cpu().numpy()).max(),(img[0].permute(1,2,0).cpu().numpy()).min())
