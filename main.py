@@ -172,7 +172,7 @@ def test(epoch):
           test_loss += loss.item()
           _, predicted = outputs.max(1)
           correct = predicted.eq(label).sum().item()
-          print("Loss:",test_loss,"Accuracy:",correct*100)
+          print("Loss:",test_loss,"Accuracy:",correct*100/100)
           '''print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
           print("manual shape",(torch.matmul(rep,weights_.transpose(0,1))+bias_).shape)
           mm_ = torch.nn.Softmax(dim=-1)
@@ -220,7 +220,7 @@ def test(epoch):
           #print('cos',cos,cos.shape)
           angle = (torch.acos(cos)*57.2958)
           print("shape of the angle is:",angle.shape)
-          break
+          #break
 
           
         '''#print(img[0][0])
