@@ -163,7 +163,8 @@ def test(epoch):
           
           temp11 = []
           temp22 = []
-          
+          temp33 = []
+          temp44 = []
           #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
           #img = jitter(img)
           #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
@@ -235,6 +236,14 @@ def test(epoch):
             cc += 1
             temp11.append(angle[h,label[h]])
             temp22.append(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90))
+            
+       
+          for h in range(100):
+            if predicted[h] == label[h]:
+              continue
+            temp33.append(angle[h,label[h]])
+            temp44.append(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90))          
+            
           ####print("cc",cc)
           cc_.append(cc)
           ###print("the len of the true angle:", len(temp11))
@@ -242,11 +251,13 @@ def test(epoch):
           ###print("true angle",temp11[10])
           ###print("false angle",temp22[10])
           sum_1 = sum(temp11)
+          sum_1_3 = sum(temp33)
           ###print("the sum of the true angle is:", sum_1)
           
           sum_2 = sum(sum(temp22))
+          sum_2_4 = sum(sum(temp44))
           ###print("the sum of the false angle is:", sum_2)
-          final_ = (sum_1 + sum_2)/correct
+          final_ = ((sum_1 + sum_2)/correct) + ((sum_1_3 + sum_2_4)/(100 - correct))
           ####print("Final:",final_)
           
           some_new.append(final_)
