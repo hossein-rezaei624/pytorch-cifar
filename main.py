@@ -145,6 +145,7 @@ def test(epoch):
     count = 0
     
     some_new = []
+    some_accuracy = []
     with torch.no_grad():
         '''#img, label = testset[0]
         
@@ -246,10 +247,13 @@ def test(epoch):
           print("Final:",final_)
           
           some_new.append(final_)
+          some_accuracy.append(correct)
           '''print("counter",counter)
           if counter==120:
             break'''
         print("some_new", sum(some_new)/100)
+        print("some_accuracy",sum(some_accuracy)/100)
+        
           
         '''#print(img[0][0])
         print("ggggggggggggggggg",(img[0].permute(1,2,0).cpu().numpy()).max(),(img[0].permute(1,2,0).cpu().numpy()).min())
