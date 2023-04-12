@@ -142,7 +142,7 @@ def test(epoch):
     correct = 0
     total = 0
     count = 0
-    
+    cc_ = []
     some_new = []
     some_accuracy = []
     with torch.no_grad():
@@ -236,6 +236,7 @@ def test(epoch):
             temp11.append(angle[h,label[h]])
             temp22.append(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90))
           print("cc",cc)
+          cc_.append(cc)
           ###print("the len of the true angle:", len(temp11))
           ###print("the len of the false angle:",len(temp22[0])*len(temp22))
           ###print("true angle",temp11[10])
@@ -255,7 +256,7 @@ def test(epoch):
             break'''
         print("some_new", sum(some_new)/100)
         print("some_accuracy",sum(some_accuracy)/100)
-        
+        print("cc_",cc_/100)
           
         '''#print(img[0][0])
         print("ggggggggggggggggg",(img[0].permute(1,2,0).cpu().numpy()).max(),(img[0].permute(1,2,0).cpu().numpy()).min())
