@@ -143,82 +143,86 @@ def test(epoch):
     total = 0
     count = 0
     with torch.no_grad():
-        #img, label = testset[0]
+        '''#img, label = testset[0]
         
-        '''for i in range(324):
-          img, label = next(iter(testloader))'''
+        #for i in range(324):
+          #img, label = next(iter(testloader))
         img, label = next(iter(testloader))
         print("img shape:",img.shape,img[0].shape,"label",label)
         img, label = img[10].view((1,3,32,32)), label[10].view((1))
         print("img shapeeeeeee:",img.shape,"label",label)
-        img, label = img.to(device), label.to(device)
+        img, label = img.to(device), label.to(device)'''
         
         
-        #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
-        #img = jitter(img)
-        #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
-        #img = torchvision.transforms.functional.adjust_contrast(img, contrast_factor = 1)
+        for batch_idx, (img, label) in enumerate(testloader):
+          img, label = img.to(device), label.to(device)
         
-        #img = torchvision.transforms.functional.rotate(img, 90)
-        #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
-        #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
-        
-        outputs, rep = net(img)
-        loss = criterion(outputs, label)
-        test_loss += loss.item()
-        _, predicted = outputs.max(1)
-        correct = predicted.eq(label).sum().item()
-        print("Loss:",test_loss,"Accuracy:",correct*100)
-        print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
-        print("manual shape",(torch.matmul(rep,weights_.transpose(0,1))+bias_).shape)
-        mm_ = torch.nn.Softmax(dim=-1)
-        output__ = mm_(torch.matmul(rep,weights_.transpose(0,1))+bias_)
-        print(output__)
-        
-        '''for i in range(10):
-          
-          a = rep[0,:]
-          b = weights_[i,:]
+
+          #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
+          #img = jitter(img)
+          #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
+          #img = torchvision.transforms.functional.adjust_contrast(img, contrast_factor = 1)
+
+          #img = torchvision.transforms.functional.rotate(img, 90)
+          #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
+          #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
+
+          outputs, rep = net(img)
+          loss = criterion(outputs, label)
+          test_loss += loss.item()
+          _, predicted = outputs.max(1)
+          correct = predicted.eq(label).sum().item()
+          print("Loss:",test_loss,"Accuracy:",correct*100)
+          '''print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
+          print("manual shape",(torch.matmul(rep,weights_.transpose(0,1))+bias_).shape)
+          mm_ = torch.nn.Softmax(dim=-1)
+          output__ = mm_(torch.matmul(rep,weights_.transpose(0,1))+bias_)
+          print(output__)'''
+
+          '''for i in range(10):
+
+            a = rep[0,:]
+            b = weights_[i,:]
+            #print("aaaaa shape",a.shape)
+            #print("bbbbbbbbb shape",b.shape)
+            final = torch.matmul(a,b)+bias_[i]
+            print("final",i,":",final)
+
+            inner_product = (a * b).sum(dim=0)
+            #print(inner_product)
+            a_norm = a.pow(2).sum(dim=0).pow(0.5)
+            #print(a_norm)
+            b_norm = b.pow(2).sum(dim=0).pow(0.5)
+            cos = inner_product / (a_norm * b_norm)
+            #print(cos)
+            angle = torch.acos(cos)
+
+            print("The angle with the weights of the class",i," is:",angle*57.2958)'''
+
+
+          a = rep
+          #print("batch_idx",batch_idx)
+          b = weights_.transpose(0,1)
           #print("aaaaa shape",a.shape)
           #print("bbbbbbbbb shape",b.shape)
-          final = torch.matmul(a,b)+bias_[i]
-          print("final",i,":",final)
+          final = torch.matmul(a,b)+bias_
+          #print("final:",final)
 
-          inner_product = (a * b).sum(dim=0)
-          #print(inner_product)
-          a_norm = a.pow(2).sum(dim=0).pow(0.5)
-          #print(a_norm)
+          inner_product = torch.matmul(a,b)
+          #print('inner_product',inner_product.shape)
+          a_norm = a.pow(2).sum(dim=1).pow(0.5)
+          #print('a_norm',a_norm.shape)
           b_norm = b.pow(2).sum(dim=0).pow(0.5)
-          cos = inner_product / (a_norm * b_norm)
-          #print(cos)
-          angle = torch.acos(cos)
+          #print('b_norm',b_norm.shape)
+          hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
+          #print("torch.matmul(a_norm,b_norm) shape",hh.shape)
+          cos = inner_product / hh
+          #print('cos',cos,cos.shape)
+          angle = (torch.acos(cos)*57.2958)
+          print("shape of the angle is:",angle.shape)
 
-          print("The angle with the weights of the class",i," is:",angle*57.2958)'''
-        
-        
-        a = rep
-        #print("batch_idx",batch_idx)
-        b = weights_.transpose(0,1)
-        #print("aaaaa shape",a.shape)
-        #print("bbbbbbbbb shape",b.shape)
-        final = torch.matmul(a,b)+bias_
-        #print("final:",final)
-
-        inner_product = torch.matmul(a,b)
-        #print('inner_product',inner_product.shape)
-        a_norm = a.pow(2).sum(dim=1).pow(0.5)
-        #print('a_norm',a_norm.shape)
-        b_norm = b.pow(2).sum(dim=0).pow(0.5)
-        #print('b_norm',b_norm.shape)
-        hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
-        #print("torch.matmul(a_norm,b_norm) shape",hh.shape)
-        cos = inner_product / hh
-        #print('cos',cos,cos.shape)
-        angle = (torch.acos(cos)*57.2958)
-        print("shape of the angle is:",angle.shape)
-        
           
-        #print(img[0][0])
+        '''#print(img[0][0])
         print("ggggggggggggggggg",(img[0].permute(1,2,0).cpu().numpy()).max(),(img[0].permute(1,2,0).cpu().numpy()).min())
         #aa_ = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).mean())/((img[0].permute(1,2,0).cpu().numpy()).std()))*255.0).astype(np.uint8)))
         aa_ = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).min())/((img[0].permute(1,2,0).cpu().numpy()).max()-(img[0].permute(1,2,0).cpu().numpy()).min()))*255.0).astype(np.uint8)))
@@ -226,7 +230,7 @@ def test(epoch):
         plt.imsave("./image.png", aa_)
         #print(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).max(),np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).min())
         #plt.show()
-        #//////////////////////////////////////////////////
+        #//////////////////////////////////////////////////'''
         
         
     
