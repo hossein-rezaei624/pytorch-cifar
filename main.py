@@ -153,10 +153,10 @@ def test(epoch):
         print("img shapeeeeeee:",img.shape,"label",label)
         img, label = img.to(device), label.to(device)'''
         
-        
+        counter = 0
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
-        
+          counter += 1
 
           #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
           #img = jitter(img)
@@ -220,8 +220,10 @@ def test(epoch):
           #print('cos',cos,cos.shape)
           angle = (torch.acos(cos)*57.2958)
           print("shape of the angle is:",angle.shape)
-          print("the angle of the first example",angle[0,:])
-          break
+          
+          if (counter == 2):
+            print("the angle of the first example",angle[0,:])
+            break
 
           
         '''#print(img[0][0])
