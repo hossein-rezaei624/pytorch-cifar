@@ -227,7 +227,7 @@ def test(epoch):
           
           for h in range(100):
             temp11.append(angle[h,label[h]])
-            temp22.append(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
+            temp22.append(torch.cat(abs((angle[h,:label[h]], angle[h,label[h]+1:])-90), axis = 0))
           
           print("the len of the true angle:", len(temp11))
           print("the len of the false angle:",len(temp22[0])*len(temp22))
@@ -235,11 +235,6 @@ def test(epoch):
           print("false angle",temp22[20])
           sum_1 = sum(temp11)
           print("the sum of the true angle is:", sum_1)
-          
-          new_a = torch.tensor(temp22)
-          print("new_a",new_a)
-          new_a = abs(new_a - 90)
-          print("new_a",new_a)
           
           sum_2 = sum(sum(temp22))
           print("the sum of the false angle is:", sum_2)
