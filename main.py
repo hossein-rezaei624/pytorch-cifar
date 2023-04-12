@@ -253,11 +253,14 @@ def test(epoch):
           sum_1 = sum(temp11)
           sum_1_3 = sum(temp33)
           ###print("the sum of the true angle is:", sum_1)
-          print("len temp22",len(temp22),len(temp22[0]))
+          ####print("len temp22",len(temp22),len(temp22[0]))
           sum_2 = sum(sum(temp22))
-          print("len temp44",len(temp44))
-          print(len(temp44[0]))
-          sum_2_4 = sum(sum(temp44))
+          ####print("len temp44",len(temp44))
+          ####print(len(temp44[0]))
+          if (len(temp44) == 0):
+            sum_2_4 = 0
+          else:
+            sum_2_4 = sum(sum(temp44))
           ###print("the sum of the false angle is:", sum_2)
           final_ = ((sum_1 + sum_2)/correct) + ((sum_1_3 + sum_2_4)/(100 - correct))
           ####print("Final:",final_)
