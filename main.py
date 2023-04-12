@@ -230,7 +230,7 @@ def test(epoch):
             temp22.append(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
           
           print("the len of the true angle:", len(temp11))
-          print("the len of the false angle:",len(temp22[0]))
+          print("the len of the false angle:",len(temp22[0])*len(temp22))
           
           break
 
