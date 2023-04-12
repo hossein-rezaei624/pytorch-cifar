@@ -144,6 +144,7 @@ def test(epoch):
     count = 0
     temp11 = []
     temp22 = []
+    some_new = []
     with torch.no_grad():
         '''#img, label = testset[0]
         
@@ -240,7 +241,10 @@ def test(epoch):
           print("the sum of the false angle is:", sum_2)
           final_ = (sum_1 + sum_2)/100
           print("Final:",final_)
-          break
+          
+          some_new.append(final_)
+          if counter==10:
+            break
 
           
         '''#print(img[0][0])
