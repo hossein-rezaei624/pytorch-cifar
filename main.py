@@ -247,7 +247,7 @@ def test(epoch):
           some_new.append(final_)
           if counter==10:
             break
-        print("some_new",some_new,sum(some_new)/10)
+        print("some_new",some_new,"\n",sum(some_new)/10)
           
         '''#print(img[0][0])
         print("ggggggggggggggggg",(img[0].permute(1,2,0).cpu().numpy()).max(),(img[0].permute(1,2,0).cpu().numpy()).min())
