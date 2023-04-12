@@ -220,6 +220,7 @@ def test(epoch):
           #print('cos',cos,cos.shape)
           angle = (torch.acos(cos)*57.2958)
           print("shape of the angle is:",angle.shape)
+          print("the angle of the first example",angle[0,:])
           break
 
           
