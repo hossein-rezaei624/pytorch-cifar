@@ -108,7 +108,7 @@ class ResNet(nn.Module):
         print("The representation:",out1)
         print("The shape of the representation:",out1.shape)
         out = self.linear(out1)
-        print("last layer output:",out)
+        #print("last layer output:",out)
         print("The shape of the last layer output:",out.shape)
         return out, out1
 
