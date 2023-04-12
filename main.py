@@ -231,8 +231,8 @@ def test(epoch):
           
           print("the len of the true angle:", len(temp11))
           print("the len of the false angle:",len(temp22[0])*len(temp22))
-          print("true angle",temp11[10])
-          print("false angle",temp22[10])
+          print("true angle",temp11[20])
+          print("false angle",temp22[20])
           
           break
 
