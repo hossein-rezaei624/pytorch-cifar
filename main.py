@@ -142,6 +142,8 @@ def test(epoch):
     correct = 0
     total = 0
     count = 0
+    temp11 = []
+    temp22 = []
     with torch.no_grad():
         '''#img, label = testset[0]
         
@@ -222,6 +224,14 @@ def test(epoch):
           print("shape of the angle is:",angle.shape)
           print("the angle of the first example",angle[20,:])
           print("shape of the label is:",label.shape)
+          
+          for h in range(100):
+            temp11.append(angle[h,label[h]])
+            temp22.append(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
+          
+          print("shape of the true angle:", temp11.shape)
+          print("shape of the false angle:",temp22.shape)
+          
           break
 
           
