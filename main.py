@@ -233,7 +233,7 @@ def test(epoch):
           print("the len of the false angle:",len(temp22[0])*len(temp22))
           print("true angle",temp11[20])
           print("false angle",temp22[20])
-          sum_ = temp11.sum()
+          sum_ = sum(temp11)
           print("the sum of the true angle is:", sum_)
           break
 
