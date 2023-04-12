@@ -39,7 +39,6 @@ transform_train = transforms.Compose([
 ])
 
 transform_test = transforms.Compose([
-    transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5)),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -170,7 +169,7 @@ def test(epoch):
           #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
           #img = torchvision.transforms.functional.adjust_contrast(img, contrast_factor = 1)
 
-          #img = torchvision.transforms.functional.rotate(img, 90)
+          img = torchvision.transforms.functional.rotate(img, 90)
           #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
           #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
 
