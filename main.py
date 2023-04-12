@@ -174,7 +174,7 @@ def test(epoch):
 
           outputs, rep = net(img)
           loss = criterion(outputs, label)
-          test_loss += loss.item()
+          test_loss = loss.item()
           _, predicted = outputs.max(1)
           correct = predicted.eq(label).sum().item()
           print("Loss:",test_loss,"Accuracy:",correct*100/100)
