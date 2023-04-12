@@ -142,8 +142,7 @@ def test(epoch):
     correct = 0
     total = 0
     count = 0
-    temp11 = []
-    temp22 = []
+    
     some_new = []
     with torch.no_grad():
         '''#img, label = testset[0]
@@ -160,7 +159,10 @@ def test(epoch):
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
           counter += 1
-
+          
+          temp11 = []
+          temp22 = []
+          
           #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
           #img = jitter(img)
           #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
