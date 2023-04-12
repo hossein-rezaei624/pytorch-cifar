@@ -236,7 +236,10 @@ def test(epoch):
           sum_1 = sum(temp11)
           print("the sum of the true angle is:", sum_1)
           
-          print(temp22,"\n",abs(temp22-90))
+          new_a = np.array(temp22)
+          print("new_a",new_a)
+          new_a = new_a - 90
+          print("new_a",new_a)
           
           sum_2 = sum(sum(temp22))
           print("the sum of the false angle is:", sum_2)
