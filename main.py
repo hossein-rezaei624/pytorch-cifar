@@ -228,11 +228,14 @@ def test(epoch):
           ###print("shape of the angle is:",angle.shape)
           ###print("the angle of the first example",angle[10,:])
           ###print("shape of the label is:",label.shape)
-          
+          cc = 0
           for h in range(100):
+            if predicted[h] != label[h]:
+              continue
+            cc += 1
             temp11.append(angle[h,label[h]])
             temp22.append(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90))
-          
+          print("cc",cc)
           ###print("the len of the true angle:", len(temp11))
           ###print("the len of the false angle:",len(temp22[0])*len(temp22))
           ###print("true angle",temp11[10])
