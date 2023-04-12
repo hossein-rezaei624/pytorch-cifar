@@ -178,7 +178,7 @@ def test(epoch):
           test_loss = loss.item()
           _, predicted = outputs.max(1)
           correct = predicted.eq(label).sum().item()
-          print("Loss:",test_loss,"Accuracy:",correct*100/100)
+          ####print("Loss:",test_loss,"Accuracy:",correct*100/100)
           '''print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
           print("manual shape",(torch.matmul(rep,weights_.transpose(0,1))+bias_).shape)
           mm_ = torch.nn.Softmax(dim=-1)
@@ -247,7 +247,7 @@ def test(epoch):
           sum_2 = sum(sum(temp22))
           ###print("the sum of the false angle is:", sum_2)
           final_ = (sum_1 + sum_2)/100
-          print("Final:",final_)
+          ####print("Final:",final_)
           
           some_new.append(final_)
           some_accuracy.append(correct)
@@ -256,7 +256,7 @@ def test(epoch):
             break'''
         print("some_new", sum(some_new)/100)
         print("some_accuracy",sum(some_accuracy)/100)
-        print("cc_",sum(cc_)/100)
+        ####print("cc_",sum(cc_)/100)
           
         '''#print(img[0][0])
         print("ggggggggggggggggg",(img[0].permute(1,2,0).cpu().numpy()).max(),(img[0].permute(1,2,0).cpu().numpy()).min())
