@@ -175,7 +175,7 @@ def test(epoch):
         output__ = mm_(torch.matmul(rep,weights_.transpose(0,1))+bias_)
         print(output__)
         
-        for i in range(10):
+        '''for i in range(10):
           
           a = rep[0,:]
           b = weights_[i,:]
@@ -193,8 +193,30 @@ def test(epoch):
           #print(cos)
           angle = torch.acos(cos)
 
-          print("The angle with the weights of the class",i," is:",angle*57.2958)
-          
+          print("The angle with the weights of the class",i," is:",angle*57.2958)'''
+        
+        
+        a = rep
+        #print("batch_idx",batch_idx)
+        b = weights_.transpose(0,1)
+        #print("aaaaa shape",a.shape)
+        #print("bbbbbbbbb shape",b.shape)
+        final = torch.matmul(a,b)+bias_
+        #print("final:",final)
+
+        inner_product = torch.matmul(a,b)
+        #print('inner_product',inner_product.shape)
+        a_norm = a.pow(2).sum(dim=1).pow(0.5)
+        #print('a_norm',a_norm.shape)
+        b_norm = b.pow(2).sum(dim=0).pow(0.5)
+        #print('b_norm',b_norm.shape)
+        hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
+        #print("torch.matmul(a_norm,b_norm) shape",hh.shape)
+        cos = inner_product / hh
+        #print('cos',cos,cos.shape)
+        angle = (torch.acos(cos)*57.2958)
+        print("shape of the angle is:",angle.shape)
+        
           
         #print(img[0][0])
         print("ggggggggggggggggg",(img[0].permute(1,2,0).cpu().numpy()).max(),(img[0].permute(1,2,0).cpu().numpy()).min())
