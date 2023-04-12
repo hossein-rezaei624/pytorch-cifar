@@ -236,9 +236,9 @@ def test(epoch):
           sum_1 = sum(temp11)
           print("the sum of the true angle is:", sum_1)
           
-          new_a = np.array(temp22.cpu())
+          new_a = torch.tensor(temp22)
           print("new_a",new_a)
-          new_a = new_a - 90
+          new_a = abs(new_a - 90)
           print("new_a",new_a)
           
           sum_2 = sum(sum(temp22))
