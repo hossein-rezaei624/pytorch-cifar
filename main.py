@@ -235,7 +235,10 @@ def test(epoch):
           print("false angle",temp22[20])
           sum_1 = sum(temp11)
           print("the sum of the true angle is:", sum_1)
-          sum_2 = sum(temp22)
+          
+          print(temp22,"\n",abs(temp22-90))
+          
+          sum_2 = sum(sum(temp22))
           print("the sum of the false angle is:", sum_2)
           break
 
