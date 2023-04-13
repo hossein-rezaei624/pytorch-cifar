@@ -99,6 +99,7 @@ def train(epoch):
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
+        inputs = torch.tensor(random_noise(inputs, mode='salt', amount=0.05))
         optimizer.zero_grad()
         outputs = net(inputs)
         loss = criterion(outputs, targets)
