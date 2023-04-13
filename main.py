@@ -263,7 +263,7 @@ def test(epoch):
             sum_2_4 = sum(sum(temp44))
           ###print("the sum of the false angle is:", sum_2)
           ####print((sum_1_3 + sum_2_4))
-          final_ = (((sum_1 + sum_2)/100) + ((5.2*sum_1_3 + sum_2_4)/(100)))/2
+          final_ = (((sum_1 + sum_2)/100) + ((6*sum_1_3 + sum_2_4)/(100)))/2
           ####print("Final:",final_)
           
           some_new.append(final_)
