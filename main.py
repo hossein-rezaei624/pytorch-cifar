@@ -16,8 +16,7 @@ from utils import progress_bar
 
 import numpy as np
 from matplotlib import pyplot as plt
-
-
+from skimage.util import random_noise
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -158,6 +157,8 @@ def test(epoch):
         
         counter = 0
         for batch_idx, (img, label) in enumerate(testloader):
+          
+          img = torch.tensor(random_noise(img, mode='salt', amount=0.05))
           img, label = img.to(device), label.to(device)
           counter += 1
           
