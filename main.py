@@ -28,6 +28,7 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
+    transforms.RandomRotation(45),
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
@@ -98,9 +99,9 @@ def train(epoch):
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         #print("targets.shape[0]",targets.shape[0])
-        for i in range(targets.shape[0]):
+        '''for i in range(targets.shape[0]):
           if targets[i] == 0:
-            inputs[i] = torch.tensor(random_noise(inputs[i], mode='salt', amount=0.0006))
+            inputs[i] = torch.tensor(random_noise(inputs[i], mode='salt', amount=0.0006))'''
         inputs, targets = inputs.to(device), targets.to(device)
         
         optimizer.zero_grad()
