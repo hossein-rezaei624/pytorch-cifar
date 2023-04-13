@@ -100,7 +100,7 @@ def train(epoch):
         #print("targets.shape[0]",targets.shape[0])
         for i in range(targets.shape[0]):
           if targets[i] == 0:
-            inputs[i] = torch.tensor(random_noise(inputs[i], mode='salt', amount=0.01))
+            inputs[i] = torch.tensor(random_noise(inputs[i], mode='salt', amount=0.005))
         inputs, targets = inputs.to(device), targets.to(device)
         
         optimizer.zero_grad()
