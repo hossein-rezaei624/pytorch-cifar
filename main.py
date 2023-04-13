@@ -158,7 +158,8 @@ def test(epoch):
         counter = 0
         for batch_idx, (img, label) in enumerate(testloader):
           
-          img = torch.tensor(random_noise(img, mode='salt', amount=0.05))
+          #img = torch.tensor(random_noise(img, mode='salt', amount=0.05))
+          img = img + torch.randn(img.size()) * 0.3 + 0.0
           img, label = img.to(device), label.to(device)
           counter += 1
           
