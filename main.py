@@ -29,7 +29,6 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 print('==> Preparing data..')
 transform_train = transforms.Compose([
     transforms.RandomRotation(90),
-    transforms.ColorJitter(brightness=(0,1), contrast=(0,1), saturation=(0,1), hue=(-0.5,0.5)),
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
