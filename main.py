@@ -31,8 +31,6 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -159,7 +157,7 @@ def test(epoch):
         for batch_idx, (img, label) in enumerate(testloader):
           
           #img = torch.tensor(random_noise(img, mode='salt', amount=0.05))
-          img = img + torch.randn(img.size()) * 0.3 + 0.0
+          #img = img + torch.randn(img.size()) * 0.3 + 0.0
           img, label = img.to(device), label.to(device)
           counter += 1
           
