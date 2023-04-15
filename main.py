@@ -233,55 +233,32 @@ def test(epoch):
           ###print("shape of the angle is:",angle.shape)
           ###print("the angle of the first example",angle[10,:])
           ###print("shape of the label is:",label.shape)
-          cc = 0
           for h in range(label.shape[0]):
-            if predicted[h] != label[h]:
-              continue
-            cc += 1
             temp11.append(angle[h,label[h]])
             temp22.append(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90))
+                
             
-       
-          for h in range(label.shape[0]):
-            if predicted[h] == label[h]:
-              continue
-            temp33.append(angle[h,label[h]])
-            temp44.append(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90))          
-            
-          ####print("cc",cc)
-          cc_.append(cc)
-          ###print("the len of the true angle:", len(temp11))
-          ###print("the len of the false angle:",len(temp22[0])*len(temp22))
-          ###print("true angle",temp11[10])
-          ###print("false angle",temp22[10])
+
+
           sum_1 = sum(temp11)
-          sum_1_3 = sum(temp33)
-          ###print("the sum of the true angle is:", sum_1)
-          ####print("len temp22",len(temp22),len(temp22[0]))
           sum_2 = sum(sum(temp22))
-          ####print("len temp44",len(temp44))
-          ####print(len(temp44[0]))
-          if (len(temp44) == 0):
-            sum_2_4 = 0
-          else:
-            sum_2_4 = sum(sum(temp44))
+
+
           ###print("the sum of the false angle is:", sum_2)
           ####print((sum_1_3 + sum_2_4))
-          final_ = (((sum_1 + sum_2)/label.shape[0]) + ((sum_1_3 + sum_2_4)/(label.shape[0])))
+          final_ = (((sum_1 + sum_2)/label.shape[0])
           ####print("Final:",final_)
           
           some_new_1.append(sum_1/label.shape[0])
           some_new_2.append(sum_2/label.shape[0])
-          some_new_3.append(sum_1_3/label.shape[0])
-          some_new_4.append(sum_2_4/label.shape[0])
           some_new.append(final_)
           some_accuracy.append(correct*100/label.shape[0])
           '''print("counter",counter)
           if counter==120:
             break'''
         #print("batch_idx",batch_idx)
-        print("A:",sum(some_new_1)/(batch_idx+1),', B:',sum(some_new_2)/(batch_idx+1),', C:',sum(some_new_3)/(batch_idx+1),', D:',sum(some_new_4)/(batch_idx+1))
-        print("All in all:",sum(some_new_1)/(batch_idx+1)+sum(some_new_2)/(batch_idx+1)+sum(some_new_3)/(batch_idx+1)+sum(some_new_4)/(batch_idx+1))
+        print("A:",sum(some_new_1)/(batch_idx+1),'B:',sum(some_new_2)/(batch_idx+1))
+        print("All in all:",sum(some_new_1)/(batch_idx+1)+sum(some_new_2)/(batch_idx+1))
         print("some_new", sum(some_new)/(batch_idx+1))
         print("some_accuracy",sum(some_accuracy)/(batch_idx+1))
         ####print("cc_",sum(cc_)/100)
