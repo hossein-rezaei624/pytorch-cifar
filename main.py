@@ -232,7 +232,7 @@ def test(epoch):
           angle = (torch.acos(cos)*57.2958)
 
           for h in range(label.shape[0]):
-            temp11.append(angle[h,label[h]])
+            temp11.append(min(angle[h,:]))
             temp22.append(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90))
                 
             
