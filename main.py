@@ -240,8 +240,8 @@ def test(epoch):
             temp11.append(aa__)
             bb__ = (angle[h,:] == aa__).nonzero(as_tuple=True)[0].item()
             cc__ = (abs(torch.cat((angle[h,:bb__], angle[h,bb__+1:]), axis = 0)-90))
-            aa__ + sum(cc__)
-            if (aa__ < 85.5219):
+            hh_ = aa__ + sum(cc__)
+            if (hh_ < 142):
               true_ +=1
             else:
               false_ +=1
