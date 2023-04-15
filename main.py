@@ -146,6 +146,8 @@ def test(epoch):
     some_new_3 = []
     some_new_4 = []
     some_accuracy = []
+    true_list = []
+    false_list = []
     with torch.no_grad():
         '''#img, label = testset[0]
         
@@ -231,25 +233,23 @@ def test(epoch):
           #print('cos',cos,cos.shape)
           angle = (torch.acos(cos)*57.2958)
 
+          true_ = 0
+          false_ = 0
           for h in range(label.shape[0]):
-            temp11.append(min(angle[h,:]))
-            temp22.append(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90))
-                
-            
+            aa__ = min(angle[h,:]).item()
+            temp11.append(aa__)
+            bb__ = (angle[h,:] == aa__).nonzero(as_tuple=True)[0].item()
+            cc__ = (abs(torch.cat((angle[h,:bb__], angle[h,bb__+1:]), axis = 0)-90))
+            aa__ + sum(cc__)
+            if (aa__ < 85.5219):
+              true_ +=1
+            else:
+              false_ +=1
+              
+          true_list.append(true_*100/label.shape[0])
+          false_list.append(false_*100/label.shape[0])
 
-
-          sum_1 = sum(temp11)
-          sum_2 = sum(sum(temp22))
-          final_ = (((sum_1 + sum_2)/label.shape[0])          
-          some_new_1.append(sum_1/label.shape[0])
-          some_new_2.append(sum_2/label.shape[0])
-          some_new.append(final_)
-          some_accuracy.append(correct*100/label.shape[0])
-
-        print("A:",sum(some_new_1)/(batch_idx+1),'B:',sum(some_new_2)/(batch_idx+1))
-        print("All in all:",sum(some_new_1)/(batch_idx+1)+sum(some_new_2)/(batch_idx+1))
-        print("some_new", sum(some_new)/(batch_idx+1))
-        print("some_accuracy",sum(some_accuracy)/(batch_idx+1))
+        print("Accuracy",sum(true_list)/(batch_idx+1))
           
 
 test(epoch=1)
