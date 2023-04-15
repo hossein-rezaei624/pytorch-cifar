@@ -141,6 +141,10 @@ def test(epoch):
     count = 0
     cc_ = []
     some_new = []
+    some_new_1 = []
+    some_new_2 = []
+    some_new_3 = []
+    some_new_4 = []
     some_accuracy = []
     with torch.no_grad():
         '''#img, label = testset[0]
@@ -263,15 +267,21 @@ def test(epoch):
             sum_2_4 = sum(sum(temp44))
           ###print("the sum of the false angle is:", sum_2)
           ####print((sum_1_3 + sum_2_4))
-          final_ = (((sum_1 + sum_2)/label.shape[0]) + ((7.1*sum_1_3 + sum_2_4)/(label.shape[0])))/2
+          final_ = (((sum_1 + sum_2)/label.shape[0]) + ((sum_1_3 + sum_2_4)/(label.shape[0])))
           ####print("Final:",final_)
           
+          some_new_1.append(sum_1/label.shape[0])
+          some_new_2.append(sum_2/label.shape[0])
+          some_new_3.append(sum_1_3/label.shape[0])
+          some_new_4.append(sum_2_4/label.shape[0])
           some_new.append(final_)
           some_accuracy.append(correct*100/label.shape[0])
           '''print("counter",counter)
           if counter==120:
             break'''
         #print("batch_idx",batch_idx)
+        print("A:",sum(some_new_1)/(batch_idx+1),', B:',sum(some_new_2)/(batch_idx+1),', C:',sum(some_new_3)/(batch_idx+1),', D:',sum(some_new_4)/(batch_idx+1))
+        print("All in all:",sum(some_new_1)/(batch_idx+1)+sum(some_new_2)/(batch_idx+1)+sum(some_new_3)/(batch_idx+1)+sum(some_new_4)/(batch_idx+1))
         print("some_new", sum(some_new)/(batch_idx+1))
         print("some_accuracy",sum(some_accuracy)/(batch_idx+1))
         ####print("cc_",sum(cc_)/100)
