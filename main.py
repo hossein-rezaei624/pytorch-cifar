@@ -267,7 +267,7 @@ def test(epoch):
           ####print("Final:",final_)
           
           some_new.append(final_)
-          some_accuracy.append(correct)
+          some_accuracy.append(correct*100/label.shape[0])
           '''print("counter",counter)
           if counter==120:
             break'''
