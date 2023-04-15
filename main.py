@@ -271,9 +271,9 @@ def test(epoch):
           '''print("counter",counter)
           if counter==120:
             break'''
-        print("batch_idx",batch_idx)
-        print("some_new", sum(some_new)/100)
-        print("some_accuracy",sum(some_accuracy)/100)
+        #print("batch_idx",batch_idx)
+        print("some_new", sum(some_new)/(batch_idx+1))
+        print("some_accuracy",sum(some_accuracy)/(batch_idx+1))
         ####print("cc_",sum(cc_)/100)
           
         '''#print(img[0][0])
