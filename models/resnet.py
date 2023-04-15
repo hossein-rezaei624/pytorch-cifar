@@ -96,6 +96,7 @@ class ResNet(nn.Module):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
         out = self.layer2(out)
+        print("shape of layer 2:", out.shape)
         out = self.layer3(out)
         #print("shape of layer 3:", out.shape)
         #out = self.layer4(out)
