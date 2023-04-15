@@ -230,7 +230,7 @@ def test(epoch):
           ###print("the angle of the first example",angle[10,:])
           ###print("shape of the label is:",label.shape)
           cc = 0
-          for h in range(100):
+          for h in range(label.shape[0]):
             if predicted[h] != label[h]:
               continue
             cc += 1
@@ -238,7 +238,7 @@ def test(epoch):
             temp22.append(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90))
             
        
-          for h in range(100):
+          for h in range(label.shape[0]):
             if predicted[h] == label[h]:
               continue
             temp33.append(angle[h,label[h]])
@@ -263,7 +263,7 @@ def test(epoch):
             sum_2_4 = sum(sum(temp44))
           ###print("the sum of the false angle is:", sum_2)
           ####print((sum_1_3 + sum_2_4))
-          final_ = (((sum_1 + sum_2)/100) + ((7.1*sum_1_3 + sum_2_4)/(100)))/2
+          final_ = (((sum_1 + sum_2)/label.shape[0]) + ((7.1*sum_1_3 + sum_2_4)/(label.shape[0])))/2
           ####print("Final:",final_)
           
           some_new.append(final_)
@@ -271,6 +271,7 @@ def test(epoch):
           '''print("counter",counter)
           if counter==120:
             break'''
+        print("batch_idx",batch_idx)
         print("some_new", sum(some_new)/100)
         print("some_accuracy",sum(some_accuracy)/100)
         ####print("cc_",sum(cc_)/100)
