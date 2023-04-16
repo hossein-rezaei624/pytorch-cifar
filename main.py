@@ -241,14 +241,14 @@ def test(epoch):
               continue
             cc += 1
             temp11.append(angle[h,label[h]])
-            temp22.append(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90))
+            temp22.append(sum(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))
 
 
           for h in range(label.shape[0]):
             if predicted[h] == label[h]:
               continue
             temp33.append(angle[h,label[h]])
-            temp44.append(sum(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))         
+            temp44.append((abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))         
             
           ####print("cc",cc)
           cc_.append(cc)
