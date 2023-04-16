@@ -171,6 +171,8 @@ def test(epoch):
           temp22 = []
           temp33 = []
           temp44 = []
+          temp55 = []
+          temp66 = []
           #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
           #img = jitter(img)
           #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
@@ -248,10 +250,13 @@ def test(epoch):
               false_ +=1
           temp33.append(max(temp11))
           temp44.append(max(temp22))
+          temp55.append(min(temp11))
+          temp66.append(min(temp22))
           true_list.append(true_*100/label.shape[0])
           false_list.append(false_*100/label.shape[0])
 
         print("Accuracy",sum(true_list)/(batch_idx+1))
-        print("max1",max(temp33),"max2",max(temp44))
+        print("max1",max(temp33),"max2",max(temp44).item())
+        print("min1",min(temp55),"min2",min(temp66).item())
 
 test(epoch=1)
