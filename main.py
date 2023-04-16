@@ -146,6 +146,8 @@ def test(epoch):
     some_new_3 = []
     some_new_4 = []
     some_accuracy = []
+    max_1 = []
+    max_2 = []
     with torch.no_grad():
         '''#img, label = testset[0]
         
