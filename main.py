@@ -240,16 +240,18 @@ def test(epoch):
             temp11.append(aa__)
             bb__ = (angle[h,:] == aa__).nonzero(as_tuple=True)[0].item()
             cc__ = (abs(torch.cat((angle[h,:bb__], angle[h,bb__+1:]), axis = 0)-90))
+            temp22.append(sum(cc__))
             hh_ = aa__ + sum(cc__)
             if (hh_ < 142):
               true_ +=1
             else:
               false_ +=1
-              
+          temp33.append(max(temp11))
+          temp44.append(max(temp22))
           true_list.append(true_*100/label.shape[0])
           false_list.append(false_*100/label.shape[0])
 
         print("Accuracy",sum(true_list)/(batch_idx+1))
-          
+        print("max1",max(temp33),"max2",max(temp44))
 
 test(epoch=1)
