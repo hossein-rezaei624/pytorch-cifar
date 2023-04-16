@@ -241,14 +241,14 @@ def test(epoch):
               continue
             cc += 1
             temp11.append(angle[h,label[h]])
-            temp22.append(90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)))
-            
-       
+            temp22.append(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90))
+
+
           for h in range(label.shape[0]):
             if predicted[h] == label[h]:
               continue
             temp33.append(angle[h,label[h]])
-            temp44.append(90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)))          
+            temp44.append(sum(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))         
             
           ####print("cc",cc)
           cc_.append(cc)
@@ -260,7 +260,7 @@ def test(epoch):
           sum_1_3 = sum(temp33)
           ###print("the sum of the true angle is:", sum_1)
           ####print("len temp22",len(temp22),len(temp22[0]))
-          sum_2 = sum(sum(temp22))
+          sum_2 = (sum(temp22))
           ####print("len temp44",len(temp44))
           ####print(len(temp44[0]))
           if (len(temp44) == 0):
@@ -271,7 +271,8 @@ def test(epoch):
           ####print((sum_1_3 + sum_2_4))
           final_ = (((sum_1 + sum_2)/label.shape[0]) + ((sum_1_3 + sum_2_4)/(label.shape[0])))
           ####print("Final:",final_)
-          
+          max_1.append(max(temp11))
+          max_2.append(max(temp22))
           some_new_1.append(sum_1/label.shape[0])
           some_new_2.append(sum_2/label.shape[0])
           some_new_3.append(sum_1_3/label.shape[0])
@@ -282,6 +283,7 @@ def test(epoch):
           if counter==120:
             break'''
         #print("batch_idx",batch_idx)
+        print("max1:",max(max_1),"max2",max(max_2))
         print("A:",sum(some_new_1)/(batch_idx+1),', B:',sum(some_new_2)/(batch_idx+1),', C:',sum(some_new_3)/(batch_idx+1),', D:',sum(some_new_4)/(batch_idx+1))
         print("All in all:",sum(some_new_1)/(batch_idx+1)+sum(some_new_2)/(batch_idx+1)+sum(some_new_3)/(batch_idx+1)+sum(some_new_4)/(batch_idx+1))
         print("some_new", sum(some_new)/(batch_idx+1))
