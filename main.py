@@ -28,11 +28,11 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.ElasticTransform()
-    transforms.RandomEqualize(p=0.5)
-    transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5))
-    transforms.RandomAffine(90)
-    transforms.ColorJitter(brightness=(0,0.2), contrast=(0,0.2), saturation=(0,0.2), hue=(-0.1,0.1))
+    transforms.ElasticTransform(),
+    transforms.RandomEqualize(p=0.5),
+    transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5)),
+    transforms.RandomAffine(90),
+    transforms.ColorJitter(brightness=(0,0.2), contrast=(0,0.2), saturation=(0,0.2), hue=(-0.1,0.1)),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
