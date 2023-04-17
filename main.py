@@ -28,8 +28,8 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.ElasticTransform(),
     transforms.RandomEqualize(p=0.3),
+    transforms.ElasticTransform(),
     transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5)),
     transforms.RandomAffine(30),
     transforms.ToTensor(),
@@ -57,7 +57,7 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
-net = ResNet18()
+net = ResNet34()
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
