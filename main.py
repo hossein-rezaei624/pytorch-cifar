@@ -135,11 +135,11 @@ def test(epoch):
     acc = 100.*correct/total
     
     print('Saving on the google drive')
-      state = {
-          'net': net.state_dict(),
-          'acc': acc,
-          'epoch': epoch,
-      }
+    state = {
+        'net': net.state_dict(),
+        'acc': acc,
+        'epoch': epoch,
+    }
     torch.save(state, '/content/drive/MyDrive/angle_models/others/ckpt.pth')
     
     if acc > best_acc:
