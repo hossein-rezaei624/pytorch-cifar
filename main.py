@@ -140,7 +140,7 @@ def test(epoch):
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, '/content/drive/MyDrive/angle_models/others/8/ckpt.pth')
+    torch.save(state, '/content/drive/MyDrive/angle_models/others/9/ckpt.pth')
     
     if acc > best_acc:
         print('Saving..')
