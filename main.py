@@ -43,13 +43,12 @@ transform_test = transforms.Compose([
 trainset = torchvision.datasets.CIFAR10(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=128, shuffle=False, num_workers=2)
+    trainset, batch_size=128, shuffle=True, num_workers=2)
 
 testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2)
-print("lennnnnnnnnnn of the testloader",len(testloader))
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
@@ -118,8 +117,8 @@ checkpoint = torch.load('./checkpoint/ckpt.pth')
 net.load_state_dict(checkpoint['net'])
 ###print('\n\nLayer params:')
 tempp = 0
-weights_ = torch.zeros((512,10))
-bias_ = torch.zeros((10))
+#weights_ = torch.zeros((512,10))
+#bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
     if (tempp==61):
@@ -131,7 +130,7 @@ for param in net.parameters():
       ###print("the shapeeeeeee",param.shape)
       bias_ = param
 #print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",net.state_dict())
-#print("temppppppppp",tempp)
+print("temppppppppp",tempp)
 def test(epoch):
     global best_acc
     net.eval()
@@ -148,25 +147,11 @@ def test(epoch):
     some_accuracy = []
     max_1 = []
     max_2 = []
-    with torch.no_grad():
-        '''#img, label = testset[0]
-        
-        #for i in range(324):
-          #img, label = next(iter(testloader))
-        img, label = next(iter(testloader))
-        print("img shape:",img.shape,img[0].shape,"label",label)
-        img, label = img[10].view((1,3,32,32)), label[10].view((1))
-        print("img shapeeeeeee:",img.shape,"label",label)
-        img, label = img.to(device), label.to(device)'''
-        
+    with torch.no_grad():        
         counter = 0
         for batch_idx, (img, label) in enumerate(testloader):
-          
-          #img = torch.tensor(random_noise(img, mode='salt', amount=0.05))
-          #img = img + torch.randn(img.size()) * 0.3 + 0.0
           img, label = img.to(device), label.to(device)
           counter += 1
-          
           temp11 = []
           temp22 = []
           temp33 = []
@@ -185,56 +170,19 @@ def test(epoch):
           test_loss = loss.item()
           _, predicted = outputs.max(1)
           correct = predicted.eq(label).sum().item()
-          ####print("Loss:",test_loss,"Accuracy:",correct*100/100)
-          '''print("manual",torch.matmul(rep,weights_.transpose(0,1))+bias_)
-          print("manual shape",(torch.matmul(rep,weights_.transpose(0,1))+bias_).shape)
-          mm_ = torch.nn.Softmax(dim=-1)
-          output__ = mm_(torch.matmul(rep,weights_.transpose(0,1))+bias_)
-          print(output__)'''
-
-          '''for i in range(10):
-
-            a = rep[0,:]
-            b = weights_[i,:]
-            #print("aaaaa shape",a.shape)
-            #print("bbbbbbbbb shape",b.shape)
-            final = torch.matmul(a,b)+bias_[i]
-            print("final",i,":",final)
-
-            inner_product = (a * b).sum(dim=0)
-            #print(inner_product)
-            a_norm = a.pow(2).sum(dim=0).pow(0.5)
-            #print(a_norm)
-            b_norm = b.pow(2).sum(dim=0).pow(0.5)
-            cos = inner_product / (a_norm * b_norm)
-            #print(cos)
-            angle = torch.acos(cos)
-
-            print("The angle with the weights of the class",i," is:",angle*57.2958)'''
 
 
           a = rep
-          #print("batch_idx",batch_idx)
           b = weights_.transpose(0,1)
-          #print("aaaaa shape",a.shape)
-          #print("bbbbbbbbb shape",b.shape)
           final = torch.matmul(a,b)+bias_
-          #print("final:",final)
 
           inner_product = torch.matmul(a,b)
-          #print('inner_product',inner_product.shape)
           a_norm = a.pow(2).sum(dim=1).pow(0.5)
-          #print('a_norm',a_norm.shape)
           b_norm = b.pow(2).sum(dim=0).pow(0.5)
-          #print('b_norm',b_norm.shape)
           hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
-          #print("torch.matmul(a_norm,b_norm) shape",hh.shape)
           cos = inner_product / hh
-          #print('cos',cos,cos.shape)
           angle = (torch.acos(cos)*57.2958)
-          ###print("shape of the angle is:",angle.shape)
-          ###print("the angle of the first example",angle[10,:])
-          ###print("shape of the label is:",label.shape)
+
           cc = 0
           for h in range(label.shape[0]):
             if predicted[h] != label[h]:
@@ -250,27 +198,15 @@ def test(epoch):
             temp33.append(angle[h,label[h]])
             temp44.append((abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))         
             
-          ####print("cc",cc)
           cc_.append(cc)
-          ###print("the len of the true angle:", len(temp11))
-          ###print("the len of the false angle:",len(temp22[0])*len(temp22))
-          ###print("true angle",temp11[10])
-          ###print("false angle",temp22[10])
           sum_1 = sum(temp11)
           sum_1_3 = sum(temp33)
-          ###print("the sum of the true angle is:", sum_1)
-          ####print("len temp22",len(temp22),len(temp22[0]))
           sum_2 = (sum(temp22))
-          ####print("len temp44",len(temp44))
-          ####print(len(temp44[0]))
           if (len(temp44) == 0):
             sum_2_4 = 0
           else:
             sum_2_4 = sum(sum(temp44))
-          ###print("the sum of the false angle is:", sum_2)
-          ####print((sum_1_3 + sum_2_4))
           final_ = (((sum_1 + sum_2)/correct) + ((sum_1_3 + sum_2_4)/((label.shape[0] - correct)+0.0000000001)))
-          ####print("Final:",final_)
           max_1.append(max(temp11))
           max_2.append(max(temp22))
           some_new_1.append(sum_1/correct)
@@ -279,62 +215,13 @@ def test(epoch):
           some_new_4.append(sum_2_4/((label.shape[0] - correct)+0.0000000001))
           some_new.append(final_)
           some_accuracy.append(correct*100/label.shape[0])
-          '''print("counter",counter)
-          if counter==120:
-            break'''
-        #print("batch_idx",batch_idx)
+
         print("max1:",max(max_1),"max2",max(max_2))
-        print("A:",sum(some_new_1)/(batch_idx+1),', B:',sum(some_new_2)/(batch_idx+1),', C:',sum(some_new_3)/(batch_idx+1),', D:',sum(some_new_4)/(batch_idx+1))
-        print("All in all:",sum(some_new_1)/(batch_idx+1)+sum(some_new_2)/(batch_idx+1)+sum(some_new_3)/(batch_idx+1)+sum(some_new_4)/(batch_idx+1))
-        print("some_new", sum(some_new)/(batch_idx+1))
-        print("some_accuracy",sum(some_accuracy)/(batch_idx+1))
-        ####print("cc_",sum(cc_)/100)
-          
-        '''#print(img[0][0])
-        print("ggggggggggggggggg",(img[0].permute(1,2,0).cpu().numpy()).max(),(img[0].permute(1,2,0).cpu().numpy()).min())
-        #aa_ = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).mean())/((img[0].permute(1,2,0).cpu().numpy()).std()))*255.0).astype(np.uint8)))
-        aa_ = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).min())/((img[0].permute(1,2,0).cpu().numpy()).max()-(img[0].permute(1,2,0).cpu().numpy()).min()))*255.0).astype(np.uint8)))
-        #plt.imsave("./image.png",(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1)*255.0).astype(np.uint8))
-        plt.imsave("./image.png", aa_)
-        #print(np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).max(),np.clip((img[0].permute(1,2,0).cpu().numpy()), 0, 1).min())
-        #plt.show()
-        #//////////////////////////////////////////////////'''
-        
-        
-    
-    '''with torch.no_grad():
-        #print("the lenght of the testloader",len(testloader))
-        for batch_idx, (inputs, targets) in enumerate(testloader[0]):
-            #count +=1
-            #print("count number",count)
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
-            loss = criterion(outputs, targets)
+        print("A:",sum(some_new_1)/(batch_idx+1),'B:',sum(some_new_2)/(batch_idx+1),'C:',sum(some_new_3)/(batch_idx+1),'D:',sum(some_new_4)/(batch_idx+1))
+        print("Sum:",sum(some_new_1)/(batch_idx+1)+sum(some_new_2)/(batch_idx+1)+sum(some_new_3)/(batch_idx+1)+sum(some_new_4)/(batch_idx+1))
+        #print("some_new", sum(some_new)/(batch_idx+1))
+        print("Accuracy",sum(some_accuracy)/(batch_idx+1))
 
-            test_loss += loss.item()
-            _, predicted = outputs.max(1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
-
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                         % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-    # Save checkpoint.
-    acc = 100.*correct/total
-    if acc > best_acc:
-        print('Saving..')
-        state = {
-            'net': net.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-        }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.pth')
-        best_acc = acc'''
 
 test(epoch=1)
-'''for epoch in range(start_epoch, start_epoch+200):
-    #train(epoch)
-    test(epoch)
-    scheduler.step()'''
+
