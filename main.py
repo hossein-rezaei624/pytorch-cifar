@@ -28,6 +28,7 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
+    transforms.RandomRotation(45),
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
@@ -55,10 +56,10 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
-net = ResNet18()
+#net = DLA()
 # net = PreActResNet18()
 # net = GoogLeNet()
-# net = DenseNet121()
+net = ResNet18()
 # net = ResNeXt29_2x64d()
 # net = MobileNet()
 # net = MobileNetV2()
@@ -142,7 +143,7 @@ def test(epoch):
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, '/content/drive/MyDrive/angle_models/others/17/ckpt.pth')
+    torch.save(state, '/content/drive/MyDrive/angle_models/others/18/ckpt.pth')
     
     if acc > best_acc:
         print('Saving..')
