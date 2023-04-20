@@ -124,11 +124,11 @@ tempp = 0
 #bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
-    if (tempp==109):
+    if (tempp==61):
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       weights_ = param
-    if (tempp==110):
+    if (tempp==62):
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       bias_ = param
