@@ -90,6 +90,9 @@ optimizer = optim.SGD(net.parameters(), lr=args.lr,
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
 
+checkpoint = torch.load('./checkpoint/ckpt.pth')
+net.load_state_dict(checkpoint['net'])
+
 # Training
 def train(epoch):
     print('\nEpoch: %d' % epoch)
@@ -99,11 +102,11 @@ def train(epoch):
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
-        optimizer.zero_grad()
+        #optimizer.zero_grad()
         outputs = net(inputs)
         loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
+        #loss.backward()
+        #optimizer.step()
 
         train_loss += loss.item()
         _, predicted = outputs.max(1)
@@ -113,8 +116,7 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-checkpoint = torch.load('./checkpoint/ckpt.pth')
-net.load_state_dict(checkpoint['net'])
+
 ###print('\n\nLayer params:')
 tempp = 0
 #weights_ = torch.zeros((512,10))
