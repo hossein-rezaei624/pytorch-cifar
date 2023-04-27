@@ -31,6 +31,9 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
+    transforms.RandomRotation(45),
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -123,11 +126,11 @@ tempp = 0
 #bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
-    if (tempp==109):
+    if (tempp==61):
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       weights_ = param
-    if (tempp==110):
+    if (tempp==62):
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       bias_ = param
