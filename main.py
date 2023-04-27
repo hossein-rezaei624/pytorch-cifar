@@ -237,14 +237,15 @@ def test(epoch):
           some_new.append(final_)
           some_accuracy.append(correct*100/label.shape[0])
           
-          print("soft33",(soft33))
+          #print("soft33",(soft33))
           #print("soft11",len(soft11))
           dd_ = sum(soft11)
           gg_ = sum(soft33)
           #print("dd_",dd_)
-          print("gg_",gg_)
+          #print("gg_",gg_)
           soft22.append(dd_/correct)
           soft44.append(gg_/((label.shape[0] - correct)+0.0000000001))
+          print("len(soft22)",len(soft22))
 
         print("max1:",max(max_1),"max2",max(max_2))
         print("A:",sum(some_new_1)/(batch_idx+1),'B:',sum(some_new_2)/(batch_idx+1),'C:',sum(some_new_3)/(batch_idx+1),'D:',sum(some_new_4)/(batch_idx+1))
