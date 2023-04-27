@@ -237,9 +237,9 @@ def test(epoch):
           some_new.append(final_)
           some_accuracy.append(correct*100/label.shape[0])
           
-          #print("soft33",len(soft33))
+          print("soft33",(soft33))
           #print("soft11",len(soft11))
-          dd_ = sum(soft11)
+          #dd_ = sum(soft11)
           gg_ = sum(soft33)
           print("dd_",dd_)
           print("gg_",gg_)
