@@ -239,7 +239,7 @@ def test(epoch):
           
           print("soft33",(soft33))
           #print("soft11",len(soft11))
-          #dd_ = sum(soft11)
+          dd_ = sum(soft11)
           gg_ = sum(soft33)
           #print("dd_",dd_)
           print("gg_",gg_)
