@@ -135,6 +135,30 @@ for param in net.parameters():
       bias_ = param
 #print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",net.state_dict())
 print("temppppppppp",tempp)
+
+
+
+haha = []
+for j in range(10):
+  a = weights_[j].view((1,weights_[j].shape[0]))
+  weights__ = torch.cat((weights_[:j,:], weights_[j+1:,:]), dim = 0)
+  b = weights__.transpose(0,1)
+
+  inner_product = torch.matmul(a,b)
+  a_norm = a.pow(2).sum(dim=1).pow(0.5)
+  b_norm = b.pow(2).sum(dim=0).pow(0.5)
+  hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,9)))
+  cos = inner_product / hh
+  angle = (torch.acos(cos)*57.2958)
+
+  haha.append(sum(90 - angle[0]).item())
+
+print("sum of all angles is:",sum(haha)/10)
+
+
+
+
+
 def test(epoch):
     global best_acc
     net.eval()
