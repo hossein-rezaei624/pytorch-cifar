@@ -120,7 +120,7 @@ class DLA(nn.Module):
         out = F.avg_pool2d(out, 4)
         out1 = out.view(out.size(0), -1)
         out = self.linear(out1)
-        return out,out1
+        return out, out1
 
 
 def test():
