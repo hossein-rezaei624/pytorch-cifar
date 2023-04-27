@@ -158,6 +158,7 @@ def test(epoch):
           temp22 = []
           temp33 = []
           temp44 = []
+          soft11 = []
           #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
           #img = jitter(img)
           #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
@@ -184,6 +185,11 @@ def test(epoch):
           hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
           cos = inner_product / hh
           angle = (torch.acos(cos)*57.2958)
+          
+          print("outputs.shape",outputs.shape)
+          print("outputs",outputs)
+          #SoftMax_ = nn.functional.softmax(outputs, dim = -1)
+          
 
           cc = 0
           for h in range(label.shape[0]):
@@ -192,6 +198,7 @@ def test(epoch):
             cc += 1
             temp11.append(angle[h,label[h]])
             temp22.append(sum(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))
+            #soft11.append(nn.functional.softmax(some, dim = -1))
 
 
           for h in range(label.shape[0]):
