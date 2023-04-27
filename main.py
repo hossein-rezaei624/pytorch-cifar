@@ -163,6 +163,8 @@ def test(epoch):
           temp44 = []
           soft11 = []
           soft33 = []
+          soft22 = []
+          soft44 = []
           #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
           #img = jitter(img)
           #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
@@ -234,6 +236,9 @@ def test(epoch):
           some_new_4.append(sum_2_4/((label.shape[0] - correct)+0.0000000001))
           some_new.append(final_)
           some_accuracy.append(correct*100/label.shape[0])
+          
+          soft22.append(sum(soft11)/correct)
+          soft44.append(sum(soft33)/((label.shape[0] - correct)+0.0000000001))
 
         print("max1:",max(max_1),"max2",max(max_2))
         print("A:",sum(some_new_1)/(batch_idx+1),'B:',sum(some_new_2)/(batch_idx+1),'C:',sum(some_new_3)/(batch_idx+1),'D:',sum(some_new_4)/(batch_idx+1))
@@ -241,8 +246,10 @@ def test(epoch):
         #print("some_new", sum(some_new)/(batch_idx+1))
         print("Accuracy",sum(some_accuracy)/(batch_idx+1))
         
-        print("SoftMax of truly classified images:", soft11)
-        print("SoftMax of misclassified images:", soft33)
+        #print("SoftMax of truly classified images:", soft11)
+        #print("SoftMax of misclassified images:", soft33)
+        print("true class SoftMax:",sum(soft22)/(batch_idx+1))
+        print("fals class SoftMax:",sum(soft44)/(batch_idx+1))
 
 
 test(epoch=1)
