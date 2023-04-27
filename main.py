@@ -194,7 +194,7 @@ def test(epoch):
           SoftMax_ = nn.functional.softmax(outputs, dim = 1)
           #print('SoftMax_.shape',SoftMax_.shape)
           #print('SoftMax_',SoftMax_)
-          SoftMax_predicted = SoftMax_.max(1)
+          SoftMax_predicted, indices = SoftMax_.max(1)
           print("SoftMax_predicted",SoftMax_predicted)
           print("SoftMax_predicted.shape",SoftMax_predicted.shape)
           
