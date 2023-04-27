@@ -252,11 +252,6 @@ def test(epoch):
         #print("some_new", sum(some_new)/(batch_idx+1))
         print("Accuracy",sum(some_accuracy)/(batch_idx+1))
         
-        #print("SoftMax of truly classified images:", soft11)
-        #print("SoftMax of misclassified images:", soft33)
-        print("soft22",soft22)
-        print("soft44",soft44)
-        print("lennnn",len(soft22), len(soft44))
         print("true class SoftMax:",sum(soft22)/(batch_idx+1))
         print("fals class SoftMax:",sum(soft44)/(batch_idx+1))
 
