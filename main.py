@@ -231,6 +231,7 @@ def test(epoch):
           max_1.append(max(temp11))
           max_2.append(max(temp22))
           some_new_1.append(sum_1/correct)
+          print("len(some_new_1)",len(some_new_1))
           some_new_2.append(sum_2/correct)
           some_new_3.append(sum_1_3/((label.shape[0] - correct)+0.0000000001))
           some_new_4.append(sum_2_4/((label.shape[0] - correct)+0.0000000001))
