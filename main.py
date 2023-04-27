@@ -162,6 +162,7 @@ def test(epoch):
           temp33 = []
           temp44 = []
           soft11 = []
+          soft33 = []
           #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
           #img = jitter(img)
           #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
@@ -189,14 +190,14 @@ def test(epoch):
           cos = inner_product / hh
           angle = (torch.acos(cos)*57.2958)
           
-          print("outputs.shape",outputs.shape)
+          #print("outputs.shape",outputs.shape)
           #print("outputs",outputs)
           SoftMax_ = nn.functional.softmax(outputs, dim = 1)
           #print('SoftMax_.shape',SoftMax_.shape)
           #print('SoftMax_',SoftMax_)
           SoftMax_predicted, indices = SoftMax_.max(1)
-          print("SoftMax_predicted",SoftMax_predicted)
-          print("SoftMax_predicted.shape",SoftMax_predicted.shape)
+          #print("SoftMax_predicted",SoftMax_predicted)
+          #print("SoftMax_predicted.shape",SoftMax_predicted.shape)
           
 
           cc = 0
@@ -206,14 +207,15 @@ def test(epoch):
             cc += 1
             temp11.append(angle[h,label[h]])
             temp22.append(sum(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))
-            #soft11.append(nn.functional.softmax(some, dim = -1))
+            soft11.append(SoftMax_predicted[h])
 
 
           for h in range(label.shape[0]):
             if predicted[h] == label[h]:
               continue
             temp33.append(angle[h,label[h]])
-            temp44.append((abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))         
+            temp44.append((abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))
+            soft33.append(SoftMax_predicted[h])
             
           cc_.append(cc)
           sum_1 = sum(temp11)
@@ -238,6 +240,9 @@ def test(epoch):
         print("Sum:",sum(some_new_1)/(batch_idx+1)+sum(some_new_2)/(batch_idx+1)+sum(some_new_3)/(batch_idx+1)+sum(some_new_4)/(batch_idx+1))
         #print("some_new", sum(some_new)/(batch_idx+1))
         print("Accuracy",sum(some_accuracy)/(batch_idx+1))
+        
+        print("SoftMax of truly classified images:", soft11)
+        print("SoftMax of misclassified images:", soft33)
 
 
 test(epoch=1)
