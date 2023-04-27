@@ -152,6 +152,10 @@ def test(epoch):
     some_accuracy = []
     max_1 = []
     max_2 = []
+    
+    soft22 = []
+    soft44 = []
+    
     with torch.no_grad():        
         counter = 0
         for batch_idx, (img, label) in enumerate(testloader):
@@ -163,8 +167,7 @@ def test(epoch):
           temp44 = []
           soft11 = []
           soft33 = []
-          soft22 = []
-          soft44 = []
+          
           #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
           #img = jitter(img)
           #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
@@ -231,19 +234,14 @@ def test(epoch):
           max_1.append(max(temp11))
           max_2.append(max(temp22))
           some_new_1.append(sum_1/correct)
-          print("len(some_new_1)",len(some_new_1))
           some_new_2.append(sum_2/correct)
           some_new_3.append(sum_1_3/((label.shape[0] - correct)+0.0000000001))
           some_new_4.append(sum_2_4/((label.shape[0] - correct)+0.0000000001))
           some_new.append(final_)
           some_accuracy.append(correct*100/label.shape[0])
           
-          #print("soft33",(soft33))
-          #print("soft11",len(soft11))
           dd_ = sum(soft11)
           gg_ = sum(soft33)
-          #print("dd_",dd_)
-          #print("gg_",gg_)
           soft22.append(dd_/correct)
           soft44.append(gg_/((label.shape[0] - correct)+0.0000000001))
           print("len(soft22)",len(soft22))
