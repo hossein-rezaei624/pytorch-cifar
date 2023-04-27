@@ -241,7 +241,7 @@ def test(epoch):
           #print("soft11",len(soft11))
           #dd_ = sum(soft11)
           gg_ = sum(soft33)
-          print("dd_",dd_)
+          #print("dd_",dd_)
           print("gg_",gg_)
           soft22.append(dd_/correct)
           soft44.append(gg_/((label.shape[0] - correct)+0.0000000001))
