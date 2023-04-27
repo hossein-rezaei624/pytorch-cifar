@@ -190,8 +190,10 @@ def test(epoch):
           angle = (torch.acos(cos)*57.2958)
           
           print("outputs.shape",outputs.shape)
-          print("outputs",outputs)
-          #SoftMax_ = nn.functional.softmax(outputs, dim = -1)
+          #print("outputs",outputs)
+          SoftMax_ = nn.functional.softmax(outputs, dim = 1)
+          print('SoftMax_.shape',SoftMax_.shape)
+          print('SoftMax_',SoftMax_)
           
 
           cc = 0
