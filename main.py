@@ -237,7 +237,7 @@ def test(epoch):
               continue
             cc += 1
             temp11.append(angle[h,label[h]])
-            temp22.append(sum(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))
+            temp22.append(sum(90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))))
             soft11.append(SoftMax_predicted[h])
 
 
@@ -245,7 +245,7 @@ def test(epoch):
             if predicted[h] == label[h]:
               continue
             temp33.append(angle[h,label[h]])
-            temp44.append((abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))
+            temp44.append((90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))))
             soft33.append(SoftMax_predicted[h])
             
           cc_.append(cc)
