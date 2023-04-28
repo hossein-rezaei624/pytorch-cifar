@@ -198,9 +198,9 @@ def test(epoch):
           #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
           #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
           
-          #img = torchvision.transforms.functional.adjust_gamma(img, gamma = 0.7, gain = 1.2)
-          #img = torchvision.transforms.functional.adjust_sharpness(img, sharpness_factor = 2)
-          #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 2)
+          #img = torchvision.transforms.functional.adjust_gamma(img, gamma = 1.0, gain = 0.7)
+          #img = torchvision.transforms.functional.adjust_sharpness(img, sharpness_factor = 1)
+          #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
           
 
           outputs, rep = net(img)
