@@ -31,8 +31,6 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -199,6 +197,11 @@ def test(epoch):
           #img = torchvision.transforms.functional.rotate(img, 90)
           #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
           #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
+          
+          #img = torchvision.transforms.functional.adjust_gamma(img, gamma = 0.7, gain = 1.2)
+          #img = torchvision.transforms.functional.adjust_sharpness(img, sharpness_factor = 2)
+          #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 2)
+          
 
           outputs, rep = net(img)
           loss = criterion(outputs, label)
