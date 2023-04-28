@@ -202,6 +202,10 @@ def test(epoch):
           #img = torchvision.transforms.functional.adjust_sharpness(img, sharpness_factor = 1)
           #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
           
+          
+          aa_a = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).min())/((img[0].permute(1,2,0).cpu().numpy()).max()-(img[0].permute(1,2,0).cpu().numpy()).min()))*255.0).astype(np.uint8)))
+          plt.imsave("./image.png", aa_a)
+          
 
           outputs, rep = net(img)
           loss = criterion(outputs, label)
