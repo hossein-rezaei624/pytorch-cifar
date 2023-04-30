@@ -144,7 +144,7 @@ def test(epoch):
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, f'/content/drive/MyDrive/final/1/ckpt{epoch}.pth')    
+    torch.save(state, f'/content/drive/MyDrive/final/2/ckpt{epoch}.pth')    
     
     if acc > best_acc:
         print('Saving..')
