@@ -56,7 +56,7 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
-net = ResNet18()
+net = DLA()
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
@@ -144,7 +144,7 @@ def test(epoch):
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, f'/content/drive/MyDrive/final/14/ckpt{epoch}.pth')    
+    torch.save(state, f'/content/drive/MyDrive/final/15/ckpt{epoch}.pth')    
     
     if acc > best_acc:
         print('Saving..')
