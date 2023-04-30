@@ -141,7 +141,7 @@ def test(epoch):
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, f'/content/drive/MyDrive/final/5/ckpt{epoch}.pth')    
+    torch.save(state, f'/content/drive/MyDrive/final/1/ckpt{epoch}.pth')    
     
     if acc > best_acc:
         print('Saving..')
@@ -158,7 +158,7 @@ def test(epoch):
 
 
 def test_train(epoch):
-    #global best_acc
+    global best_acc
     net.eval()
     test_loss = 0
     correct = 0
