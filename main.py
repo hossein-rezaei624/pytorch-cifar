@@ -186,18 +186,14 @@ def test(epoch):
           soft11 = []
           soft33 = []
           
-          #jitter = torchvision.transforms.ColorJitter(brightness=.5, hue=.3)
-          #img = jitter(img)
-          #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1)
-          #img = torchvision.transforms.functional.adjust_contrast(img, contrast_factor = 1)
-
-          #img = torchvision.transforms.functional.rotate(img, 90)
-          #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
-          #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
-          
+                    
           #img = torchvision.transforms.functional.adjust_sharpness(img, sharpness_factor = 2)
-          #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 2)
-          #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
+          #img = torchvision.transforms.functional.equalize(img)
+          #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
+          #img = torchvision.transforms.functional.perspective(img, startpoints: [[20,100], [20,100], [20,100], [20,100]], endpoints: [[20,100], [20,100], [20,100], [20,100]])          
+          #img = torchvision.transforms.functional.posterize(img, bits = 2)
+          #img = torchvision.transforms.functional.rotate(img, 90)
+          
           
           
           aa_a = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).min())/((img[0].permute(1,2,0).cpu().numpy()).max()-(img[0].permute(1,2,0).cpu().numpy()).min()))*255.0).astype(np.uint8)))
