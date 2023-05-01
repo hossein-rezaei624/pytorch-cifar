@@ -191,7 +191,7 @@ def test(epoch):
           #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 2)
           #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(5, 9), sigma=(0.1, 5))
           #img = torchvision.transforms.functional.perspective(img, startpoints = [[0,0], [32,0], [32,32], [0,32]], endpoints = [[7,5], [26,1], [28,27], [1,27]])       
-          #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 2)
+          #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.2)
           #img = torchvision.transforms.functional.rotate(img, 90)
           
           
