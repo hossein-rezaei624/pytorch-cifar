@@ -85,16 +85,13 @@ if args.resume:
     start_epoch = checkpoint['epoch']
 
 criterion = nn.CrossEntropyLoss()
-#optimizer = optim.SGD(net.parameters(), lr=args.lr,
-#                      momentum=0.9, weight_decay=5e-4)
-#scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+optimizer = optim.SGD(net.parameters(), lr=args.lr,
+                      momentum=0.9, weight_decay=5e-4)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
-
-checkpoint = torch.load('./checkpoint/ckpt.pth')
-net.load_state_dict(checkpoint['net'])
 
 # Training
-def train(epoch):
+'''def train(epoch):
     print('\nEpoch: %d' % epoch)
     net.train()
     train_loss = 0
@@ -102,11 +99,11 @@ def train(epoch):
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
-        #optimizer.zero_grad()
+        optimizer.zero_grad()
         outputs, _ = net(inputs)
         loss = criterion(outputs, targets)
-        #loss.backward()
-        #optimizer.step()
+        loss.backward()
+        optimizer.step()
 
         train_loss += loss.item()
         _, predicted = outputs.max(1)
@@ -114,8 +111,11 @@ def train(epoch):
         correct += predicted.eq(targets).sum().item()
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                     % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+                     % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))'''
 
+
+checkpoint = torch.load('./checkpoint/ckpt.pth')
+net.load_state_dict(checkpoint['net'])
 
 ###print('\n\nLayer params:')
 tempp = 0
@@ -135,7 +135,6 @@ for param in net.parameters():
 print("temppppppppp",tempp)
 
 
-
 haha = []
 for j in range(10):
   a = weights_[j].view((1,weights_[j].shape[0]))
@@ -152,8 +151,6 @@ for j in range(10):
   haha.append(sum(abs(90 - angle[0])).item())
 
 print("sum of all angles is:",sum(haha)/10)
-
-
 
 
 
@@ -241,7 +238,7 @@ def test(epoch):
               continue
             cc += 1
             temp11.append(angle[h,label[h]])
-            temp22.append(sum(90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))))
+            temp22.append(sum(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))
             soft11.append(SoftMax_predicted[h])
 
 
@@ -249,7 +246,7 @@ def test(epoch):
             if predicted[h] == label[h]:
               continue
             temp33.append(angle[h,label[h]])
-            temp44.append((90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))))
+            temp44.append((abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))  
             soft33.append(SoftMax_predicted[h])
             
           cc_.append(cc)
@@ -275,7 +272,7 @@ def test(epoch):
           soft22.append(dd_/correct)
           soft44.append(gg_/((label.shape[0] - correct)+0.0000000001))
 
-        print("max1:",max(max_1),"max2",max(max_2))
+        #print("max1:",max(max_1),"max2",max(max_2))
         print("A:",sum(some_new_1)/(batch_idx+1),'B:',sum(some_new_2)/(batch_idx+1),'C:',sum(some_new_3)/(batch_idx+1),'D:',sum(some_new_4)/(batch_idx+1))
         print("Sum:",sum(some_new_1)/(batch_idx+1)+sum(some_new_2)/(batch_idx+1)+sum(some_new_3)/(batch_idx+1)+sum(some_new_4)/(batch_idx+1))
         #print("some_new", sum(some_new)/(batch_idx+1))
