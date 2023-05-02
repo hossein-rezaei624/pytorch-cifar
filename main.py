@@ -148,7 +148,7 @@ for j in range(10):
   cos = inner_product / hh
   angle = (torch.acos(cos)*57.2958)
 
-  haha.append(sum(abs(90 - angle[0])).item())
+  haha.append(sum((90 - angle[0])).item())
 
 print("sum of all angles is:",sum(haha)/10)
 
