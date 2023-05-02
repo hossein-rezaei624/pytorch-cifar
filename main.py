@@ -31,9 +31,6 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomVerticalFlip(),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -237,7 +234,7 @@ def test(epoch):
               continue
             cc += 1
             temp11.append(angle[h,label[h]])
-            temp22.append(sum(abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))
+            temp22.append(sum(90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))))
             soft11.append(SoftMax_predicted[h])
 
 
@@ -245,7 +242,7 @@ def test(epoch):
             if predicted[h] == label[h]:
               continue
             temp33.append(angle[h,label[h]])
-            temp44.append((abs(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0)-90)))  
+            temp44.append((90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))))
             soft33.append(SoftMax_predicted[h])
             
           cc_.append(cc)
