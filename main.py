@@ -28,9 +28,6 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomVerticalFlip(),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -144,7 +141,7 @@ def test(epoch):
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, f'/content/drive/MyDrive/final/CIFAR100/2/ckpt{epoch}.pth')    
+    torch.save(state, f'/content/drive/MyDrive/final/CIFAR100/3/ckpt{epoch}.pth')    
     
     if acc > best_acc:
         print('Saving..')
@@ -181,7 +178,7 @@ def test_train(epoch):
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
         
         
-for epoch in range(start_epoch, start_epoch+250):
+for epoch in range(start_epoch, start_epoch+300):
     train(epoch)
     test(epoch)
     test_train(epoch)
