@@ -179,7 +179,7 @@ def test_train(epoch):
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
         
         
-for epoch in range(start_epoch, start_epoch+300):
+for epoch in range(start_epoch, start_epoch+250):
     train(epoch)
     test(epoch)
     test_train(epoch)
