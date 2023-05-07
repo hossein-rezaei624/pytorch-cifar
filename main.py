@@ -28,7 +28,9 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5)),
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomRotation(90),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -38,14 +40,13 @@ transform_test = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-trainset = torchvision.datasets.SVHN(
-    root='./data', split = 'train', download=True, transform=transform_train)
-
+trainset = torchvision.datasets.CIFAR100(
+    root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=128, shuffle=False, num_workers=2)
+    trainset, batch_size=128, shuffle=True, num_workers=2)
 
-testset = torchvision.datasets.SVHN(
-    root='./data', split = 'test', download=True, transform=transform_test)
+testset = torchvision.datasets.CIFAR100(
+    root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2)
 
@@ -54,14 +55,14 @@ testloader = torch.utils.data.DataLoader(
 
 # Model
 print('==> Building model..')
-#net = VGG('VGG16')
+# net = VGG('VGG19')
 net = ResNet18()
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
 # net = ResNeXt29_2x64d()
 # net = MobileNet()
-#net = MobileNetV2()
+# net = MobileNetV2()
 # net = DPN92()
 # net = ShuffleNetG2()
 # net = SENet18()
@@ -143,7 +144,7 @@ def test(epoch):
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, f'/content/gdrive/My Drive/final/SVHN/13/ckpt{epoch}.pth')    
+    torch.save(state, f'/content/gdrive/My Drive/final/CIFAR100_/6/ckpt{epoch}.pth')    
     
     if acc > best_acc:
         print('Saving..')
