@@ -173,6 +173,8 @@ def test(epoch):
     
     soft22 = []
     soft44 = []
+    logits22 = []
+    logits44 = []
     
     with torch.no_grad():        
         counter = 0
@@ -185,7 +187,8 @@ def test(epoch):
           temp44 = []
           soft11 = []
           soft33 = []
-          
+          logits11 = []
+          logits33 = []
                     
           #img = torchvision.transforms.functional.adjust_sharpness(img, sharpness_factor = 2)
           #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 2)
@@ -203,7 +206,7 @@ def test(epoch):
           outputs, rep = net(img)
           loss = criterion(outputs, label)
           test_loss = loss.item()
-          _, predicted = outputs.max(1)
+          logits__predicted, predicted = outputs.max(1)
           correct = predicted.eq(label).sum().item()
 
 
@@ -236,6 +239,7 @@ def test(epoch):
             temp11.append(angle[h,label[h]])
             temp22.append(sum(90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))))
             soft11.append(SoftMax_predicted[h])
+            logits11.append(logits__predicted[h])
 
 
           for h in range(label.shape[0]):
@@ -244,6 +248,7 @@ def test(epoch):
             temp33.append(angle[h,label[h]])
             temp44.append((90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))))
             soft33.append(SoftMax_predicted[h])
+            logits33.append(logits__predicted[h])
             
           cc_.append(cc)
           sum_1 = sum(temp11)
@@ -267,6 +272,9 @@ def test(epoch):
           gg_ = sum(soft33)
           soft22.append(dd_/correct)
           soft44.append(gg_/((label.shape[0] - correct)+0.0000000001))
+          
+          logits22.append(sum(logits11)/correct)
+          logits44.append(sum(logits33)/((label.shape[0] - correct)+0.0000000001))
 
         #print("max1:",max(max_1),"max2",max(max_2))
         print("A:",sum(some_new_1)/(batch_idx+1),'B:',sum(some_new_2)/(batch_idx+1),'C:',sum(some_new_3)/(batch_idx+1),'D:',sum(some_new_4)/(batch_idx+1))
@@ -275,7 +283,10 @@ def test(epoch):
         print("Accuracy",sum(some_accuracy)/(batch_idx+1))
         
         print("true class SoftMax:",sum(soft22)/(batch_idx+1))
-        print("fals class SoftMax:",sum(soft44)/(batch_idx+1))
+        print("false class SoftMax:",sum(soft44)/(batch_idx+1))
+        
+        print("true logits:", sum(logits22)/(batch_idx+1))
+        print("false logits:", sum(logits44)/(batch_idx+1))
 
 
 test(epoch=1)
