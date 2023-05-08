@@ -227,9 +227,10 @@ def test(epoch):
           #print('SoftMax_.shape',SoftMax_.shape)
           #print('SoftMax_',SoftMax_)
           SoftMax_predicted, indices = SoftMax_.max(1)
-          #print("SoftMax_predicted",SoftMax_predicted)
-          #print("SoftMax_predicted.shape",SoftMax_predicted.shape)
-          
+          print("SoftMax_predicted",SoftMax_predicted)
+          print("SoftMax_predicted.shape",SoftMax_predicted.shape)
+          print("logits__predicted", logits__predicted)
+          print("logits__predicted.shape", logits__predicted.shape)
 
           cc = 0
           for h in range(label.shape[0]):
