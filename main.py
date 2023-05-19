@@ -53,7 +53,7 @@ testloader = torch.utils.data.DataLoader(
 # Model
 print('==> Building model..')
 #net = VGG('VGG19')
-net = ResNet34()
+net = ResNet50()
 # net = PreActResNet18()
 # net = GoogLeNet()
 #net = DenseNet121()
@@ -141,7 +141,7 @@ def test(epoch):
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, f'/content/gdrive/My Drive/final/CIFAR100_/15/ckpt{epoch}.pth')    
+    torch.save(state, f'/content/gdrive/My Drive/final/CIFAR100_/16/ckpt{epoch}.pth')    
     
     if acc > best_acc:
         print('Saving..')
