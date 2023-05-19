@@ -144,7 +144,7 @@ def test(epoch):
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, f'/content/gdrive/My Drive/final/CIFAR100_/12/ckpt{epoch}.pth')    
+    torch.save(state, f'/content/gdrive/My Drive/final/CIFAR100_/13/ckpt{epoch}.pth')    
     
     if acc > best_acc:
         print('Saving..')
