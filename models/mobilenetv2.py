@@ -23,6 +23,7 @@ class Block(nn.Module):
         self.bn3 = nn.BatchNorm2d(out_planes)
 
         self.shortcut = nn.Sequential()
+        self.drop = nn.Dropout()
         if stride == 1 and in_planes != out_planes:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False),
@@ -34,6 +35,7 @@ class Block(nn.Module):
         out = F.relu(self.bn2(self.conv2(out)))
         out = self.bn3(self.conv3(out))
         out = out + self.shortcut(x) if self.stride==1 else out
+        out = self.drop(out)
         return out
 
 
