@@ -40,7 +40,7 @@ transform_test = transforms.Compose([
 trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=128, shuffle=True, num_workers=2)
+    trainset, batch_size=128, shuffle=False, num_workers=2)
 
 testset = torchvision.datasets.CIFAR100(
     root='./data', train=False, download=True, transform=transform_test)
@@ -141,7 +141,7 @@ def test(epoch):
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, f'/content/gdrive/My Drive/final/CIFAR100_/26/ckpt{epoch}.pth')    
+    torch.save(state, f'/content/gdrive/My Drive/final/CIFAR100_/27/ckpt{epoch}.pth')    
     
     if acc > best_acc:
         print('Saving..')
