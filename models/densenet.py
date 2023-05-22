@@ -34,11 +34,11 @@ class Transition(nn.Module):
 
 
 class DenseNet(nn.Module):
-    def __init__(self, block, nblocks, growth_rate=3, reduction=0.5, num_classes=100):
+    def __init__(self, block, nblocks, growth_rate=12, reduction=0.5, num_classes=100):
         super(DenseNet, self).__init__()
         self.growth_rate = growth_rate
 
-        num_planes = 1*growth_rate
+        num_planes = 2*growth_rate
         self.conv1 = nn.Conv2d(3, num_planes, kernel_size=3, padding=1, bias=False)
 
         self.dense1 = self._make_dense_layers(block, num_planes, nblocks[0])
@@ -63,7 +63,7 @@ class DenseNet(nn.Module):
         num_planes += nblocks[3]*growth_rate
 
         self.bn = nn.BatchNorm2d(num_planes)
-        self.linear = nn.Linear(num_planes, num_classes)
+        self.linear = nn.Linear(num_planes/8, num_classes)
 
     def _make_dense_layers(self, block, in_planes, nblock):
         layers = []
