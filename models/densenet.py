@@ -75,9 +75,13 @@ class DenseNet(nn.Module):
     def forward(self, x):
         out = self.conv1(x)
         out = self.trans1(self.dense1(out))
+        print("1",out.shape)
         out = self.trans2(self.dense2(out))
+        print("2",out.shape)
         out = self.trans3(self.dense3(out))
+        print("3",out.shape)
         out = self.dense4(out)
+        print("4",out.shape)
         out = F.avg_pool2d(F.relu(self.bn(out)), 4)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
