@@ -62,8 +62,8 @@ class DenseNet(nn.Module):
         self.dense4 = self._make_dense_layers(block, num_planes, nblocks[3])
         num_planes += nblocks[3]*growth_rate
 
-        self.bn = nn.BatchNorm2d(num_planes)
-        self.linear = nn.Linear(num_planes/8, num_classes)
+        self.bn = nn.BatchNorm2d(128)
+        self.linear = nn.Linear(128, num_classes)
 
     def _make_dense_layers(self, block, in_planes, nblock):
         layers = []
