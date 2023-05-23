@@ -57,7 +57,7 @@ testloader = torch.utils.data.DataLoader(
 # Model
 print('==> Building model..')
 #net = VGG('VGG19')
-net = ResNet34()
+net = ResNet50()
 # net = PreActResNet18()
 # net = GoogLeNet()
 #net = DenseNet121()
@@ -124,11 +124,11 @@ tempp = 0
 #bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
-    if (tempp==109):
+    if (tempp==160):
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       weights_ = param
-    if (tempp==110):
+    if (tempp==161):
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       bias_ = param
