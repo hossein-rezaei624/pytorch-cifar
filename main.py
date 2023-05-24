@@ -59,9 +59,9 @@ testloader = torch.utils.data.DataLoader(
 # Model
 print('==> Building model..')
 #net = ResNet18()
-net = ResNet34()
+#net = ResNet34()
 #net = ResNet50()
-#net = VGG('VGG19')
+net = VGG('VGG19')
 #net = MobileNetV2()
 net = net.to(device)
 if device == 'cuda':
