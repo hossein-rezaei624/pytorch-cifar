@@ -1,4 +1,3 @@
-'''Train CIFAR10 with PyTorch...'''
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -31,6 +30,9 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomRotation(90),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -56,21 +58,11 @@ testloader = torch.utils.data.DataLoader(
 
 # Model
 print('==> Building model..')
-net = VGG('VGG19')
+#net = ResNet18()
+net = ResNet34()
 #net = ResNet50()
-# net = PreActResNet18()
-# net = GoogLeNet()
-#net = DenseNet121()
-# net = ResNeXt29_2x64d()
-# net = MobileNet()
+#net = VGG('VGG19')
 #net = MobileNetV2()
-# net = DPN92()
-# net = ShuffleNetG2()
-# net = SENet18()
-# net = ShuffleNetV2(1)
-# net = EfficientNetB0()
-# net = RegNetX_200MF()
-# net = SimpleDLA()
 net = net.to(device)
 if device == 'cuda':
     net = torch.nn.DataParallel(net)
@@ -91,29 +83,6 @@ optimizer = optim.SGD(net.parameters(), lr=args.lr,
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
 
-# Training
-'''def train(epoch):
-    print('\nEpoch: %d' % epoch)
-    net.train()
-    train_loss = 0
-    correct = 0
-    total = 0
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
-        inputs, targets = inputs.to(device), targets.to(device)
-        optimizer.zero_grad()
-        outputs, _ = net(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
-
-        train_loss += loss.item()
-        _, predicted = outputs.max(1)
-        total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
-
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                     % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))'''
-
 
 checkpoint = torch.load('./checkpoint/ckpt.pth')
 net.load_state_dict(checkpoint['net'])
@@ -124,34 +93,17 @@ tempp = 0
 #bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
-    if (tempp==65):
+    if (tempp==65): ##for example for VGG19 you should set tempp as 65
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       weights_ = param
-    if (tempp==66):
+    if (tempp==66): ##for example for VGG19 you should set tempp as 66
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       bias_ = param
 #print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",net.state_dict())
-print("temppppppppp",tempp)
+print("number of layers of the model",tempp)
 
-
-haha = []
-for j in range(100):
-  a = weights_[j].view((1,weights_[j].shape[0]))
-  weights__ = torch.cat((weights_[:j,:], weights_[j+1:,:]), dim = 0)
-  b = weights__.transpose(0,1)
-
-  inner_product = torch.matmul(a,b)
-  a_norm = a.pow(2).sum(dim=1).pow(0.5)
-  b_norm = b.pow(2).sum(dim=0).pow(0.5)
-  hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,99)))
-  cos = inner_product / hh
-  angle = (torch.acos(cos)*57.2958)
-
-  haha.append(sum((90 - angle[0])).item())
-
-print("sum of all angles is:",sum(haha)/100)
 
 
 
@@ -277,8 +229,9 @@ def test(epoch):
           
           logits22.append(sum(logits11)/correct)
           logits44.append(sum(logits33)/((label.shape[0] - correct)+0.0000000001))
-
-        #print("max1:",max(max_1),"max2",max(max_2))
+        
+        
+        #A and B are for correctly predicted samples while C and D are for incorrectly predicted samples.
         print("A:",sum(some_new_1)/(batch_idx+1),'B:',sum(some_new_2)/(batch_idx+1),'C:',sum(some_new_3)/(batch_idx+1),'D:',sum(some_new_4)/(batch_idx+1))
         print("Sum:",sum(some_new_1)/(batch_idx+1)+sum(some_new_2)/(batch_idx+1)+sum(some_new_3)/(batch_idx+1)+sum(some_new_4)/(batch_idx+1))
         #print("some_new", sum(some_new)/(batch_idx+1))
