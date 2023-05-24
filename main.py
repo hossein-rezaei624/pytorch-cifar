@@ -60,10 +60,10 @@ print('==> Building model..')
 #net = ResNet50()
 # net = PreActResNet18()
 # net = GoogLeNet()
-net = DenseNet121()
+#net = DenseNet121()
 # net = ResNeXt29_2x64d()
 # net = MobileNet()
-#net = MobileNetV2()
+net = MobileNetV2()
 # net = DPN92()
 # net = ShuffleNetG2()
 # net = SENet18()
@@ -124,11 +124,11 @@ tempp = 0
 #bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
-    if (tempp==361):
+    if (tempp==172):
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       weights_ = param
-    if (tempp==362):
+    if (tempp==173):
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       bias_ = param
