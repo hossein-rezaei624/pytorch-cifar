@@ -1,4 +1,3 @@
-'''Train CIFAR10 with PyTorch.'''
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -55,21 +54,11 @@ testloader = torch.utils.data.DataLoader(
 
 # Model
 print('==> Building model..')
-#net = VGG('VGG19')
+#net = ResNet18()
+net = ResNet34()
 #net = ResNet50()
-# net = PreActResNet18()
-# net = GoogLeNet()
-net = DenseNet121()
-# net = ResNeXt29_2x64d()
-# net = MobileNet()
+#net = VGG('VGG19')
 #net = MobileNetV2()
-#net = DPN92()
-# net = ShuffleNetG2()
-# net = SENet18()
-# net = ShuffleNetV2(1)
-# net = EfficientNetB0()
-# net = RegNetX_200MF()
-# net = SimpleDLA()
 net = net.to(device)
 if device == 'cuda':
     net = torch.nn.DataParallel(net)
