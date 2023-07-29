@@ -13,6 +13,7 @@ import argparse
 
 from models import *
 from utils import progress_bar
+from kornia.augmentation import RandomResizedCrop, RandomHorizontalFlip, ColorJitter, RandomGrayscale
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -27,9 +28,16 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 # Data
 print('==> Preparing data..')
+
+transform11 = nn.Sequential(
+    RandomResizedCrop(scale=(0.2, 1.)),
+    RandomHorizontalFlip(),
+    ColorJitter(0.4, 0.4, 0.4, 0.1, p=0.8),
+    RandomGrayscale(p=0.2)
+)
+
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
+    transform11,
     transforms.ToTensor(),
 ])
 
