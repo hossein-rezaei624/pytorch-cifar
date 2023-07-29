@@ -51,7 +51,7 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer',
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
-net = Reduced_ResNet18()
+net = Reduced_ResNet18(100)
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
