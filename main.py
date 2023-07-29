@@ -144,7 +144,7 @@ def test(epoch):
         best_acc = acc
 
 
-for epoch in range(start_epoch, start_epoch+200):
+for epoch in range(start_epoch, start_epoch+75):
     train(epoch)
     test(epoch)
     #scheduler.step()
