@@ -30,7 +30,7 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 print('==> Preparing data..')
 
 transform11 = nn.Sequential(
-    RandomResizedCrop(scale=(0.2, 1.)),
+    RandomResizedCrop(size = (32,32), scale=(0.2, 1.)),
     RandomHorizontalFlip(),
     ColorJitter(0.4, 0.4, 0.4, 0.1, p=0.8),
     RandomGrayscale(p=0.2)
