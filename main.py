@@ -37,10 +37,10 @@ transform11 = nn.Sequential(
 )
 
 transform_train = transforms.Compose([
-    transform11,
     transforms.ToTensor(),
 ])
 
+transform_train = transform11(transform_train)
 transform_test = transforms.Compose([
     transforms.ToTensor(),
 ])
