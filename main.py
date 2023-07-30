@@ -93,6 +93,8 @@ optimizer = optim.SGD(net.parameters(), lr=args.lr,
                       weight_decay=0)
 #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
+checkpoint = torch.load('./checkpoint/ckpt.pth')
+net.load_state_dict(checkpoint['net'])
 
 # Training
 def train(epoch):
@@ -153,8 +155,8 @@ def test(epoch):
         torch.save(state, './checkpoint/ckpt.pth')
         best_acc = acc
 
-
-for epoch in range(start_epoch, start_epoch+75):
+test(epoch = 1)
+'''for epoch in range(start_epoch, start_epoch+75):
     train(epoch)
     test(epoch)
-    #scheduler.step()
+    #scheduler.step()'''
