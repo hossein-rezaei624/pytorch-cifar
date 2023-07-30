@@ -40,7 +40,6 @@ transform_train = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-transform_train = transform11(transform_train)
 transform_test = transforms.Compose([
     transforms.ToTensor(),
 ])
@@ -105,6 +104,7 @@ def train(epoch):
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
+        inputs = transform11(inputs)
         outputs = net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
