@@ -41,6 +41,7 @@ transform_train = transforms.Compose([
 ])
 
 transform_test = transforms.Compose([
+    transforms.RandomRotation(90),
     transforms.ToTensor(),
 ])
 
