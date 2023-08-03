@@ -17,6 +17,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from skimage.util import random_noise
 
+from sympy import Matrix
+
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
@@ -138,11 +140,11 @@ def test(epoch):
         print("target_weight",target_weight.shape, "other_weight",other_weight.shape)
 
         # Calculate the Null space of the matrix
-        #null_space_basis = null_space(other_weight.transpose(0,1).cpu().numpy())
-        #null_space_basis_ = torch.tensor(null_space_basis).to(device)
-        print("dtype", other_weight.dtype)
+        M = Matrix(other_weight.transpose(0,1))
+        M_nullspace = M.nullspace()
+        #print("dtype", other_weight.dtype)
 
-        #print("shape",null_space_basis_.shape,"......",null_space_basis_)
+        print("shape",M_nullspace.shape,"......",M_nullspace)
 
         a = rep
         #print(weights_.shape,"shapeeee")
