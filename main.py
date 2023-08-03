@@ -144,7 +144,7 @@ def test(epoch):
         M_nullspace = M.nullspace()
         #print("dtype", other_weight.dtype)
 
-        print("......",M_nullspace)
+        print("......",len(M_nullspace))
 
         a = rep
         #print(weights_.shape,"shapeeee")
