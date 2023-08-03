@@ -120,9 +120,9 @@ def test(epoch):
         counter = 0
 
         img, label = next(iter(testloader))
-        print("img shape:",img.shape,img[0].shape,"label",label)
+        print("img shape:",img.shape,img[0].shape,"label",label.shape)
         img, label = img[50].view((1,3,32,32)), label[50].view((1))
-        print("img shapeeeeeee:",img.shape,"label",label)
+        print("img shapeeeeeee:",img.shape,"label",label.shape)
         img, label = img.to(device), label.to(device)
 
           
@@ -135,7 +135,7 @@ def test(epoch):
 
         a = rep
         #print(weights_.shape,"shapeeee")
-        #b = weights_.transpose(0,1)
+        b = weights_.transpose(0,1)
         #final = torch.matmul(a,b)+bias_
         #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
         print(b.shape)
