@@ -132,9 +132,9 @@ def test(epoch):
 
           for label_ in label:
             target_weight = weights_[label_,:]
-            print("eeeeeeeeeeeeee",label_.item())
+            #print("eeeeeeeeeeeeee",label_.item())
             #print("target_weight",target_weight.shape)
-            other_weight = torch.cat((weights_[:label_,:], weights_[label_+1:,:]), axis = 0)
+            other_weight = torch.cat((weights_[:label_.item(),:], weights_[label_.item()+1:,:]), axis = 0)
             #print("target_weight",target_weight.shape, "other_weight",other_weight.shape)
     
             # Calculate the Null space of the matrix
