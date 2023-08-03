@@ -130,6 +130,7 @@ def test(epoch):
           correct = predicted.eq(label).sum().item()
   
           print("label",label)
+          print("weights_weights_weights_",weights_.shape)
           target_weight = weights_[label,:]
           print("target_weight",target_weight.shape)
           other_weight = torch.cat((weights_[:label.item(),:], weights_[label.item()+1:,:]), axis = 0)
