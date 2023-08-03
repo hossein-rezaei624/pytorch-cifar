@@ -153,8 +153,8 @@ def test(epoch):
 
         a = rep
         #print(weights_.shape,"shapeeee")
-        b = cc
-        #b = target_weight.view(512,1)
+        #b = cc
+        b = target_weight.view(512,1)
         #final = torch.matmul(a,b)+bias_
         #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
         print(b.shape)
