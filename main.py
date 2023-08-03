@@ -106,20 +106,6 @@ print("number of layers of the model",tempp)
 
 
 
-def null_space(matrix):
-    # Use Singular Value Decomposition (SVD) to find the Null space
-    u, s, vh = np.linalg.svd(matrix)
-    
-    # Find the index of the zero singular values
-    tol = np.finfo(float).eps * max(matrix.shape) * max(s)
-    null_mask = (s <= tol)
-    
-    # Extract the Null space basis from the columns of vh corresponding to zero singular values
-    null_space_basis = vh[null_mask].conj().T
-    
-    return null_space_basis
-
-
 
 def test(epoch):
     global best_acc
@@ -151,11 +137,12 @@ def test(epoch):
         other_weight = torch.cat((weights_[:label.item(),:], weights_[label.item()+1:,:]), axis = 0)
         print("target_weight",target_weight.shape, "other_weight",other_weight.shape)
 
-        # Calculate the Null space of the example matrix
-        null_space_basis = null_space(other_weight.transpose(0,1).cpu().numpy())
-        null_space_basis_ = torch.tensor(null_space_basis).to(device)
+        # Calculate the Null space of the matrix
+        #null_space_basis = null_space(other_weight.transpose(0,1).cpu().numpy())
+        #null_space_basis_ = torch.tensor(null_space_basis).to(device)
+        print("dtype", other_weight.dtype)
 
-        print("shape",null_space_basis_.shape,"......",null_space_basis_)
+        #print("shape",null_space_basis_.shape,"......",null_space_basis_)
 
         a = rep
         #print(weights_.shape,"shapeeee")
