@@ -130,7 +130,7 @@ def test(epoch):
           correct = predicted.eq(label).sum().item()
   
 
-          sss = o
+          sss = 0
           for label_ in label:
             target_weight = weights_[label_.item(),:]
             #print("eeeeeeeeeeeeee",label_.item())
