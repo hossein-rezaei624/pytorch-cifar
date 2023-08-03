@@ -152,17 +152,19 @@ def test(epoch):
 
         a = rep
         #print(weights_.shape,"shapeeee")
-        b = weights_.transpose(0,1)
+        b = cc.transpose(0,1)
         #final = torch.matmul(a,b)+bias_
         #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
         print(b.shape)
 
         inner_product = torch.matmul(a,b)
         a_norm = a.pow(2).sum(dim=1).pow(0.5)
-        b_norm = b.pow(2).sum(dim=0).pow(0.5)
-        hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
+        b_norm = b.pow(2).sum(dim=1).pow(0.5)
+        hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,1)))
         cos = inner_product / hh
         angle = (torch.acos(cos)*57.2958)
+
+        print("angleeeeeeeee",angle)
         
 
 
