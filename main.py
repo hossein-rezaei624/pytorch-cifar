@@ -129,42 +129,42 @@ def test(epoch):
           logits__predicted, predicted = outputs.max(1)
           correct = predicted.eq(label).sum().item()
   
-          print("label",label)
-          print("weights_weights_weights_",weights_.shape)
-          target_weight = weights_[label.item(),:]
-          print("target_weight",target_weight.shape)
-          other_weight = torch.cat((weights_[:label.item(),:], weights_[label.item()+1:,:]), axis = 0)
-          print("target_weight",target_weight.shape, "other_weight",other_weight.shape)
-  
-          # Calculate the Null space of the matrix
-          M = Matrix(other_weight.cpu())
-          M_nullspace = M.nullspace()
-          #print("dtype", other_weight.dtype)
-          bb = np.array(M_nullspace[0])
-          bb = bb.astype("float32")
-          cc = torch.tensor(bb).to(device)
-  
-          print("......",cc.shape)
-          print("rep shape",rep.shape)
-          print("target_weighttttttttt",target_weight.view(512,1).shape)
-  
-          a = rep
-          #print(weights_.shape,"shapeeee")
-          b = cc
-          #b = target_weight.view(512,1)
-          #final = torch.matmul(a,b)+bias_
-          #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
-          print(b.shape)
-  
-          inner_product = torch.matmul(a,b)
-          a_norm = a.pow(2).sum(dim=1).pow(0.5)
-          b_norm = b.pow(2).sum(dim=0).pow(0.5)
-          hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,1)))
-          cos = inner_product / hh
-          angle = (torch.acos(cos)*57.2958)
-  
-          print("angleeeeeeeee",angle)
-          
+
+          for label_ in label:
+            target_weight = weights_[label_,:]
+            #print("target_weight",target_weight.shape)
+            other_weight = torch.cat((weights_[:label_,:], weights_[label_+1:,:]), axis = 0)
+            #print("target_weight",target_weight.shape, "other_weight",other_weight.shape)
+    
+            # Calculate the Null space of the matrix
+            M = Matrix(other_weight.cpu())
+            M_nullspace = M.nullspace()
+            #print("dtype", other_weight.dtype)
+            bb = np.array(M_nullspace[0])
+            bb = bb.astype("float32")
+            cc = torch.tensor(bb).to(device)
+    
+            #print("......",cc.shape)
+            #print("rep shape",rep.shape)
+            #print("target_weighttttttttt",target_weight.view(512,1).shape)
+    
+            a = rep
+            #print(weights_.shape,"shapeeee")
+            b = cc
+            #b = target_weight.view(512,1)
+            #final = torch.matmul(a,b)+bias_
+            #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
+            #print(b.shape)
+    
+            inner_product = torch.matmul(a,b)
+            a_norm = a.pow(2).sum(dim=1).pow(0.5)
+            b_norm = b.pow(2).sum(dim=0).pow(0.5)
+            hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,1)))
+            cos = inner_product / hh
+            angle = (torch.acos(cos)*57.2958)
+    
+            print("angleeeeeeeee",angle)
+            
 
 
 test(epoch=1)
