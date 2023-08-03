@@ -131,7 +131,7 @@ def test(epoch):
   
 
           for label_ in label:
-            target_weight = weights_[label_,:]
+            target_weight = weights_[label_.item(),:]
             #print("eeeeeeeeeeeeee",label_.item())
             #print("target_weight",target_weight.shape)
             other_weight = torch.cat((weights_[:label_.item(),:], weights_[label_.item()+1:,:]), axis = 0)
@@ -149,7 +149,7 @@ def test(epoch):
             #print("rep shape",rep.shape)
             #print("target_weighttttttttt",target_weight.view(512,1).shape)
     
-            a = rep
+            a = rep[label_.item(),:]
             #print(weights_.shape,"shapeeee")
             #b = cc
             b = target_weight.view(512,1)
