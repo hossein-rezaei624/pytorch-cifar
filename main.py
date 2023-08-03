@@ -147,7 +147,8 @@ def test(epoch):
         bb = bb.astype("float32")
         cc = torch.tensor(bb)
 
-        print("......",cc.shape,"cccccccc",cc)
+        print("......",cc.shape)
+        print("rep shape",rep.shape)
 
         a = rep
         #print(weights_.shape,"shapeeee")
