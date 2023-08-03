@@ -120,7 +120,7 @@ def test(epoch):
         counter = 0
 
         img, label = next(iter(testloader))
-        print("img shape:",img.shape,img[0].shape,"label",label)
+        #print("img shape:",img.shape,img[0].shape,"label",label)
         img, label = img[50].view((1,3,32,32)), label[50].view((1))
         #print("img shapeeeeeee:",img.shape,"label",label.shape)
         img, label = img.to(device), label.to(device)
@@ -131,7 +131,7 @@ def test(epoch):
         test_loss = loss.item()
         logits__predicted, predicted = outputs.max(1)
         correct = predicted.eq(label).sum().item()
-        print("loss",loss, "\npredicted",predicted, "\nlabel",label)
+        print("loss",loss, "\npredicted",predicted, "\nlabel",label.item())
 
 
         a = rep
