@@ -155,8 +155,7 @@ def test(epoch):
         null_space_basis = null_space(other_weight.transpose(0,1).cpu().numpy())
         null_space_basis_ = torch.tensor(null_space_basis).to(device)
 
-        print("Null space basis:")
-        print(null_space_basis_.shape)
+        print("shape",null_space_basis_.shape,"......",null_space_basis_)
 
         a = rep
         #print(weights_.shape,"shapeeee")
