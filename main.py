@@ -152,7 +152,7 @@ def test(epoch):
         print("target_weight",target_weight.shape, "other_weight",other_weight.shape)
 
         # Calculate the Null space of the example matrix
-        null_space_basis = null_space(other_weight.numpy().cpu())
+        null_space_basis = null_space(other_weight.cpu().numpy())
         null_space_basis_ = torch.tensor(null_space_basis)
 
         print("Null space basis:")
