@@ -118,32 +118,35 @@ def test(epoch):
     
     with torch.no_grad():        
         counter = 0
-        for batch_idx, (img, label) in enumerate(testloader):
-          img, label = img.to(device), label.to(device)
 
+        img, label = next(iter(testloader))
+        print("img shape:",img.shape,img[0].shape,"label",label)
+        img, label = img[50].view((1,3,32,32)), label[50].view((1))
+        print("img shapeeeeeee:",img.shape,"label",label)
+        img, label = img.to(device), label.to(device)
 
-          outputs, rep = net(img)
-          loss = criterion(outputs, label)
-          test_loss = loss.item()
-          logits__predicted, predicted = outputs.max(1)
-          correct = predicted.eq(label).sum().item()
-
-
-          a = rep
-          print(weights_.shape,"shapeeee")
-          b = weights_.transpose(0,1)
-          final = torch.matmul(a,b)+bias_
-          #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
-          print(b.shape)
-
-          inner_product = torch.matmul(a,b)
-          a_norm = a.pow(2).sum(dim=1).pow(0.5)
-          b_norm = b.pow(2).sum(dim=0).pow(0.5)
-          hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
-          cos = inner_product / hh
-          angle = (torch.acos(cos)*57.2958)
           
-          break
+        outputs, rep = net(img)
+        loss = criterion(outputs, label)
+        test_loss = loss.item()
+        logits__predicted, predicted = outputs.max(1)
+        correct = predicted.eq(label).sum().item()
+
+
+        a = rep
+        #print(weights_.shape,"shapeeee")
+        #b = weights_.transpose(0,1)
+        #final = torch.matmul(a,b)+bias_
+        #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
+        print(b.shape)
+
+        inner_product = torch.matmul(a,b)
+        a_norm = a.pow(2).sum(dim=1).pow(0.5)
+        b_norm = b.pow(2).sum(dim=0).pow(0.5)
+        hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
+        cos = inner_product / hh
+        angle = (torch.acos(cos)*57.2958)
+        
 
 
 test(epoch=1)
