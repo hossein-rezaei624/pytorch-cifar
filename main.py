@@ -138,7 +138,7 @@ def test(epoch):
           inner_product = torch.matmul(a,b)
           a_norm = a.pow(2).sum(dim=1).pow(0.5)
           b_norm = b.pow(2).sum(dim=0).pow(0.5)
-          hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,100)))
+          hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
           cos = inner_product / hh
           angle = (torch.acos(cos)*57.2958)
           
