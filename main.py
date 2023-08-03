@@ -58,10 +58,10 @@ testloader = torch.utils.data.DataLoader(
 
 # Model
 print('==> Building model..')
-#net = ResNet18()
+net = ResNet18()
 #net = ResNet34()
 #net = ResNet50()
-net = VGG('VGG19')
+#net = VGG('VGG19')
 #net = MobileNetV2()
 net = net.to(device)
 if device == 'cuda':
@@ -93,11 +93,11 @@ tempp = 0
 #bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
-    if (tempp==65): ##for example for VGG19 you should set tempp as 65
+    if (tempp==62): ##for example for VGG19 you should set tempp as 65
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       weights_ = param
-    if (tempp==66): ##for example for VGG19 you should set tempp as 66
+    if (tempp==63): ##for example for VGG19 you should set tempp as 66
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       bias_ = param
@@ -114,47 +114,13 @@ def test(epoch):
     correct = 0
     total = 0
     count = 0
-    cc_ = []
-    some_new = []
-    some_new_1 = []
-    some_new_2 = []
-    some_new_3 = []
-    some_new_4 = []
-    some_accuracy = []
-    max_1 = []
-    max_2 = []
-    
-    soft22 = []
-    soft44 = []
-    logits22 = []
-    logits44 = []
+
     
     with torch.no_grad():        
         counter = 0
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
-          counter += 1
-          temp11 = []
-          temp22 = []
-          temp33 = []
-          temp44 = []
-          soft11 = []
-          soft33 = []
-          logits11 = []
-          logits33 = []
-                    
-          #img = torchvision.transforms.functional.adjust_sharpness(img, sharpness_factor = 1.2)
-          #img = torchvision.transforms.functional.adjust_brightness(img, brightness_factor = 1.2)
-          #img = torchvision.transforms.functional.gaussian_blur(img, kernel_size=(1, 3), sigma=(0.05, 1.5))
-          #img = torchvision.transforms.functional.perspective(img, startpoints = [[0,0], [32,0], [32,32], [0,32]], endpoints = [[7,5], [26,1], [28,27], [1,27]])       
-          #img = torchvision.transforms.functional.adjust_hue(img, hue_factor = 0.12)
-          #img = torchvision.transforms.functional.invert(img)
-          
-          
-          
-          aa_a = ((((((img[0].permute(1,2,0).cpu().numpy())-(img[0].permute(1,2,0).cpu().numpy()).min())/((img[0].permute(1,2,0).cpu().numpy()).max()-(img[0].permute(1,2,0).cpu().numpy()).min()))*255.0).astype(np.uint8)))
-          plt.imsave("./image.png", aa_a)
-          
+
 
           outputs, rep = net(img)
           loss = criterion(outputs, label)
@@ -166,6 +132,8 @@ def test(epoch):
           a = rep
           b = weights_.transpose(0,1)
           final = torch.matmul(a,b)+bias_
+          #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
+          print(b.shape)
 
           inner_product = torch.matmul(a,b)
           a_norm = a.pow(2).sum(dim=1).pow(0.5)
@@ -174,74 +142,7 @@ def test(epoch):
           cos = inner_product / hh
           angle = (torch.acos(cos)*57.2958)
           
-          #print("outputs.shape",outputs.shape)
-          #print("outputs",outputs)
-          SoftMax_ = nn.functional.softmax(outputs, dim = 1)
-          #print('SoftMax_.shape',SoftMax_.shape)
-          #print('SoftMax_',SoftMax_)
-          SoftMax_predicted, indices = SoftMax_.max(1)
-          #print("SoftMax_predicted",SoftMax_predicted)
-          #print("SoftMax_predicted.shape",SoftMax_predicted.shape)
-          #print("logits__predicted", logits__predicted)
-          #print("logits__predicted.shape", logits__predicted.shape)
-
-          cc = 0
-          for h in range(label.shape[0]):
-            if predicted[h] != label[h]:
-              continue
-            cc += 1
-            temp11.append(angle[h,label[h]])
-            temp22.append(sum(90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))))
-            soft11.append(SoftMax_predicted[h])
-            logits11.append(logits__predicted[h])
-
-
-          for h in range(label.shape[0]):
-            if predicted[h] == label[h]:
-              continue
-            temp33.append(angle[h,label[h]])
-            temp44.append((90 - (torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))))
-            soft33.append(SoftMax_predicted[h])
-            logits33.append(logits__predicted[h])
-            
-          cc_.append(cc)
-          sum_1 = sum(temp11)
-          sum_1_3 = sum(temp33)
-          sum_2 = (sum(temp22))
-          if (len(temp44) == 0):
-            sum_2_4 = 0
-          else:
-            sum_2_4 = sum(sum(temp44))
-          final_ = (((sum_1 + sum_2)/correct) + ((sum_1_3 + sum_2_4)/((label.shape[0] - correct)+0.0000000001)))
-          max_1.append(max(temp11))
-          max_2.append(max(temp22))
-          some_new_1.append(sum_1/correct)
-          some_new_2.append(sum_2/correct)
-          some_new_3.append(sum_1_3/((label.shape[0] - correct)+0.0000000001))
-          some_new_4.append(sum_2_4/((label.shape[0] - correct)+0.0000000001))
-          some_new.append(final_)
-          some_accuracy.append(correct*100/label.shape[0])
-          
-          dd_ = sum(soft11)
-          gg_ = sum(soft33)
-          soft22.append(dd_/correct)
-          soft44.append(gg_/((label.shape[0] - correct)+0.0000000001))
-          
-          logits22.append(sum(logits11)/correct)
-          logits44.append(sum(logits33)/((label.shape[0] - correct)+0.0000000001))
-        
-        
-        #A and B are for correctly predicted samples while C and D are for incorrectly predicted samples.
-        print("A:",sum(some_new_1)/(batch_idx+1),'B:',sum(some_new_2)/(batch_idx+1),'C:',sum(some_new_3)/(batch_idx+1),'D:',sum(some_new_4)/(batch_idx+1))
-        print("Sum:",sum(some_new_1)/(batch_idx+1)+sum(some_new_2)/(batch_idx+1)+sum(some_new_3)/(batch_idx+1)+sum(some_new_4)/(batch_idx+1))
-        #print("some_new", sum(some_new)/(batch_idx+1))
-        print("Accuracy",sum(some_accuracy)/(batch_idx+1))
-        
-        print("true class SoftMax:",sum(soft22)/(batch_idx+1))
-        print("false class SoftMax:",sum(soft44)/(batch_idx+1))
-        
-        print("true logits:", sum(logits22)/(batch_idx+1))
-        print("false logits:", sum(logits44)/(batch_idx+1))
+          break
 
 
 test(epoch=1)
