@@ -143,8 +143,11 @@ def test(epoch):
         M = Matrix(other_weight.cpu())
         M_nullspace = M.nullspace()
         #print("dtype", other_weight.dtype)
+        bb = np.array(M_nullspace[0])
+        bb = bb.astype("float32")
+        cc = torch.tensor(bb)
 
-        print("......",len(M_nullspace))
+        print("......",cc.shape)
 
         a = rep
         #print(weights_.shape,"shapeeee")
