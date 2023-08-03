@@ -120,6 +120,7 @@ def test(epoch):
 
     with torch.no_grad():        
         counter = 0
+        list_2 = []
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
           
@@ -131,6 +132,7 @@ def test(epoch):
   
 
           sss = 0
+          list_1 = []
           for label_ in label:
             target_weight = weights_[label_.item(),:]
             #print("eeeeeeeeeeeeee",label_.item())
@@ -165,8 +167,11 @@ def test(epoch):
             cos = inner_product / hh
             angle = (torch.acos(cos)*57.2958)
     
-            print("angleeeeeeeee",angle)
+            #print("angleeeeeeeee",angle)
             sss = sss+1
+            list_1.append(angle)
+          list_2.append(sum(list_1)/len(label))
+        print(sum(list_2)/(batch_idx+1))
 
 
 test(epoch=1)
