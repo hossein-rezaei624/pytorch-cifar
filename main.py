@@ -134,7 +134,7 @@ def test(epoch):
         print("loss",loss, "\npredicted",predicted, "\nlabel",label.item())
 
         target_weight = weights_[label.item(),:]
-        other_weight = torch.cat((weights_[:label.item(),:], weights_[label.item()+1:,:]), axis = 1)
+        other_weight = torch.cat((weights_[:label.item(),:], weights_[label.item()+1:,:]), axis = 0)
         print("target_weight",target_weight.shape, "other_weight",other_weight.shape)
 
 
