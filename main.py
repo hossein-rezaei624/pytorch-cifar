@@ -145,7 +145,7 @@ def test(epoch):
         #print("dtype", other_weight.dtype)
         bb = np.array(M_nullspace[0])
         bb = bb.astype("float32")
-        cc = torch.tensor(bb)
+        cc = torch.tensor(bb).to(device)
 
         print("......",cc.shape)
         print("rep shape",rep.shape)
