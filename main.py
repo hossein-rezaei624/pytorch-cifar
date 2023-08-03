@@ -130,6 +130,7 @@ def test(epoch):
 
 
           a = rep
+          print(weights_.shape,"shapeeee")
           b = weights_.transpose(0,1)
           final = torch.matmul(a,b)+bias_
           #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
