@@ -93,11 +93,11 @@ tempp = 0
 #bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
-    if (tempp==63): ##for example for VGG19 you should set tempp as 65
+    if (tempp==61): ##for example for VGG19 you should set tempp as 65
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       weights_ = param
-    if (tempp==64): ##for example for VGG19 you should set tempp as 66
+    if (tempp==62): ##for example for VGG19 you should set tempp as 66
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       bias_ = param
