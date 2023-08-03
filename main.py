@@ -150,7 +150,7 @@ def test(epoch):
             #print("rep shape",rep.shape)
             #print("target_weighttttttttt",target_weight.view(512,1).shape)
             #print("rep.shapeeeee",rep.shape)
-            a = rep[0,:].view(1,512)
+            a = rep[sss,:].view(1,512)
             #print(weights_.shape,"shapeeee")
             #b = cc
             b = target_weight.view(512,1)
