@@ -130,6 +130,7 @@ def test(epoch):
           correct = predicted.eq(label).sum().item()
   
 
+          sss = o
           for label_ in label:
             target_weight = weights_[label_.item(),:]
             #print("eeeeeeeeeeeeee",label_.item())
@@ -149,7 +150,7 @@ def test(epoch):
             #print("rep shape",rep.shape)
             #print("target_weighttttttttt",target_weight.view(512,1).shape)
     
-            a = rep[label_.item(),:]
+            a = rep[0,:]
             #print(weights_.shape,"shapeeee")
             #b = cc
             b = target_weight.view(512,1)
@@ -165,7 +166,7 @@ def test(epoch):
             angle = (torch.acos(cos)*57.2958)
     
             print("angleeeeeeeee",angle)
-            
+            sss = sss+1
 
 
 test(epoch=1)
