@@ -164,7 +164,7 @@ def test(epoch):
             cos = inner_product / hh
             angle = (torch.acos(cos)*57.2958)
     
-            #print("angleeeeeeeee",angle)
+            print("angleeeeeeeee",angle)
             
 
 
