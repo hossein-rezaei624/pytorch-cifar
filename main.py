@@ -149,6 +149,7 @@ def test(epoch):
 
         print("......",cc.shape)
         print("rep shape",rep.shape)
+        print("target_weighttttttttt",target_weight.shape)
 
         a = rep
         #print(weights_.shape,"shapeeee")
