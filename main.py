@@ -120,7 +120,7 @@ def test(epoch):
         counter = 0
 
         img, label = next(iter(testloader))
-        #print("img shape:",img.shape,img[0].shape,"label",label.shape)
+        print("img shape:",img.shape,img[0].shape,"label",label)
         img, label = img[50].view((1,3,32,32)), label[50].view((1))
         #print("img shapeeeeeee:",img.shape,"label",label.shape)
         img, label = img.to(device), label.to(device)
