@@ -131,16 +131,14 @@ def test(epoch):
           #print("dtype", other_weight.dtype)
           bb = np.array(M_nullspace[0])
           bb = bb.astype("float32")
-          cc = torch.tensor(bb).to(device)
-          list_null.append(cc)
+          #cc = torch.tensor(bb).to(device)
+          list_null.append(bb)
 
-        print("list_null", type(list_null))
-        #torch_null = torch.tensor(np.array(list_null).cpu())
+        torch_null = torch.tensor(np.array(list_null)).to(device).view(10,512)
+        print("torch_null", torch_null.shape)
         list1_1 = []
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
-
-
           
           outputs, rep = net(img)
           loss = criterion(outputs, label)
@@ -148,11 +146,8 @@ def test(epoch):
           logits__predicted, predicted = outputs.max(1)
           correct = predicted.eq(label).sum().item()
   
-          target_weight = weights_[label,:]
-          #other_weight = torch.cat((weights_[:label_.item(),:], weights_[label_.item()+1:,:]), axis = 0)
-
           a = rep
-          b = target_weight
+          b = weights_.transpose(0,1)
           #print('rep shape',a.shape)
           #print("null shape",b.shape)
   
@@ -161,10 +156,25 @@ def test(epoch):
           b_norm = b.pow(2).sum(dim=0).pow(0.5)
           hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,1)))
           cos = inner_product / hh
-          angle = (torch.acos(cos)*57.2958)
+          angle_target = (torch.acos(cos)*57.2958)
 
-          list1_1.append(sum(angle)/len(label))
-        print("angleeeeeeeee",sum(list1_1)/(batch_idx+1))
+
+          a = rep
+          b = torch_null.transpose(0,1)
+          #print('rep shape',a.shape)
+          #print("null shape",b.shape)
+  
+          inner_product = torch.matmul(a,b)
+          a_norm = a.pow(2).sum(dim=1).pow(0.5)
+          b_norm = b.pow(2).sum(dim=0).pow(0.5)
+          hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,1)))
+          cos = inner_product / hh
+          angle_null = (torch.acos(cos)*57.2958)
+
+
+          
+
+
           
 ###
 
