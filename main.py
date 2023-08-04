@@ -134,7 +134,8 @@ def test(epoch):
           cc = torch.tensor(bb).to(device)
           list_null.append(cc)
 
-        print("list_null", len(list_null))
+        #print("list_null", len(list_null))
+        torch_null = torch.tensor(list_null)
         list1_1 = []
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
@@ -147,11 +148,11 @@ def test(epoch):
           logits__predicted, predicted = outputs.max(1)
           correct = predicted.eq(label).sum().item()
   
-          target_weight = weights_[label_,:]
+          target_weight = weights_[label,:]
           #other_weight = torch.cat((weights_[:label_.item(),:], weights_[label_.item()+1:,:]), axis = 0)
 
           a = rep
-          b = cc
+          b = target_weight
           #print('rep shape',a.shape)
           #print("null shape",b.shape)
   
