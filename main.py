@@ -132,7 +132,7 @@ def test(epoch):
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
 
-          List1_1 = []
+          list1_1 = []
 
           
           outputs, rep = net(img)
