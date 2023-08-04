@@ -121,54 +121,52 @@ def test(epoch):
     with torch.no_grad():        
         counter = 0
 
-        img, label = next(iter(testloader))
-        #print("img shape:",img.shape,img[0].shape,"label",label)
-        img, label = img[2].view((1,3,32,32)), label[2].view((1))
-        #print("img shapeeeeeee:",img.shape,"label",label.shape)
-        img, label = img.to(device), label.to(device)
+        for batch_idx, (img, label) in enumerate(testloader):
+          img, label = img.to(device), label.to(device)
 
           
-        outputs, rep = net(img)
-        loss = criterion(outputs, label)
-        test_loss = loss.item()
-        logits__predicted, predicted = outputs.max(1)
-        correct = predicted.eq(label).sum().item()
-        print("loss",loss, "\npredicted",predicted, "\nlabel",label.item())
+          outputs, rep = net(img)
+          loss = criterion(outputs, label)
+          test_loss = loss.item()
+          logits__predicted, predicted = outputs.max(1)
+          correct = predicted.eq(label).sum().item()
+  
+          list1_1 = []
+          list2_2 = []
+          for label_ in label:
+            
+            target_weight = weights_[label_.item(),:]
+            other_weight = torch.cat((weights_[:label_.item(),:], weights_[label_.item()+1:,:]), axis = 0)
+    
+            # Calculate the Null space of the matrix
+            M = Matrix(other_weight.cpu())
+            M_nullspace = M.nullspace()
+            #print("dtype", other_weight.dtype)
+            bb = np.array(M_nullspace[0])
+            bb = bb.astype("float32")
+            cc = torch.tensor(bb).to(device)
+            list1_1.append(cc)
+            list2_2.append(target_weight)
+  
 
-        target_weight = weights_[label.item(),:]
-        other_weight = torch.cat((weights_[:label.item(),:], weights_[label.item()+1:,:]), axis = 0)
-        print("target_weight",target_weight.shape, "other_weight",other_weight.shape)
-
-        # Calculate the Null space of the matrix
-        #M = Matrix(other_weight.cpu())
-        M = Matrix(target_weight.view(1,512).cpu())
-        M_nullspace = M.nullspace()
-        #print("dtype", other_weight.dtype)
-        bb = np.array(M_nullspace[0])
-        bb = bb.astype("float32")
-        cc = torch.tensor(bb).to(device)
-
-        print("......",cc.shape)
-        print("rep shape",rep.shape)
-        print("target_weighttttttttt",target_weight.view(512,1).shape)
-
-        a = rep
-        #print(weights_.shape,"shapeeee")
-        b = cc
-        #b = target_weight.view(512,1)
-        #final = torch.matmul(a,b)+bias_
-        #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
-        print(b.shape)
-
-        inner_product = torch.matmul(a,b)
-        a_norm = a.pow(2).sum(dim=1).pow(0.5)
-        b_norm = b.pow(2).sum(dim=0).pow(0.5)
-        hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,1)))
-        cos = inner_product / hh
-        angle = (torch.acos(cos)*57.2958)
-
-        print("angleeeeeeeee",angle)
-        
+          print("list1_1",list1_1,'\n',"list2_2",list2_2)
+          a = rep
+          #print(weights_.shape,"shapeeee")
+          b = cc
+          #b = target_weight.view(512,1)
+          #final = torch.matmul(a,b)+bias_
+          #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
+          print(b.shape)
+  
+          inner_product = torch.matmul(a,b)
+          a_norm = a.pow(2).sum(dim=1).pow(0.5)
+          b_norm = b.pow(2).sum(dim=0).pow(0.5)
+          hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,1)))
+          cos = inner_product / hh
+          angle = (torch.acos(cos)*57.2958)
+  
+          print("angleeeeeeeee",angle)
+          
 
 
 test(epoch=1)
