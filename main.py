@@ -141,7 +141,7 @@ def test(epoch):
 
         # Calculate the Null space of the matrix
         #M = Matrix(other_weight.cpu())
-        M = Matrix(target_weight.cpu())
+        M = Matrix(target_weight.view(1,512).cpu())
         M_nullspace = M.nullspace()
         #print("dtype", other_weight.dtype)
         bb = np.array(M_nullspace[0])
