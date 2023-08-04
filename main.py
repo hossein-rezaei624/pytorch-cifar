@@ -157,7 +157,7 @@ def test(epoch):
           angle = (torch.acos(cos)*57.2958)
 
           list1_1.append(sum(angle)/len(label))
-          print("angleeeeeeeee",list1_1)
+        print("angleeeeeeeee",sum(list1_1)/(batch_idx+1))
           
 
 
