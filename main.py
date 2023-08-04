@@ -120,7 +120,15 @@ def test(epoch):
     
     with torch.no_grad():        
         counter = 0
-
+      
+        # Calculate the Null space of the matrix
+        M = Matrix(weights_.cpu())
+        M_nullspace = M.nullspace()
+        #print("dtype", other_weight.dtype)
+        bb = np.array(M_nullspace[0])
+        bb = bb.astype("float32")
+        cc = torch.tensor(bb).to(device)
+    
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
 
@@ -131,32 +139,13 @@ def test(epoch):
           logits__predicted, predicted = outputs.max(1)
           correct = predicted.eq(label).sum().item()
   
-          list1_1 = []
-          list2_2 = []
-          for label_ in label:
-            
-            target_weight = weights_[label_.item(),:]
-            other_weight = torch.cat((weights_[:label_.item(),:], weights_[label_.item()+1:,:]), axis = 0)
-    
-            # Calculate the Null space of the matrix
-            M = Matrix(other_weight.cpu())
-            M_nullspace = M.nullspace()
-            #print("dtype", other_weight.dtype)
-            bb = np.array(M_nullspace[0])
-            bb = bb.astype("float32")
-            cc = torch.tensor(bb).to(device)
-            list1_1.append(cc)
-            list2_2.append(target_weight)
-  
+          #target_weight = weights_[label_.item(),:]
+          #other_weight = torch.cat((weights_[:label_.item(),:], weights_[label_.item()+1:,:]), axis = 0)
 
-          print("list1_1",list1_1,'\n',"list2_2",list2_2)
           a = rep
-          #print(weights_.shape,"shapeeee")
           b = cc
-          #b = target_weight.view(512,1)
-          #final = torch.matmul(a,b)+bias_
-          #(torch.cat((angle[h,:label[h]], angle[h,label[h]+1:]), axis = 0))
-          print(b.shape)
+          print('rep shape',a.shape)
+          print("null shape",b.shape)
   
           inner_product = torch.matmul(a,b)
           a_norm = a.pow(2).sum(dim=1).pow(0.5)
