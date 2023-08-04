@@ -135,7 +135,7 @@ def test(epoch):
           list_null.append(cc)
 
         #print("list_null", len(list_null))
-        torch_null = torch.tensor(np.array(list_null).cpu())
+        #torch_null = torch.tensor(np.array(list_null).cpu())
         list1_1 = []
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
