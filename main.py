@@ -132,6 +132,8 @@ def test(epoch):
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
 
+          List1_1 = []
+
           
           outputs, rep = net(img)
           loss = criterion(outputs, label)
@@ -144,8 +146,8 @@ def test(epoch):
 
           a = rep
           b = cc
-          print('rep shape',a.shape)
-          print("null shape",b.shape)
+          #print('rep shape',a.shape)
+          #print("null shape",b.shape)
   
           inner_product = torch.matmul(a,b)
           a_norm = a.pow(2).sum(dim=1).pow(0.5)
@@ -153,8 +155,9 @@ def test(epoch):
           hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,1)))
           cos = inner_product / hh
           angle = (torch.acos(cos)*57.2958)
-  
-          print("angleeeeeeeee",angle)
+
+          list1_1.append(sum(angle)/len(label))
+          print("angleeeeeeeee",list1_1)
           
 
 
