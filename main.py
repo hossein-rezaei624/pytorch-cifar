@@ -157,7 +157,7 @@ def test(epoch):
           hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
           cos = inner_product / hh
           angle_target = (torch.acos(cos)*57.2958)
-          print("angle_target shape", angle_target)
+          print("angle_target shape", angle_target.shape)
 
 
           a = rep
@@ -172,7 +172,7 @@ def test(epoch):
           cos = inner_product / hh
           angle_null = (torch.acos(cos)*57.2958)
 
-          print("angle_null shape", angle_null)
+          print("angle_null shape", angle_null.shape)
           
           
 ###
