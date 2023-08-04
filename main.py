@@ -137,6 +137,8 @@ def test(epoch):
         torch_null = torch.tensor(np.array(list_null)).to(device).view(10,512)
         print("torch_null", torch_null.shape)
         list1_1 = []
+        suum1 = []
+        suum2 = []
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
           
@@ -182,8 +184,13 @@ def test(epoch):
             sum_2_2.append(angle_null[count1, label_1.item()])
             count1 = count1 + 1
 
-          print("sum_1_1",sum_1_1,len(sum_1_1))
-          print("sum_2_2",sum_2_2,len(sum_2_2))
+          #print("sum_1_1",sum_1_1,len(sum_1_1))
+          #print("sum_2_2",sum_2_2,len(sum_2_2))
+          suum1.append(sum(sum_1_1)/len(label))
+          suum2.append(sum(sum_2_2)/len(label))
+
+        print("final target angle is:", sum(suum1)/(batch_idx+1))
+        print("final null angle is:", sum(suum2)/(batch_idx+1))
             
 ###
 
