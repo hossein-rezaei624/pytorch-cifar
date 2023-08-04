@@ -134,7 +134,7 @@ def test(epoch):
           #cc = torch.tensor(bb).to(device)
           list_null.append(bb)
 
-        torch_null = torch.tensor(np.array(list_null)).to(device).view(10,512)
+        torch_null = torch.squeeze(torch.tensor(np.array(list_null)).to(device))
         print("torch_null", torch_null.shape)
         list1_1 = []
         suum1 = []
