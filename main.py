@@ -121,14 +121,20 @@ def test(epoch):
     with torch.no_grad():        
         counter = 0
       
-        # Calculate the Null space of the matrix
-        M = Matrix(weights_.cpu())
-        M_nullspace = M.nullspace()
-        #print("dtype", other_weight.dtype)
-        bb = np.array(M_nullspace[0])
-        bb = bb.astype("float32")
-        cc = torch.tensor(bb).to(device)
-    
+        list_null = []
+        for i in range(10):
+          
+          other_weight = torch.cat((weights_[:i,:], weights_[i+1:,:]), axis = 0)
+          # Calculate the Null space of the matrix
+          M = Matrix(other_weight.cpu())
+          M_nullspace = M.nullspace()
+          #print("dtype", other_weight.dtype)
+          bb = np.array(M_nullspace[0])
+          bb = bb.astype("float32")
+          cc = torch.tensor(bb).to(device)
+          list_null.append(cc)
+
+        print("list_null", list_null)
         list1_1 = []
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
@@ -141,7 +147,7 @@ def test(epoch):
           logits__predicted, predicted = outputs.max(1)
           correct = predicted.eq(label).sum().item()
   
-          #target_weight = weights_[label_.item(),:]
+          target_weight = weights_[label_,:]
           #other_weight = torch.cat((weights_[:label_.item(),:], weights_[label_.item()+1:,:]), axis = 0)
 
           a = rep
