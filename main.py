@@ -96,11 +96,11 @@ tempp = 0
 #bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
-    if (tempp==61): ##for example for VGG19 you should set tempp as 65
+    if (tempp==361): ##for example for VGG19 you should set tempp as 65
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       weights_ = param
-    if (tempp==62): ##for example for VGG19 you should set tempp as 66
+    if (tempp==362): ##for example for VGG19 you should set tempp as 66
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       bias_ = param
@@ -123,7 +123,7 @@ def test(epoch):
         counter = 0
       
         list_null = []
-        for i in range(10):
+        for i in range(100):
           
           other_weight = torch.cat((weights_[:i,:], weights_[i+1:,:]), axis = 0)
           # Calculate the Null space of the matrix
@@ -134,6 +134,7 @@ def test(epoch):
           bb = bb.astype("float32")
           #cc = torch.tensor(bb).to(device)
           list_null.append(bb)
+          print("iiiiii",i)
 
         torch_null = torch.squeeze(torch.tensor(np.array(list_null)).to(device))
         print("torch_null", torch_null.shape)
