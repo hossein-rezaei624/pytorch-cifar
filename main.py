@@ -136,10 +136,9 @@ def test(epoch):
           list_null.append(bb)
           print("iiiiii",i)
 
-        squeez_ = torch.squeeze(torch.tensor(np.array(list_null)).to(device))
-        print("squeez_", squeez_)
-        torch_null = 90 - squeez_
-        print("torch_null", torch_null)
+
+        torch_null = torch.squeeze(torch.tensor(np.array(list_null)).to(device))
+        #print("torch_null", torch_null)
         list1_1 = []
         suum1 = []
         suum2 = []
