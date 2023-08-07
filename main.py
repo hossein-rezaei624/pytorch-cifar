@@ -44,12 +44,12 @@ transform_test = transforms.Compose([
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-trainset = torchvision.datasets.CIFAR10(
+trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=128, shuffle=True, num_workers=2)
 
-testset = torchvision.datasets.CIFAR10(
+testset = torchvision.datasets.CIFAR100(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2)
@@ -60,8 +60,8 @@ testloader = torch.utils.data.DataLoader(
 
 # Model
 print('==> Building model..')
-net = ResNet18()
-#net = DenseNet121()
+#net = ResNet18()
+net = DenseNet121()
 #net = ResNet34()
 #net = ResNet50()
 #net = VGG('VGG19')
@@ -96,11 +96,11 @@ tempp = 0
 #bias_ = torch.zeros((10))
 for param in net.parameters():
     tempp +=1
-    if (tempp==61): ##for example for VGG19 you should set tempp as 65
+    if (tempp==361): ##for example for VGG19 you should set tempp as 65
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       weights_ = param
-    if (tempp==62): ##for example for VGG19 you should set tempp as 66
+    if (tempp==362): ##for example for VGG19 you should set tempp as 66
       ###print(param)
       ###print("the shapeeeeeee",param.shape)
       bias_ = param
@@ -123,7 +123,7 @@ def test(epoch):
         counter = 0
       
         list_null = []
-        for i in range(10):
+        for i in range(100):
           
           other_weight = torch.cat((weights_[:i,:], weights_[i+1:,:]), axis = 0)
           # Calculate the Null space of the matrix
@@ -159,7 +159,7 @@ def test(epoch):
           inner_product = torch.matmul(a,b)
           a_norm = a.pow(2).sum(dim=1).pow(0.5)
           b_norm = b.pow(2).sum(dim=0).pow(0.5)
-          hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
+          hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,100)))
           cos = inner_product / hh
           angle_target = (torch.acos(cos)*57.2958)
           #print("angle_target shape", angle_target.shape)
@@ -173,7 +173,7 @@ def test(epoch):
           inner_product = torch.matmul(a,b)
           a_norm = a.pow(2).sum(dim=1).pow(0.5)
           b_norm = b.pow(2).sum(dim=0).pow(0.5)
-          hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,10)))
+          hh = torch.matmul(a_norm.view((a_norm.shape[0],1)),b_norm.view((1,100)))
           cos = inner_product / hh
           angle_null = (torch.acos(cos)*57.2958)
 
