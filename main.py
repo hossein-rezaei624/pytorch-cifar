@@ -184,7 +184,7 @@ def test(epoch):
           sum_2_2 = []
           for label_1 in label:
             sum_1_1.append(angle_target[count1, label_1.item()])
-            sum_2_2.append(90 - angle_null[count1, label_1.item()])
+            sum_2_2.append(abs(90 - angle_null[count1, label_1.item()]))
             count1 = count1 + 1
 
           #print("sum_1_1",sum_1_1,len(sum_1_1))
