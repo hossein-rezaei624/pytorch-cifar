@@ -86,10 +86,11 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
 tempp = 0
 for param in net.parameters():
-  param.requires_grad = False
   tempp = tempp + 1
-  if tempp == 30:
-    break
+  if (tempp > 30 and tempp < 61):
+    param.requires_grad = False
+  '''if tempp == 30:
+    break'''
 
 # Training
 def train(epoch):
