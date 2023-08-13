@@ -85,7 +85,7 @@ optimizer = optim.SGD(net.parameters(), lr=args.lr,
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
 for param in net.parameters():
-  print("param", param)
+  print("parammm", param.shape)
 # Training
 def train(epoch):
     print('\nEpoch: %d' % epoch)
