@@ -87,8 +87,8 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 tempp = 0
 for param in net.parameters():
   print("parammm", param.shape)
+  print("tempp", tempp)
   tempp = tempp + 1
-print("tempp", tempp)
 # Training
 def train(epoch):
     print('\nEpoch: %d' % epoch)
