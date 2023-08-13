@@ -91,8 +91,11 @@ for param in net.parameters():
   if tempp == 30:
     break
 print("tempp", tempp)
+ii__ = 0
 for param in net.parameters():
   print(param)
+  ii__ = ii__ + 1
+  print(ii__)
 # Training
 def train(epoch):
     print('\nEpoch: %d' % epoch)
