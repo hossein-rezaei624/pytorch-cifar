@@ -84,12 +84,6 @@ optimizer = optim.SGD(net.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
-'''tempp = 0
-for param in net.parameters():
-  tempp = tempp + 1
-  param.requires_grad = False
-  if tempp == 60:
-    break'''
 
 '''tempp = 0
 for param in net.parameters():
@@ -103,6 +97,13 @@ for param in net.parameters():
   tempp = tempp + 1
   if (tempp > 30 and tempp < 61):
     param.requires_grad = False
+
+'''tempp = 0
+for param in net.parameters():
+  tempp = tempp + 1
+  param.requires_grad = False
+  if tempp == 60:
+    break'''
 
 # Training
 def train(epoch):
