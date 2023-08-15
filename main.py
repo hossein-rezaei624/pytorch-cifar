@@ -72,7 +72,7 @@ net.load_state_dict(checkpoint['net'])
 
 
 
-dataset = CIFAR100(root='./data', train=False, download=True, transform=transform_test)
+dataset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
 
 # Iterate over each set
 for i, subset_classes in enumerate(sets):
