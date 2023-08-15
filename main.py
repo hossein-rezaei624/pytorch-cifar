@@ -29,7 +29,7 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 
-label_sets = [
+class_sets = [
     [26, 86, 2, 55, 75, 93, 16, 73, 54, 95],
     [53, 92, 78, 13, 7, 30, 22, 24, 33, 8],
     [43, 62, 3, 71, 45, 48, 6, 99, 82, 76],
@@ -62,11 +62,11 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-trainset = torchvision.datasets.CIFAR100(
+'''trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
 
 testset = torchvision.datasets.CIFAR100(
-    root='./data', train=False, download=True, transform=transform_test)
+    root='./data', train=False, download=True, transform=transform_test)'''
 
 '''classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')'''
@@ -137,24 +137,28 @@ def train(epoch):
 
 
 
-def test(epoch, label_set):
-    correct = 0
-    total = 0
+def test(epoch, class_sets):
 
     with torch.no_grad():
-        for data in testset:
-            images, labels = data
-            if labels in label_set:
-                outputs = net(images.unsqueeze(0))
-                _, predicted = torch.max(outputs, 1)
-                total += 1
-                if predicted.item() in label_set:
-                    correct += 1
+      # Calculate accuracy for each set of classes
+      for set_idx, class_numbers in enumerate(class_sets):
+          correct = 0
+          total = 0
+          
+          for class_num in class_numbers:
+              dataset = datasets.CIFAR100(root='./data', train=False, download=True, transform=transform)
+              class_indices = [idx for idx, (_, label) in enumerate(dataset) if label == class_num]
+              
+              for idx in class_indices:
+                  image, label = dataset[idx]
+                  output = model(image.unsqueeze(0))  # Add batch dimension
+                  _, predicted = torch.max(output.data, 1)
+                  if predicted.item() == class_num:
+                      correct += 1
+                  total += 1
+          
+          accuracy = correct / total
+          print(f"Set: {set_idx}, Accuracy: {accuracy:.2%}")
 
-    print(f'Accuracy for label set {label_set}: {100 * correct / total:.2f}%')
 
-
-
-# Perform inference for each label set
-for label_set in label_sets:
-    test(1, label_set)
+test(1, class_sets)
