@@ -146,7 +146,7 @@ def test(epoch, class_sets):
           total = 0
           
           for class_num in class_numbers:
-              dataset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform)
+              dataset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
               class_indices = [idx for idx, (_, label) in enumerate(dataset) if label == class_num]
               
               for idx in class_indices:
