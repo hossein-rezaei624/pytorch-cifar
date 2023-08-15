@@ -80,7 +80,7 @@ for i, subset_classes in enumerate(sets):
     subset_indices = [idx for idx, (_, target) in enumerate(dataset) if target in subset_classes]
 
     # Create a data loader for the current subset
-    subset_loader = DataLoader(Subset(dataset, subset_indices), batch_size=64)
+    subset_loader = torch.utils.data.DataLoader(Subset(dataset, subset_indices), batch_size=64)
 
     correct = 0
     total = 0
