@@ -44,6 +44,7 @@ sets = [
 
 
 transform_test = transforms.Compose([
+    transforms.RandomRotation(90),
     transforms.ToTensor(),
 ])
 
