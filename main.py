@@ -29,7 +29,7 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 
-class_sets = [
+sets = [
     [26, 86, 2, 55, 75, 93, 16, 73, 54, 95],
     [53, 92, 78, 13, 7, 30, 22, 24, 33, 8],
     [43, 62, 3, 71, 45, 48, 6, 99, 82, 76],
@@ -44,54 +44,22 @@ class_sets = [
 
 
 
-transform11 = nn.Sequential(
-    RandomResizedCrop(size = (32,32), scale=(0.2, 1.)),
-    RandomHorizontalFlip(),
-    ColorJitter(0.4, 0.4, 0.4, 0.1, p=0.8),
-    RandomGrayscale(p=0.2)
-)
-
-transform_train = transforms.Compose([
-    transforms.ToTensor(),
-])
-
 transform_test = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-test_dataset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=100, shuffle=False)
 
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
 net = Reduced_ResNet18(100)
-# net = PreActResNet18()
-# net = GoogLeNet()
-# net = DenseNet121()
-# net = ResNeXt29_2x64d()
-# net = MobileNet()
-# net = MobileNetV2()
-# net = DPN92()
-# net = ShuffleNetG2()
-# net = SENet18()
-# net = ShuffleNetV2(1)
-# net = EfficientNetB0()
-# net = RegNetX_200MF()
-# net = SimpleDLA()
+
 net = net.to(device)
 if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
 
-if args.resume:
-    # Load checkpoint.
-    print('==> Resuming from checkpoint..')
-    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/ckpt.pth')
-    net.load_state_dict(checkpoint['net'])
-    best_acc = checkpoint['acc']
-    start_epoch = checkpoint['epoch']
+
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr,
@@ -101,60 +69,29 @@ optimizer = optim.SGD(net.parameters(), lr=args.lr,
 checkpoint = torch.load('./checkpoint/ckpt.pth')
 net.load_state_dict(checkpoint['net'])
 
-# Training
-def train(epoch):
-    print('\nEpoch: %d' % epoch)
-    net.train()
-    train_loss = 0
+
+
+
+dataset = CIFAR100(root='./data', train=False, download=True, transform=transform_test)
+
+# Iterate over each set
+for i, subset_classes in enumerate(sets):
+    # Get indices of samples belonging to the current subset
+    subset_indices = [idx for idx, (_, target) in enumerate(dataset) if target in subset_classes]
+
+    # Create a data loader for the current subset
+    subset_loader = DataLoader(Subset(dataset, subset_indices), batch_size=64)
+
     correct = 0
     total = 0
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
-        inputs, targets = inputs.to(device), targets.to(device)
-        optimizer.zero_grad()
-        inputs = transform11(inputs)
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
 
-        train_loss += loss.item()
-        _, predicted = outputs.max(1)
-        total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
-
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                     % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-
-
-
-def test(epoch, class_sets):
-
+    # Calculate accuracy for the current subset
     with torch.no_grad():
-        correct = 0
-        total = 0
-    
-        for images, labels in test_loader:
-            images = images.to(device)
-            labels = labels.to(device)
-    
-            # Get the predicted outputs from the model
+        for data in subset_loader:
+            images, labels = data[0].to(device), data[1].to(device)
             outputs = net(images)
-    
-            for class_nums in class_sets:
-                class_indices = [test_dataset.class_to_idx[class_num] for class_num in class_nums]
-    
-                # Select only the predictions corresponding to the current class set
-                selected_outputs = outputs[:, class_indices]
-    
-                # Get the predicted class indices
-                _, predicted = torch.max(selected_outputs.data, 1)
-    
-                total += labels.size(0)
-                correct += (predicted == labels.unsqueeze(1)).sum().item()
-    
-        accuracy = 100 * correct / total
-        print(f"Overall Accuracy: {accuracy:.2f}%")
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
 
-
-test(1, class_sets)
+    print(f'Set: {i}, Accuracy: {100 * correct / total}%')
