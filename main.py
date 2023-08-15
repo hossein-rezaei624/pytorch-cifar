@@ -44,9 +44,6 @@ class_sets = [
 
 
 
-
-
-
 transform11 = nn.Sequential(
     RandomResizedCrop(size = (32,32), scale=(0.2, 1.)),
     RandomHorizontalFlip(),
@@ -139,26 +136,29 @@ def train(epoch):
 
 def test(epoch, class_sets):
 
-    with torch.no_grad():
-      # Calculate accuracy for each set of classes
-      for set_idx, class_numbers in enumerate(class_sets):
+  with torch.no_grad():
+      for i, class_set in enumerate(class_sets):
           correct = 0
           total = 0
-          
-          for class_num in class_numbers:
-              dataset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
-              class_indices = [idx for idx, (_, label) in enumerate(dataset) if label == class_num]
-              
-              for idx in class_indices:
-                  image, label = dataset[idx]
-                  output = net(image.unsqueeze(0))  # Add batch dimension
-                  _, predicted = torch.max(output.data, 1)
-                  if predicted.item() == class_num:
-                      correct += 1
-                  total += 1
-          
-          accuracy = correct / total
-          print(f"Set: {set_idx}, Accuracy: {accuracy:.2%}")
+  
+          for images, labels in test_loader:
+              images = images.to(device)
+              labels = labels.to(device)
+  
+              # Get the predicted outputs from the model
+              outputs = model(images)
+  
+              # Select only the predictions corresponding to the current class set
+              selected_outputs = outputs[:, class_set]
+  
+              # Get the predicted class indices
+              _, predicted = torch.max(selected_outputs.data, 1)
+  
+              total += labels.size(0)
+              correct += (predicted == labels).sum().item()
+  
+          accuracy = 100 * correct / total
+          print(f"Accuracy for Set {i}: {accuracy:.2f}%")
 
 
 test(1, class_sets)
