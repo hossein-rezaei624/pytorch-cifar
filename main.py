@@ -59,14 +59,8 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-'''trainset = torchvision.datasets.CIFAR100(
-    root='./data', train=True, download=True, transform=transform_train)
-
-testset = torchvision.datasets.CIFAR100(
-    root='./data', train=False, download=True, transform=transform_test)'''
-
-'''classes = ('plane', 'car', 'bird', 'cat', 'deer',
-           'dog', 'frog', 'horse', 'ship', 'truck')'''
+test_dataset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=100, shuffle=False)
 
 # Model
 print('==> Building model..')
@@ -146,7 +140,7 @@ def test(epoch, class_sets):
               labels = labels.to(device)
   
               # Get the predicted outputs from the model
-              outputs = model(images)
+              outputs = net(images)
   
               # Select only the predictions corresponding to the current class set
               selected_outputs = outputs[:, class_set]
