@@ -29,6 +29,24 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 
+label_sets = [
+    [26, 86, 2, 55, 75, 93, 16, 73, 54, 95],
+    [53, 92, 78, 13, 7, 30, 22, 24, 33, 8],
+    [43, 62, 3, 71, 45, 48, 6, 99, 82, 76],
+    [60, 80, 90, 68, 51, 27, 18, 56, 63, 74],
+    [1, 61, 42, 41, 4, 15, 17, 40, 38, 5],
+    [91, 59, 0, 34, 28, 50, 11, 35, 23, 52],
+    [10, 31, 66, 57, 79, 85, 32, 84, 14, 89],
+    [19, 29, 49, 97, 98, 69, 20, 94, 72, 77],
+    [25, 37, 81, 46, 39, 65, 58, 12, 88, 70],
+    [87, 36, 21, 83, 9, 96, 67, 64, 47, 44]
+]
+
+
+
+
+
+
 transform11 = nn.Sequential(
     RandomResizedCrop(size = (32,32), scale=(0.2, 1.)),
     RandomHorizontalFlip(),
@@ -46,13 +64,9 @@ transform_test = transforms.Compose([
 
 trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=128, shuffle=True, num_workers=2)
 
 testset = torchvision.datasets.CIFAR100(
     root='./data', train=False, download=True, transform=transform_test)
-testloader = torch.utils.data.DataLoader(
-    testset, batch_size=100, shuffle=False, num_workers=2)
 
 '''classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')'''
@@ -120,42 +134,27 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-def test(epoch):
-    global best_acc
-    net.eval()
-    test_loss = 0
+
+
+
+def test(epoch, label_set):
     correct = 0
     total = 0
+
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(testloader):
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
-            loss = criterion(outputs, targets)
+        for data in testset:
+            images, labels = data
+            if labels in label_set:
+                outputs = model(images.unsqueeze(0))
+                _, predicted = torch.max(outputs, 1)
+                total += 1
+                if predicted.item() in label_set:
+                    correct += 1
 
-            test_loss += loss.item()
-            _, predicted = outputs.max(1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
+    print(f'Accuracy for label set {label_set}: {100 * correct / total:.2f}%')
 
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                         % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-    # Save checkpoint.
-    acc = 100.*correct/total
-    if acc > best_acc:
-        print('Saving..')
-        state = {
-            'net': net.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-        }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.pth')
-        best_acc = acc
 
-test(epoch = 1)
-'''for epoch in range(start_epoch, start_epoch+75):
-    train(epoch)
-    test(epoch)
-    #scheduler.step()'''
+# Perform inference for each label set
+for label_set in label_sets:
+    test(epoch = 1, label_set)
