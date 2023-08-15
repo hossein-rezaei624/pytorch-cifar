@@ -13,7 +13,6 @@ import argparse
 
 from models import *
 from utils import progress_bar
-from kornia.augmentation import RandomResizedCrop, RandomHorizontalFlip, ColorJitter, RandomGrayscale
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -81,7 +80,7 @@ for i, subset_classes in enumerate(sets):
     subset_indices = [idx for idx, (_, target) in enumerate(dataset) if target in subset_classes]
 
     # Create a data loader for the current subset
-    subset_loader = torch.utils.data.DataLoader(torch.utils.data.Subset(dataset, subset_indices), batch_size=64)
+    subset_loader = torch.utils.data.DataLoader(torch.utils.data.Subset(dataset, subset_indices), batch_size=100, shuffle=False, num_workers=2)
 
     correct = 0
     total = 0
