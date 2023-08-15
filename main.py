@@ -35,12 +35,12 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-trainset = torchvision.datasets.SVHN(
+trainset = torchvision.datasets.CelebA(
     root='./data', split = 'train', download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=128, shuffle=True, num_workers=2)
 
-testset = torchvision.datasets.SVHN(
+testset = torchvision.datasets.CelebA(
     root='./data', split = 'test', download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2)
@@ -84,12 +84,12 @@ optimizer = optim.SGD(net.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
-tempp = 0
+'''tempp = 0
 for param in net.parameters():
   tempp = tempp + 1
   param.requires_grad = False
   if tempp == 60:
-    break
+    break'''
 
 # Training
 def train(epoch):
