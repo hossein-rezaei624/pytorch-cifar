@@ -94,4 +94,5 @@ for i, subset_classes in enumerate(sets):
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-    print(f'Set: {i}, Accuracy: {100 * correct / total}%')
+    accuracy = 100 * correct / total
+    print(f'Set: {i}, Accuracy: {accuracy:.2f}%')
