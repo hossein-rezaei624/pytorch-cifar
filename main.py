@@ -35,12 +35,12 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-trainset = torchvision.datasets.CINIC10(
+trainset = CINIC10(
     root='./data', partition = train, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=128, shuffle=True, num_workers=2)
 
-testset = torchvision.datasets.CINIC10(
+testset = CINIC10(
     root='./data', partition = test, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2)
