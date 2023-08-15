@@ -146,12 +146,12 @@ def test(epoch, class_sets):
           total = 0
           
           for class_num in class_numbers:
-              dataset = datasets.CIFAR100(root='./data', train=False, download=True, transform=transform)
+              dataset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform)
               class_indices = [idx for idx, (_, label) in enumerate(dataset) if label == class_num]
               
               for idx in class_indices:
                   image, label = dataset[idx]
-                  output = model(image.unsqueeze(0))  # Add batch dimension
+                  output = net(image.unsqueeze(0))  # Add batch dimension
                   _, predicted = torch.max(output.data, 1)
                   if predicted.item() == class_num:
                       correct += 1
