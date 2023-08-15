@@ -145,7 +145,7 @@ def test(epoch, label_set):
         for data in testset:
             images, labels = data
             if labels in label_set:
-                outputs = model(images.unsqueeze(0))
+                outputs = net(images.unsqueeze(0))
                 _, predicted = torch.max(outputs, 1)
                 total += 1
                 if predicted.item() in label_set:
