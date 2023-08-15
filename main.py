@@ -131,18 +131,18 @@ def train(epoch):
 def test(epoch, class_sets):
 
     with torch.no_grad():
-        for i, class_nums in enumerate(class_sets):
-            correct = 0
-            total = 0
+        correct = 0
+        total = 0
     
-            class_indices = [class_num for class_num in class_nums]
+        for images, labels in test_loader:
+            images = images.to(device)
+            labels = labels.to(device)
     
-            for images, labels in test_loader:
-                images = images.to(device)
-                labels = labels.to(device)
+            # Get the predicted outputs from the model
+            outputs = model(images)
     
-                # Get the predicted outputs from the model
-                outputs = net(images)
+            for class_nums in class_sets:
+                class_indices = [test_dataset.class_to_idx[class_num] for class_num in class_nums]
     
                 # Select only the predictions corresponding to the current class set
                 selected_outputs = outputs[:, class_indices]
@@ -153,8 +153,8 @@ def test(epoch, class_sets):
                 total += labels.size(0)
                 correct += (predicted == labels.unsqueeze(1)).sum().item()
     
-            accuracy = 100 * correct / total
-            print(f"Accuracy for Set {i}: {accuracy:.2f}%")
+        accuracy = 100 * correct / total
+        print(f"Overall Accuracy: {accuracy:.2f}%")
 
 
 test(1, class_sets)
