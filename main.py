@@ -75,6 +75,7 @@ net.load_state_dict(checkpoint['net'])
 dataset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_test)
 net.eval()
 # Iterate over each set
+list11 = []
 for i, subset_classes in enumerate(sets):
     # Get indices of samples belonging to the current subset
     subset_indices = [idx for idx, (_, target) in enumerate(dataset) if target in subset_classes]
@@ -95,3 +96,5 @@ for i, subset_classes in enumerate(sets):
             correct += (predicted == labels).sum().item()
 
     print(f'Set: {i}, Accuracy: {100 * correct / total}%')
+    list11.append(100 * correct / total)
+print("sum",sum(list11)/10)
