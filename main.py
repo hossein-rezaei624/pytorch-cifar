@@ -92,18 +92,18 @@ for param in net.parameters():
   if tempp == 30:
     break'''
 
-tempp = 0
+'''tempp = 0
 for param in net.parameters():
   tempp = tempp + 1
   if (tempp > 30 and tempp < 61):
-    param.requires_grad = False
+    param.requires_grad = False'''
 
-'''tempp = 0
+tempp = 0
 for param in net.parameters():
   tempp = tempp + 1
   param.requires_grad = False
   if tempp == 60:
-    break'''
+    break
 
 # Training
 def train(epoch):
