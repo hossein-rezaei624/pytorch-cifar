@@ -157,4 +157,4 @@ def test(epoch, label_set):
 
 # Perform inference for each label set
 for label_set in label_sets:
-    test(epoch = 1, label_set)
+    test(1, label_set)
