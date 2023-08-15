@@ -13,7 +13,7 @@ import argparse
 
 from models import *
 from utils import progress_bar
-
+from pytorch_cinic.dataset import CINIC10
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -35,13 +35,13 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-trainset = torchvision.datasets.CIFAR100(
-    root='./data', train=True, download=True, transform=transform_train)
+trainset = torchvision.datasets.CINIC10(
+    root='./data', partition = train, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=128, shuffle=True, num_workers=2)
 
-testset = torchvision.datasets.CIFAR100(
-    root='./data', train=False, download=True, transform=transform_test)
+testset = torchvision.datasets.CINIC10(
+    root='./data', partition = test, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2)
 
