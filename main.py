@@ -139,7 +139,7 @@ def test(epoch, class_sets):
             labels = labels.to(device)
     
             # Get the predicted outputs from the model
-            outputs = model(images)
+            outputs = net(images)
     
             for class_nums in class_sets:
                 class_indices = [test_dataset.class_to_idx[class_num] for class_num in class_nums]
