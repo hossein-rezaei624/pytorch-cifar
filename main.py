@@ -138,8 +138,8 @@ def test(epoch):
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
-            where_, jj = np.where(predicted.cpu().numpy() == targets.cpu().numpy())
-            print("whereeee", where_, "aaa", jj)
+            where_ = np.where(predicted.cpu().numpy() == targets.cpu().numpy())
+            print("whereeee", where_[0], where_[1])
 
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
