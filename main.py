@@ -152,6 +152,8 @@ def test(epoch):
             corrected_inputs = inputs[where_[0]]
             corrected_labels = targets[where_[0]]
 
+            corrected_inputs = transforms.RandomRotation(90)(corrected_inputs)
+
             outputs_ = net(corrected_inputs)
             loss_ = criterion(outputs_, corrected_labels)
 
