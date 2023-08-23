@@ -128,6 +128,9 @@ def test(epoch):
     test_loss = 0
     correct = 0
     total = 0
+    test_loss_ = 0
+    total_ = 0
+    correct_ = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
@@ -139,11 +142,30 @@ def test(epoch):
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
             where_ = np.where(predicted.cpu().numpy() == targets.cpu().numpy())
-            print("whereeee", where_[0], where_[1])
+
+            
 
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
+            
+            corrected_inputs = inputs[where_[0]]
+            corrected_labels = targets[where_[0]]
+
+            outputs_ = net(corrected_inputs)
+            loss_ = criterion(outputs_, corrected_labels)
+
+            test_loss_ += loss_.item()
+            __, predicted_ = outputs_.max(1)
+            total_ += corrected_labels.size(0)
+            correct_ += predicted_.eq(corrected_labels).sum().item()
+            
+
+            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                         % (test_loss_/(batch_idx+1), 100.*correct_/total_, correct_, total_))
+
+        print("Acc.", 100.*correct/total)
+        print("Acc.", 100.*correct_/total_)
     # Save checkpoint.
     acc = 100.*correct/total
     if acc > best_acc:
