@@ -125,7 +125,8 @@ def test(epoch):
         list_null = []
         for i in range(100):
           
-          other_weight = torch.cat((weights_[:i,:], weights_[i+1:,:]), axis = 0)
+          #other_weight = torch.cat((weights_[:i,:], weights_[i+1:,:]), axis = 0)
+          other_weight = weights_[i,:]
           # Calculate the Null space of the matrix
           M = Matrix(other_weight.cpu())
           M_nullspace = M.nullspace()
