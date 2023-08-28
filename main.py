@@ -126,7 +126,7 @@ def test(epoch):
         for i in range(100):
           
           #other_weight = torch.cat((weights_[:i,:], weights_[i+1:,:]), axis = 0)
-          other_weight = weights_[i,:]
+          other_weight = weights_[i,:].reshape(1,512)
           # Calculate the Null space of the matrix
           M = Matrix(other_weight.cpu())
           M_nullspace = M.nullspace()
@@ -143,6 +143,7 @@ def test(epoch):
         list1_1 = []
         suum1 = []
         suum2 = []
+        suum3 = []
         for batch_idx, (img, label) in enumerate(testloader):
           img, label = img.to(device), label.to(device)
           
@@ -183,18 +184,22 @@ def test(epoch):
           count1 = 0
           sum_1_1 = []
           sum_2_2 = []
+          sum_3_3 = []
           for label_1 in label:
             sum_1_1.append(angle_target[count1, label_1.item()])
-            sum_2_2.append(abs(90 - angle_null[count1, label_1.item()]))
+            sum_2_2.append(abs(angle_null[count1, label_1.item()]))
+            sum_3_3.append(abs(90 - angle_null[count1, label_1.item()]))
             count1 = count1 + 1
 
           #print("sum_1_1",sum_1_1,len(sum_1_1))
           #print("sum_2_2",sum_2_2,len(sum_2_2))
           suum1.append(sum(sum_1_1)/len(label))
           suum2.append(sum(sum_2_2)/len(label))
+          suum3.append(sum(sum_3_3)/len(label))
 
         print("final target angle is:", sum(suum1)/(batch_idx+1))
         print("final null angle is:", sum(suum2)/(batch_idx+1))
+        print("final null angle1 is:", sum(suum3)/(batch_idx+1))
             
 ###
 
