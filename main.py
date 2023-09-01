@@ -98,11 +98,11 @@ def train(epoch):
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        outputs = net(inputs)
+        outputs, soft_ = net(inputs)
         confidence_batch = []
 
         for i in range(targets.shape[0]):
-          confidence_batch.append(outputs[i,targets[i]].item())
+          confidence_batch.append(soft_[i,targets[i]].item())
         if (targets.shape[0] != batch_size_):
           for j in range(batch_size_ - targets.shape[0]):
             confidence_batch.append(0)
@@ -136,7 +136,7 @@ def test(epoch):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
+            outputs, __ = net(inputs)
             loss = criterion(outputs, targets)
 
             test_loss += loss.item()
