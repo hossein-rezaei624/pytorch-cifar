@@ -14,6 +14,8 @@ import argparse
 from models import *
 from utils import progress_bar
 
+import numpy as np
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -124,7 +126,8 @@ def train(epoch):
     conf_tensor = torch.tensor(confidence_epoch)
     conf_tensor = conf_tensor.reshape(conf_tensor.shape[0]*conf_tensor.shape[1])
     conf_tensor = conf_tensor[:(total-1)]
-    print(conf_tensor.shape)
+    #print(conf_tensor.shape)
+    return conf_tensor
 
 def test(epoch):
     global best_acc
@@ -160,8 +163,27 @@ def test(epoch):
         torch.save(state, './checkpoint/ckpt.pth')
         best_acc = acc
 
-
-for epoch in range(start_epoch, start_epoch+200):
-    train(epoch)
+Carto = []
+for epoch in range(start_epoch, start_epoch+2):
+    Carto.append(train(epoch).numpy())
     test(epoch)
     scheduler.step()
+
+Carto_tensor = torch.tensor(np.array(Carto))
+#print(Carto_tensor.shape)
+Confidence_mean = Carto_tensor.mean(dim=0)
+Variability = Carto_tensor.std(dim = 0)
+#print(Confidence_mean.shape)
+#print(Variability.shape)
+
+plt.scatter(Variability, Confidence_mean)
+
+
+# Add Axes Labels
+
+plt.xlabel("Variability") 
+plt.ylabel("Confidence") 
+
+# Display
+
+plt.show()
