@@ -102,6 +102,7 @@ def train(epoch):
         optimizer.zero_grad()
         outputs = net(inputs)
         confidence_batch = []
+        print(batch_idx ,targets)
 
         for i in range(targets.shape[0]):
           confidence_batch.append(outputs[i,targets[i]].item())
