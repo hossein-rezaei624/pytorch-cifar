@@ -164,7 +164,7 @@ def test(epoch):
         best_acc = acc
 
 Carto = []
-for epoch in range(start_epoch, start_epoch+2):
+for epoch in range(start_epoch, start_epoch+7):
     Carto.append(train(epoch).numpy())
     test(epoch)
     scheduler.step()
@@ -186,4 +186,4 @@ plt.ylabel("Confidence")
 
 # Display
 
-plt.show()
+plt.savefig('scatter_plot.png')
