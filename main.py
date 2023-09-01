@@ -176,7 +176,7 @@ Variability = Carto_tensor.std(dim = 0)
 #print(Confidence_mean.shape)
 #print(Variability.shape)
 
-plt.scatter(Variability, Confidence_mean)
+plt.scatter(Variability, Confidence_mean, s = 15)
 
 
 # Add Axes Labels
