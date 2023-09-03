@@ -54,6 +54,7 @@ testloader = torch.utils.data.DataLoader(
 print('==> Building model..')
 # net = VGG('VGG19')
 net = ResNet18()
+net_ = ResNet18()
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
@@ -72,6 +73,11 @@ if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
 
+net_ = net_.to(device)
+if device == 'cuda':
+    net_ = torch.nn.DataParallel(net_)
+    cudnn.benchmark = True
+
 if args.resume:
     # Load checkpoint.
     print('==> Resuming from checkpoint..')
@@ -82,9 +88,13 @@ if args.resume:
     start_epoch = checkpoint['epoch']
 
 criterion = nn.CrossEntropyLoss()
+criterion_ = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
+optimizer_ = optim.SGD(net_.parameters(), lr=args.lr,
+                      momentum=0.9, weight_decay=5e-4)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+scheduler_ = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_, T_max=200)
 
 
 # Training
@@ -162,7 +172,7 @@ def test(epoch):
         best_acc = acc
 
 Carto = []
-for epoch in range(start_epoch, start_epoch+7):
+for epoch in range(start_epoch, start_epoch+20):
     Carto.append(train(epoch).numpy())
     test(epoch)
     scheduler.step()
@@ -186,13 +196,10 @@ plt.ylabel("Confidence")
 
 plt.savefig('scatter_plot.png')'''
 
-high_Variability = np.where(Variability.numpy() > 0.4 )
-#print("high_Variability", high_Variability)
-
 
 # Number of top values you're interested in
-top_n = Variability.shape//3
-print("Variability.shape",Variability.shape, "top_n", top_n)
+top_n = Variability.shape[0]//3
+
 # Find the indices that would sort the array
 sorted_indices = np.argsort(Variability.numpy())
 
@@ -202,27 +209,24 @@ top_indices = sorted_indices[-top_n:]
 # If you want these indices in ascending order, you can sort them
 top_indices_sorted = np.sort(top_indices)
 
-print("Sorted indices of top 2 values:", top_indices_sorted)
+print(top_indices_sorted)
 
-
-print("high_Variability.shape", high_Variability[0].shape)
-
-subset_data = torch.utils.data.Subset(trainset, high_Variability[0])
+subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
 trainloader = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=False)
 
-for e in range(20):
-  net.train()
+def train_(epoch):
+  net_.train()
   train_loss = 0
   correct = 0
   total = 0
   for batch_idx, (inputs, targets) in enumerate(trainloader):
       inputs, targets = inputs.to(device), targets.to(device)
-      optimizer.zero_grad()
-      outputs, soft_ = net(inputs)
+      optimizer_.zero_grad()
+      outputs, soft_ = net_(inputs)
 
-      loss = criterion(outputs, targets)
+      loss = criterion_(outputs, targets)
       loss.backward()
-      optimizer.step()
+      optimizer_.step()
 
       train_loss += loss.item()
       _, predicted = outputs.max(1)
@@ -232,3 +236,30 @@ for e in range(20):
       progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                    % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
     
+
+def test_(epoch):
+    net_.eval()
+    test_loss = 0
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(testloader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs, __ = net_(inputs)
+            loss = criterion_(outputs, targets)
+
+            test_loss += loss.item()
+            _, predicted = outputs.max(1)
+            total += targets.size(0)
+            correct += predicted.eq(targets).sum().item()
+
+            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                         % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
+    print("\n")
+
+
+for epoch in range(start_epoch, start_epoch+20):
+    train_(epoch)
+    test_(epoch)
+    scheduler_.step()
