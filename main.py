@@ -190,4 +190,28 @@ high_Variability = np.where(Variability.numpy() > 0.4 )
 #print("high_Variability", high_Variability)
 print("high_Variability.shape", high_Variability[0].shape)
 
+subset_data = torch.utils.data.Subset(trainset, high_Variability[0])
+trainloader = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=False)
 
+for e in range(20):
+  net.train()
+  train_loss = 0
+  correct = 0
+  total = 0
+  for batch_idx, (inputs, targets) in enumerate(trainloader):
+      inputs, targets = inputs.to(device), targets.to(device)
+      optimizer.zero_grad()
+      outputs, soft_ = net(inputs)
+
+      loss = criterion(outputs, targets)
+      loss.backward()
+      optimizer.step()
+
+      train_loss += loss.item()
+      _, predicted = outputs.max(1)
+      total += targets.size(0)
+      correct += predicted.eq(targets).sum().item()
+
+      progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                   % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+    
