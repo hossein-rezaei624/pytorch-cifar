@@ -186,8 +186,8 @@ plt.ylabel("Confidence")
 
 plt.savefig('scatter_plot.png')'''
 
-high_Variability, _ = np.where(Variability.numpy() > 0.4 )
-print("high_Variability", high_Variability)
-print("high_Variability.shape", high_Variability.shape)
+high_Variability = np.where(Variability.numpy() > 0.4 )
+#print("high_Variability", high_Variability)
+print("high_Variability.shape", high_Variability[0].shape)
 
 
