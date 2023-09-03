@@ -188,6 +188,23 @@ plt.savefig('scatter_plot.png')'''
 
 high_Variability = np.where(Variability.numpy() > 0.4 )
 #print("high_Variability", high_Variability)
+
+
+# Number of top values you're interested in
+top_n = Variability.shape//3
+print("Variability.shape",Variability.shape, "top_n", top_n)
+# Find the indices that would sort the array
+sorted_indices = np.argsort(Variability.numpy())
+
+# Take the last 'top_n' indices (i.e., the top values)
+top_indices = sorted_indices[-top_n:]
+
+# If you want these indices in ascending order, you can sort them
+top_indices_sorted = np.sort(top_indices)
+
+print("Sorted indices of top 2 values:", top_indices_sorted)
+
+
 print("high_Variability.shape", high_Variability[0].shape)
 
 subset_data = torch.utils.data.Subset(trainset, high_Variability[0])
