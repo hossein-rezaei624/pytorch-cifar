@@ -130,7 +130,7 @@ def train(epoch):
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-    print("100.*correct/total, correct, total", 100.*correct/total, correct, total)
+    
     conf_tensor = torch.tensor(confidence_epoch)
     conf_tensor = conf_tensor.reshape(conf_tensor.shape[0]*conf_tensor.shape[1])
     conf_tensor = conf_tensor[:(total-1)]
