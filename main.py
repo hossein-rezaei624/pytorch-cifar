@@ -172,7 +172,7 @@ def test(epoch):
         best_acc = acc
 
 Carto = []
-for epoch in range(start_epoch, start_epoch+20):
+for epoch in range(start_epoch, start_epoch+6):
     Carto.append(train(epoch).numpy())
     test(epoch)
     scheduler.step()
@@ -184,7 +184,7 @@ Variability = Carto_tensor.std(dim = 0)
 #print(Confidence_mean.shape)
 #print(Variability.shape)
 
-'''plt.scatter(Variability, Confidence_mean, s = 2)
+plt.scatter(Variability, Confidence_mean, s = 2)
 
 
 # Add Axes Labels
@@ -194,7 +194,7 @@ plt.ylabel("Confidence")
 
 # Display
 
-plt.savefig('scatter_plot.png')'''
+plt.savefig('scatter_plot.png')
 
 
 # Number of top values you're interested in
