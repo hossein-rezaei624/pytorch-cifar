@@ -29,64 +29,44 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 print('==> Preparing data..')
 transform_train = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-trainset = torchvision.datasets.CIFAR10(
+trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=128, shuffle=True, num_workers=2)
+##trainloader = torch.utils.data.DataLoader(
+##    trainset, batch_size=10, shuffle=False, num_workers=0, drop_last=True)
 
-testset = torchvision.datasets.CIFAR10(
+testset = torchvision.datasets.CIFAR100(
     root='./data', train=False, download=True, transform=transform_test)
-testloader = torch.utils.data.DataLoader(
-    testset, batch_size=100, shuffle=False, num_workers=2)
+##testloader = torch.utils.data.DataLoader(
+##    testset, batch_size=10, shuffle=False, num_workers=0, drop_last=True)
 
-classes = ('plane', 'car', 'bird', 'cat', 'deer',
-           'dog', 'frog', 'horse', 'ship', 'truck')
+
+subset_indices_train = [idx for idx, (_, target) in enumerate(trainset) if target in [26, 86, 2, 55, 75, 93, 16, 73, 54, 95]]
+subset_indices_test = [idx for idx, (_, target) in enumerate(testset) if target in [26, 86, 2, 55, 75, 93, 16, 73, 54, 95]]
+
+# Create a data loader for the current subset
+subset_loader_train = torch.utils.data.DataLoader(torch.utils.data.Subset(trainset, subset_indices_train), batch_size=10, shuffle=False, num_workers=0, drop_last=True)
+subset_loader_test = torch.utils.data.DataLoader(torch.utils.data.Subset(testset, subset_indices_test), batch_size=10, shuffle=False, num_workers=0, drop_last=True)
+
 
 # Model
 print('==> Building model..')
-# net = VGG('VGG19')
 net = ResNet18()
-# net = PreActResNet18()
-# net = GoogLeNet()
-# net = DenseNet121()
-# net = ResNeXt29_2x64d()
-# net = MobileNet()
-# net = MobileNetV2()
-# net = DPN92()
-# net = ShuffleNetG2()
-# net = SENet18()
-# net = ShuffleNetV2(1)
-# net = EfficientNetB0()
-# net = RegNetX_200MF()
-# net = SimpleDLA()
-net = net.to(device)
-if device == 'cuda':
-    net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True
 
-if args.resume:
-    # Load checkpoint.
-    print('==> Resuming from checkpoint..')
-    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/ckpt.pth')
-    net.load_state_dict(checkpoint['net'])
-    best_acc = checkpoint['acc']
-    start_epoch = checkpoint['epoch']
+net = net.to(device)
+
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=5e-4)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
-#print(trainloader,"\n",len(trainloader))
+
 # Training
 def train(epoch):
     print('\nEpoch: %d' % epoch)
@@ -94,7 +74,7 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
+    for batch_idx, (inputs, targets) in enumerate(subset_loader_train):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = net(inputs)
@@ -109,10 +89,6 @@ def train(epoch):
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-        
-        #print(batch_idx)
-        '''if batch_idx == 80:
-          break'''
 
 
 def test(epoch):
@@ -122,7 +98,7 @@ def test(epoch):
     correct = 0
     total = 0
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(testloader):
+        for batch_idx, (inputs, targets) in enumerate(subset_loader_test):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
@@ -137,20 +113,9 @@ def test(epoch):
 
     # Save checkpoint.
     acc = 100.*correct/total
-    if acc > best_acc:
-        print('Saving..')
-        state = {
-            'net': net.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-        }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.pth')
-        best_acc = acc
 
 
-for epoch in range(start_epoch, start_epoch+200):
+for epoch in range(start_epoch, start_epoch+18):
     train(epoch)
     test(epoch)
     scheduler.step()
