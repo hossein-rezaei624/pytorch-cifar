@@ -53,6 +53,7 @@ subset_indices_test = [idx for idx, (_, target) in enumerate(testset) if target 
 subset_loader_train = torch.utils.data.DataLoader(torch.utils.data.Subset(trainset, subset_indices_train), batch_size=10, shuffle=False, num_workers=0, drop_last=True)
 subset_loader_test = torch.utils.data.DataLoader(torch.utils.data.Subset(testset, subset_indices_test), batch_size=10, shuffle=False, num_workers=0, drop_last=True)
 
+mapping = {value: index for index, value in enumerate([26, 86, 2, 55, 75, 93, 16, 73, 54, 95])}
 
 # Model
 print('==> Building model..')
@@ -76,6 +77,9 @@ def train(epoch):
     total = 0
     for batch_idx, (inputs, targets) in enumerate(subset_loader_train):
         inputs, targets = inputs.to(device), targets.to(device)
+
+        targets = torch.tensor([mapping[val.item()] for val in targets]).to(device)
+      
         optimizer.zero_grad()
         outputs = net(inputs)
         loss = criterion(outputs, targets)
@@ -100,6 +104,9 @@ def test(epoch):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(subset_loader_test):
             inputs, targets = inputs.to(device), targets.to(device)
+
+            targets = torch.tensor([mapping[val.item()] for val in targets]).to(device)
+          
             outputs = net(inputs)
             loss = criterion(outputs, targets)
 
