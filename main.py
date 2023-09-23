@@ -43,7 +43,7 @@ batch_size_ = 128
 trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=batch_size_, shuffle=True, num_workers=2)
+    trainset, batch_size=batch_size_, shuffle=False, num_workers=2)
 
 testset = torchvision.datasets.CIFAR100(
     root='./data', train=False, download=True, transform=transform_test)
@@ -111,7 +111,6 @@ def train(epoch):
         optimizer.zero_grad()
         outputs, soft_ = net(inputs)
         confidence_batch = []
-        print("indices_1", indices_1)
         for i in range(targets.shape[0]):
           confidence_batch.append(soft_[i,targets[i]].item())
 
@@ -232,7 +231,7 @@ top_indices_sorted = top_indices
 print(top_indices_sorted)
 
 subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
-trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=False)
+trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=128, shuffle=False)
 
 
 # Extract the first 10 images
