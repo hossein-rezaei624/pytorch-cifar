@@ -111,7 +111,7 @@ def train(epoch):
         optimizer.zero_grad()
         outputs, soft_ = net(inputs)
         confidence_batch = []
-
+        print("indices_1", indices_1)
         for i in range(targets.shape[0]):
           confidence_batch.append(soft_[i,targets[i]].item())
 
