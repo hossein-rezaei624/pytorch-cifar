@@ -173,7 +173,7 @@ def test(epoch):
         best_acc = acc
 
 Carto = []
-for epoch in range(start_epoch, start_epoch+6):
+for epoch in range(start_epoch, start_epoch+2):
     Carto.append(train(epoch).numpy())
     test(epoch)
     scheduler.step()
@@ -216,14 +216,6 @@ subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
 trainloader = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=False)
 
 
-
-def imshow(img):
-    # Convert tensor to numpy for visualization and unnormalize
-    img = img / 2 + 0.5
-    npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)))
-    plt.show()
-
 # Extract the first 10 images
 images = [trainset[i][0] for i in range(10)]
 labels = [trainset[i][1] for i in range(10)]
@@ -234,8 +226,7 @@ grid = torchvision.utils.make_grid(images, nrow=5)  # 5 images per row
 # Print the labels (you can map these to actual class names if needed)
 print("Labels:", labels)
 
-# Show the grid of images
-imshow(grid)
+torchvision.utils.save_image(grid, 'grid_image.png')
 
 
 
