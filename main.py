@@ -228,7 +228,7 @@ top_indices = sorted_indices[:top_n]
 
 top_indices_sorted = top_indices
 
-print(top_indices_sorted)
+print(top_indices_sorted, top_indices_sorted.shape)
 
 subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
 trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=False)
