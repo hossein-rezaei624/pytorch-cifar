@@ -43,7 +43,7 @@ batch_size_ = 128
 trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=batch_size_, shuffle=False, num_workers=2)
+    trainset, batch_size=batch_size_, shuffle=True, num_workers=2)
 
 testset = torchvision.datasets.CIFAR100(
     root='./data', train=False, download=True, transform=transform_test)
@@ -114,6 +114,9 @@ def train(epoch):
         for i in range(targets.shape[0]):
           confidence_batch.append(soft_[i,targets[i]].item())
 
+          if indices_1 == 0:
+            print(soft_[i,targets[i]].item())
+      
 ##        if (targets.shape[0] != batch_size_):
 ##          for j in range(batch_size_ - targets.shape[0]):
 ##            confidence_batch.append(0)
@@ -186,7 +189,7 @@ for epoch in range(start_epoch, start_epoch+6):
     test(epoch)
     scheduler.step()
 
-
+print(Carto[:,0])
 
 
 ##Carto_tensor = torch.tensor(np.array(Carto))
@@ -231,15 +234,15 @@ top_indices_sorted = top_indices
 print(top_indices_sorted, top_indices_sorted.shape)
 
 subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
-trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=False)
+trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=128, shuffle=True)
 
 
 # Extract the first 10 images
-images = [subset_data[i][0] for i in range(200)]
-labels = [subset_data[i][1] for i in range(200)]
+images = [subset_data[i][0] for i in range(225)]
+labels = [subset_data[i][1] for i in range(225)]
 
 # Make a grid from these images
-grid = torchvision.utils.make_grid(images, nrow=10)  # 5 images per row
+grid = torchvision.utils.make_grid(images, nrow=15)  # 5 images per row
 
 # Print the labels (you can map these to actual class names if needed)
 print("Labels:", labels)
