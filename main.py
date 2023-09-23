@@ -202,7 +202,7 @@ plt.savefig('scatter_plot.png')
 top_n = Variability.shape[0]//3
 
 # Find the indices that would sort the array
-sorted_indices = np.argsort(Confidence_mean.numpy())
+sorted_indices = np.argsort(Variability.numpy())
 
 # Take the last 'top_n' indices (i.e., the top values)
 top_indices = sorted_indices[-top_n:]
