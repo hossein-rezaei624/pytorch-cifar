@@ -231,7 +231,7 @@ top_indices_sorted = top_indices
 print(top_indices_sorted)
 
 subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
-trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=128, shuffle=False)
+trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=False)
 
 
 # Extract the first 10 images
