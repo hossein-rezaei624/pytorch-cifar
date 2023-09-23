@@ -114,13 +114,18 @@ def train(epoch):
 
         for i in range(targets.shape[0]):
           confidence_batch.append(soft_[i,targets[i]].item())
-          if i == 0 and batch_idx == 0:
-            print(soft_[i,targets[i]])
-        if (targets.shape[0] != batch_size_):
-          for j in range(batch_size_ - targets.shape[0]):
-            confidence_batch.append(0)
-        confidence_epoch.append(confidence_batch)
+
+##        if (targets.shape[0] != batch_size_):
+##          for j in range(batch_size_ - targets.shape[0]):
+##            confidence_batch.append(0)
+        ##confidence_epoch.append(confidence_batch)
         #print(len(confidence_epoch[0]))
+
+
+        # ... [Rest of the batch processing code]
+        conf_tensor = torch.tensor(confidence_batch)
+        Carto[epoch, indices_1] = conf_tensor  # Place confidences in the right location using indices
+
 
         loss = criterion(outputs, targets)
         loss.backward()
@@ -134,11 +139,11 @@ def train(epoch):
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
     
-    conf_tensor = torch.tensor(confidence_epoch)
-    conf_tensor = conf_tensor.reshape(conf_tensor.shape[0]*conf_tensor.shape[1])
-    conf_tensor = conf_tensor[:(total-1)]
+    ##conf_tensor = torch.tensor(confidence_epoch)
+    ##conf_tensor = conf_tensor.reshape(conf_tensor.shape[0]*conf_tensor.shape[1])
+    ##conf_tensor = conf_tensor[:(total-1)]
     #print(conf_tensor.shape)
-    return conf_tensor
+    ##return conf_tensor
 
 def test(epoch):
     global best_acc
@@ -174,19 +179,25 @@ def test(epoch):
         torch.save(state, './checkpoint/ckpt.pth')
         best_acc = acc
 
-Carto = []
+##Carto = []
+Carto = torch.zeros((6, len(trainset)))
 for epoch in range(start_epoch, start_epoch+6):
-    Carto.append(train(epoch).numpy())
+    ##Carto.append(train(epoch).numpy())
     test(epoch)
     scheduler.step()
 
-Carto_tensor = torch.tensor(np.array(Carto))
-print(Carto_tensor[:,0])
+
+
+
+##Carto_tensor = torch.tensor(np.array(Carto))
 #print(Carto_tensor.shape)
-Confidence_mean = Carto_tensor.mean(dim=0)
-Variability = Carto_tensor.std(dim = 0)
+##Confidence_mean = Carto_tensor.mean(dim=0)
+##Variability = Carto_tensor.std(dim = 0)
 #print(Confidence_mean.shape)
 #print(Variability.shape)
+
+Confidence_mean = Carto.mean(dim=0)
+Variability = Carto.std(dim=0)
 
 plt.scatter(Variability, Confidence_mean, s = 2)
 
