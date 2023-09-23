@@ -183,6 +183,7 @@ def test(epoch):
 Carto = torch.zeros((6, len(trainset)))
 for epoch in range(start_epoch, start_epoch+6):
     ##Carto.append(train(epoch).numpy())
+    train(epoch)
     test(epoch)
     scheduler.step()
 
