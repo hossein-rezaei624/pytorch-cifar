@@ -114,7 +114,7 @@ def train(epoch):
         for i in range(targets.shape[0]):
           confidence_batch.append(soft_[i,targets[i]].item())
 
-          if indices_1 == 0:
+          if indices_1[i] == 0:
             print(soft_[i,targets[i]].item())
       
 ##        if (targets.shape[0] != batch_size_):
