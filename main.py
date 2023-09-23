@@ -114,6 +114,8 @@ def train(epoch):
 
         for i in range(targets.shape[0]):
           confidence_batch.append(soft_[i,targets[i]].item())
+          if i == 0 and batch_idx == 0:
+            print(soft_[i,targets[i]])
         if (targets.shape[0] != batch_size_):
           for j in range(batch_size_ - targets.shape[0]):
             confidence_batch.append(0)
@@ -133,9 +135,7 @@ def train(epoch):
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
     
     conf_tensor = torch.tensor(confidence_epoch)
-    print("conf_tensor", conf_tensor[1][0])
     conf_tensor = conf_tensor.reshape(conf_tensor.shape[0]*conf_tensor.shape[1])
-    print("next", conf_tensor[128])
     conf_tensor = conf_tensor[:(total-1)]
     #print(conf_tensor.shape)
     return conf_tensor
@@ -181,6 +181,7 @@ for epoch in range(start_epoch, start_epoch+6):
     scheduler.step()
 
 Carto_tensor = torch.tensor(np.array(Carto))
+print(Carto_tensor[:,0])
 #print(Carto_tensor.shape)
 Confidence_mean = Carto_tensor.mean(dim=0)
 Variability = Carto_tensor.std(dim = 0)
