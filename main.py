@@ -16,6 +16,7 @@ from utils import progress_bar
 
 import numpy as np
 import matplotlib.pyplot as plt
+import torchvision
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -223,15 +224,19 @@ def imshow(img):
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
     plt.show()
 
-# Let's say i = 7 for the 8th image (remember Python is 0-indexed)
-i = 7
-image, label = subset_data[0]
+# Extract the first 10 images
+images = [trainset[i][0] for i in range(10)]
+labels = [trainset[i][1] for i in range(10)]
 
-# Print the label (you can map this to the actual class name if needed)
-print("Label:", label)
+# Make a grid from these images
+grid = torchvision.utils.make_grid(images, nrow=5)  # 5 images per row
 
-# Show the image
-imshow(image)
+# Print the labels (you can map these to actual class names if needed)
+print("Labels:", labels)
+
+# Show the grid of images
+imshow(grid)
+
 
 
 def train_(epoch):
