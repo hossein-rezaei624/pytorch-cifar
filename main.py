@@ -208,7 +208,9 @@ sorted_indices = np.argsort(Confidence_mean.numpy())
 top_indices = sorted_indices[:top_n]
 
 # If you want these indices in ascending order, you can sort them
-top_indices_sorted = np.sort(top_indices)
+#top_indices_sorted = np.sort(top_indices)
+
+top_indices_sorted = top_indices
 
 print(top_indices_sorted)
 
@@ -217,8 +219,8 @@ trainloader = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=F
 
 
 # Extract the first 10 images
-images = [trainset[i][0] for i in range(10)]
-labels = [trainset[i][1] for i in range(10)]
+images = [trainset[i][0] for i in range(20)]
+labels = [trainset[i][1] for i in range(20)]
 
 # Make a grid from these images
 grid = torchvision.utils.make_grid(images, nrow=5)  # 5 images per row
