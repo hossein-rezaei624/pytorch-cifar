@@ -217,7 +217,7 @@ top_indices_sorted = top_indices
 print(top_indices_sorted)
 
 subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
-trainloader = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=False)
+trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=False)
 
 
 # Extract the first 10 images
@@ -239,7 +239,7 @@ def train_(epoch):
   train_loss = 0
   correct = 0
   total = 0
-  for batch_idx, (inputs, targets, indices_1) in enumerate(trainloader):
+  for batch_idx, (inputs, targets, indices_1) in enumerate(trainloader_):
       inputs, targets = inputs.to(device), targets.to(device)
       optimizer_.zero_grad()
       outputs, soft_ = net_(inputs)
