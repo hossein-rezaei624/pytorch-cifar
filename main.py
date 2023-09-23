@@ -133,7 +133,9 @@ def train(epoch):
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
     
     conf_tensor = torch.tensor(confidence_epoch)
+    print("conf_tensor.shape", conf_tensor.shape, conf_tensor[1][0])
     conf_tensor = conf_tensor.reshape(conf_tensor.shape[0]*conf_tensor.shape[1])
+    print("next", conf_tensor[conf_tensor.shape[0]])
     conf_tensor = conf_tensor[:(total-1)]
     #print(conf_tensor.shape)
     return conf_tensor
