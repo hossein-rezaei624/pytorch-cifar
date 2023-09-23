@@ -214,6 +214,26 @@ print(top_indices_sorted)
 subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
 trainloader = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=False)
 
+
+
+def imshow(img):
+    # Convert tensor to numpy for visualization and unnormalize
+    img = img / 2 + 0.5
+    npimg = img.numpy()
+    plt.imshow(np.transpose(npimg, (1, 2, 0)))
+    plt.show()
+
+# Let's say i = 7 for the 8th image (remember Python is 0-indexed)
+i = 7
+image, label = subset_data[0]
+
+# Print the label (you can map this to the actual class name if needed)
+print("Label:", label)
+
+# Show the image
+imshow(image)
+
+
 def train_(epoch):
   net_.train()
   train_loss = 0
