@@ -38,7 +38,7 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-batch_size_ = 5
+batch_size_ = 128
 
 trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
@@ -133,9 +133,9 @@ def train(epoch):
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
     
     conf_tensor = torch.tensor(confidence_epoch)
-    print("conf_tensor", conf_tensor)
+    print("conf_tensor", conf_tensor[1][0])
     conf_tensor = conf_tensor.reshape(conf_tensor.shape[0]*conf_tensor.shape[1])
-    print("next", conf_tensor)
+    print("next", conf_tensor[128])
     conf_tensor = conf_tensor[:(total-1)]
     #print(conf_tensor.shape)
     return conf_tensor
