@@ -134,8 +134,9 @@ def train(epoch):
     
     conf_tensor = torch.tensor(confidence_epoch)
     print("conf_tensor.shape", conf_tensor.shape, conf_tensor[1][0])
+    hj = conf_tensor.shape[0]
     conf_tensor = conf_tensor.reshape(conf_tensor.shape[0]*conf_tensor.shape[1])
-    print("next", conf_tensor[conf_tensor.shape[0]])
+    print("next", conf_tensor[hj])
     conf_tensor = conf_tensor[:(total-1)]
     #print(conf_tensor.shape)
     return conf_tensor
