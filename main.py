@@ -219,8 +219,8 @@ trainloader = torch.utils.data.DataLoader(subset_data, batch_size=100, shuffle=F
 
 
 # Extract the first 10 images
-images = [trainset[i][0] for i in range(20)]
-labels = [trainset[i][1] for i in range(20)]
+images = [subset_data[i][0] for i in range(20)]
+labels = [subset_data[i][1] for i in range(20)]
 
 # Make a grid from these images
 grid = torchvision.utils.make_grid(images, nrow=5)  # 5 images per row
