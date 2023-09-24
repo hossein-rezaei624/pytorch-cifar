@@ -161,6 +161,10 @@ for epoch in range(start_epoch, start_epoch+6):
 Confidence_mean = Carto.mean(dim=0)
 Variability = Carto.std(dim=0)
 
+print("Confidence_mean", type(Confidence_mean), Confidence_mean.shape)
+print("Variability", type(Variability), Variability.shape)
+
+
 plt.scatter(Variability, Confidence_mean, s = 2)
 
 
