@@ -98,14 +98,10 @@ def train(epoch):
         confidence_batch = []
         for i in range(targets.shape[0]):
           confidence_batch.append(soft_[i,targets[i]].item())
-
-          if indices_1[i] == 0:
-            print(soft_[i,targets[i]].item())
       
         # ... [Rest of the batch processing code]
         conf_tensor = torch.tensor(confidence_batch)
         Carto[epoch, indices_1] = conf_tensor  # Place confidences in the right location using indices
-
 
         loss = criterion(outputs, targets)
         loss.backward()
@@ -155,12 +151,11 @@ def test(epoch):
         best_acc = acc
 
 Carto = torch.zeros((6, len(trainset)))
+print("len(trainset)", len(trainset))
 for epoch in range(start_epoch, start_epoch+6):
     train(epoch)
     test(epoch)
     scheduler.step()
-
-print(Carto[:,0])
 
 
 Confidence_mean = Carto.mean(dim=0)
