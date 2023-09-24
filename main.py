@@ -39,12 +39,12 @@ transform_test = transforms.Compose([
 
 batch_size_ = 128
 
-trainset = torchvision.datasets.CIFAR100(
+trainset = torchvision.datasets.CIFAR10(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=batch_size_, shuffle=True, num_workers=0)
 
-testset = torchvision.datasets.CIFAR100(
+testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=0)
@@ -219,7 +219,7 @@ def test_(epoch):
 
     print("\n")
 
-
+print("Trainning with cartography...")
 for epoch in range(start_epoch, start_epoch+20):
     train_(epoch)
     test_(epoch)
