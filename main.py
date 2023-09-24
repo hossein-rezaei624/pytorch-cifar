@@ -127,6 +127,9 @@ def train(epoch):
         # ... [Rest of the batch processing code]
         conf_tensor = torch.tensor(confidence_batch)
         Carto[epoch, indices_1] = conf_tensor  # Place confidences in the right location using indices
+        print("conf_tensor", conf_tensor)
+        print("indices_1", indices_1)
+        print("Carto[epoch, indices_1]", Carto[epoch, indices_1])
 
 
         loss = criterion(outputs, targets)
