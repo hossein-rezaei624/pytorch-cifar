@@ -1,4 +1,3 @@
-'''Train CIFAR10 with PyTorch.'''
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -53,22 +52,8 @@ testloader = torch.utils.data.DataLoader(
 
 # Model
 print('==> Building model..')
-# net = VGG('VGG19')
 net = ResNet18()
 net_ = ResNet18()
-# net = PreActResNet18()
-# net = GoogLeNet()
-# net = DenseNet121()
-# net = ResNeXt29_2x64d()
-# net = MobileNet()
-# net = MobileNetV2()
-# net = DPN92()
-# net = ShuffleNetG2()
-# net = SENet18()
-# net = ShuffleNetV2(1)
-# net = EfficientNetB0()
-# net = RegNetX_200MF()
-# net = SimpleDLA()
 net = net.to(device)
 if device == 'cuda':
     net = torch.nn.DataParallel(net)
@@ -117,13 +102,6 @@ def train(epoch):
           if indices_1[i] == 0:
             print(soft_[i,targets[i]].item())
       
-        if (targets.shape[0] != batch_size_):
-          for j in range(batch_size_ - targets.shape[0]):
-            confidence_batch.append(0)
-        ##confidence_epoch.append(confidence_batch)
-        #print(len(confidence_epoch[0]))
-
-
         # ... [Rest of the batch processing code]
         conf_tensor = torch.tensor(confidence_batch)
         Carto[epoch, indices_1] = conf_tensor  # Place confidences in the right location using indices
@@ -140,12 +118,7 @@ def train(epoch):
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-    
-    ##conf_tensor = torch.tensor(confidence_epoch)
-    ##conf_tensor = conf_tensor.reshape(conf_tensor.shape[0]*conf_tensor.shape[1])
-    ##conf_tensor = conf_tensor[:(total-1)]
-    #print(conf_tensor.shape)
-    ##return conf_tensor
+  
 
 def test(epoch):
     global best_acc
@@ -181,23 +154,14 @@ def test(epoch):
         torch.save(state, './checkpoint/ckpt.pth')
         best_acc = acc
 
-##Carto = []
 Carto = torch.zeros((6, len(trainset)))
 for epoch in range(start_epoch, start_epoch+6):
-    ##Carto.append(train(epoch).numpy())
     train(epoch)
     test(epoch)
     scheduler.step()
 
 print(Carto[:,0])
 
-
-##Carto_tensor = torch.tensor(np.array(Carto))
-#print(Carto_tensor.shape)
-##Confidence_mean = Carto_tensor.mean(dim=0)
-##Variability = Carto_tensor.std(dim = 0)
-#print(Confidence_mean.shape)
-#print(Variability.shape)
 
 Confidence_mean = Carto.mean(dim=0)
 Variability = Carto.std(dim=0)
