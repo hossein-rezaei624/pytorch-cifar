@@ -151,7 +151,7 @@ def test(epoch):
         best_acc = acc
 
 Carto = torch.zeros((6, len(trainset)))
-print("len(trainset)", len(trainset))
+
 for epoch in range(start_epoch, start_epoch+6):
     train(epoch)
     test(epoch)
@@ -178,12 +178,12 @@ plt.savefig('scatter_plot.png')
 top_n = Variability.shape[0]//3
 
 # Find the indices that would sort the array
-sorted_indices = np.argsort(Variability.numpy())
+sorted_indices = np.argsort(Confidence_mean.numpy())
 
 # Take the last 'top_n' indices (i.e., the top values)
 top_indices = sorted_indices[-top_n:]
 
-top_indices = top_indices[::-1]
+##top_indices = top_indices[::-1]
 
 # If you want these indices in ascending order, you can sort them
 #top_indices_sorted = np.sort(top_indices)
@@ -202,9 +202,6 @@ labels = [subset_data[i][1] for i in range(225)]
 
 # Make a grid from these images
 grid = torchvision.utils.make_grid(images, nrow=15)  # 5 images per row
-
-# Print the labels (you can map these to actual class names if needed)
-print("Labels:", labels)
 
 torchvision.utils.save_image(grid, 'grid_image.png')
 
