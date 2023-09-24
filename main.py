@@ -42,12 +42,12 @@ batch_size_ = 128
 trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=batch_size_, shuffle=True, num_workers=2)
+    trainset, batch_size=batch_size_, shuffle=True, num_workers=0)
 
 testset = torchvision.datasets.CIFAR100(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
-    testset, batch_size=100, shuffle=False, num_workers=2)
+    testset, batch_size=100, shuffle=False, num_workers=0)
 
 
 # Model
@@ -60,18 +60,6 @@ if device == 'cuda':
     cudnn.benchmark = True
 
 net_ = net_.to(device)
-if device == 'cuda':
-    net_ = torch.nn.DataParallel(net_)
-    cudnn.benchmark = True
-
-if args.resume:
-    # Load checkpoint.
-    print('==> Resuming from checkpoint..')
-    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/ckpt.pth')
-    net.load_state_dict(checkpoint['net'])
-    best_acc = checkpoint['acc']
-    start_epoch = checkpoint['epoch']
 
 criterion = nn.CrossEntropyLoss()
 criterion_ = nn.CrossEntropyLoss()
@@ -136,19 +124,7 @@ def test(epoch):
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-    # Save checkpoint.
-    acc = 100.*correct/total
-    if acc > best_acc:
-        print('Saving..')
-        state = {
-            'net': net.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-        }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ckpt.pth')
-        best_acc = acc
+  
 
 Carto = torch.zeros((6, len(trainset)))
 
@@ -161,19 +137,11 @@ for epoch in range(start_epoch, start_epoch+6):
 Confidence_mean = Carto.mean(dim=0)
 Variability = Carto.std(dim=0)
 
-print("Confidence_mean", type(Confidence_mean), Confidence_mean.shape)
-print("Variability", type(Variability), Variability.shape)
-
 
 plt.scatter(Variability, Confidence_mean, s = 2)
 
-
-# Add Axes Labels
-
 plt.xlabel("Variability") 
 plt.ylabel("Confidence") 
-
-# Display
 
 plt.savefig('scatter_plot.png')
 
@@ -185,16 +153,12 @@ top_n = Variability.shape[0]//3
 sorted_indices = np.argsort(Confidence_mean.numpy())
 
 # Take the last 'top_n' indices (i.e., the top values)
-top_indices = sorted_indices[-top_n:]
+top_indices = sorted_indices[:top_n]
 
 ##top_indices = top_indices[::-1]
 
-# If you want these indices in ascending order, you can sort them
-#top_indices_sorted = np.sort(top_indices)
-
 top_indices_sorted = top_indices
 
-print(top_indices_sorted, top_indices_sorted.shape)
 
 subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
 trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=128, shuffle=True)
