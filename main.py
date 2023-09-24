@@ -117,9 +117,9 @@ def train(epoch):
           if indices_1[i] == 0:
             print(soft_[i,targets[i]].item())
       
-##        if (targets.shape[0] != batch_size_):
-##          for j in range(batch_size_ - targets.shape[0]):
-##            confidence_batch.append(0)
+        if (targets.shape[0] != batch_size_):
+          for j in range(batch_size_ - targets.shape[0]):
+            confidence_batch.append(0)
         ##confidence_epoch.append(confidence_batch)
         #print(len(confidence_epoch[0]))
 
@@ -127,9 +127,6 @@ def train(epoch):
         # ... [Rest of the batch processing code]
         conf_tensor = torch.tensor(confidence_batch)
         Carto[epoch, indices_1] = conf_tensor  # Place confidences in the right location using indices
-        print("conf_tensor", conf_tensor)
-        print("indices_1", indices_1)
-        print("Carto[epoch, :]", Carto[epoch, :])
 
 
         loss = criterion(outputs, targets)
