@@ -55,9 +55,9 @@ print('==> Building model..')
 net = ResNet18()
 net_ = ResNet18()
 net = net.to(device)
-if device == 'cuda':
-    net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True
+##if device == 'cuda':
+  ##  net = torch.nn.DataParallel(net)
+    ##cudnn.benchmark = True
 
 net_ = net_.to(device)
 
@@ -217,7 +217,7 @@ def test_(epoch):
     print("\n")
 
 print("Trainning with cartography...")
-for epoch in range(start_epoch, start_epoch+20):
+for epoch in range(start_epoch, start_epoch+200):
     train_(epoch)
     test_(epoch)
     scheduler_.step()
