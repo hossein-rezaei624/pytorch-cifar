@@ -76,9 +76,9 @@ net = Reduced_ResNet18(100)
 # net = RegNetX_200MF()
 # net = SimpleDLA()
 net = net.to(device)
-if device == 'cuda':
-    net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True
+##if device == 'cuda':
+  ##  net = torch.nn.DataParallel(net)
+    ##cudnn.benchmark = True
 
 if args.resume:
     # Load checkpoint.
