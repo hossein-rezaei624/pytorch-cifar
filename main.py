@@ -13,9 +13,7 @@ import argparse
 
 from models import *
 from utils import progress_bar
-from kornia.augmentation import RandomResizedCrop, RandomHorizontalFlip, ColorJitter, RandomGrayscale
 
-import numpy as np
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -29,39 +27,35 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 # Data
 print('==> Preparing data..')
-
-transform11 = nn.Sequential(
-    RandomResizedCrop(size = (32,32), scale=(0.2, 1.)),
-    RandomHorizontalFlip(),
-    ColorJitter(0.4, 0.4, 0.4, 0.1, p=0.8),
-    RandomGrayscale(p=0.2)
-)
-
 transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-trainset = torchvision.datasets.CIFAR100(
+trainset = torchvision.datasets.CIFAR10(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=128, shuffle=True, num_workers=2)
 
-testset = torchvision.datasets.CIFAR100(
+testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2)
 
-'''classes = ('plane', 'car', 'bird', 'cat', 'deer',
-           'dog', 'frog', 'horse', 'ship', 'truck')'''
+classes = ('plane', 'car', 'bird', 'cat', 'deer',
+           'dog', 'frog', 'horse', 'ship', 'truck')
 
 # Model
 print('==> Building model..')
 # net = VGG('VGG19')
-net = Reduced_ResNet18(100)
+net = ResNet18()
 # net = PreActResNet18()
 # net = GoogLeNet()
 # net = DenseNet121()
@@ -74,7 +68,7 @@ net = Reduced_ResNet18(100)
 # net = ShuffleNetV2(1)
 # net = EfficientNetB0()
 # net = RegNetX_200MF()
-# net = SimpleDLA()
+#net = SimpleDLA()
 net = net.to(device)
 ##if device == 'cuda':
   ##  net = torch.nn.DataParallel(net)
@@ -91,11 +85,9 @@ if args.resume:
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr,
-                      weight_decay=0)
-#scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+                      momentum=0.9, weight_decay=5e-4)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
-checkpoint = torch.load('./checkpoint/ckpt.pth')
-net.load_state_dict(checkpoint['net'])
 
 # Training
 def train(epoch):
@@ -107,7 +99,6 @@ def train(epoch):
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        inputs = transform11(inputs)
         outputs = net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
@@ -118,9 +109,9 @@ def train(epoch):
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
-
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+
 
 def test(epoch):
     global best_acc
@@ -128,9 +119,6 @@ def test(epoch):
     test_loss = 0
     correct = 0
     total = 0
-    test_loss_ = 0
-    total_ = 0
-    correct_ = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
@@ -141,33 +129,10 @@ def test(epoch):
             _, predicted = outputs.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
-            where_ = np.where(predicted.cpu().numpy() == targets.cpu().numpy())
-
-            
 
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-            
-            corrected_inputs = inputs[where_[0]]
-            corrected_labels = targets[where_[0]]
-
-            corrected_inputs = transforms.RandomRotation(90)(corrected_inputs)
-
-            outputs_ = net(corrected_inputs)
-            loss_ = criterion(outputs_, corrected_labels)
-
-            test_loss_ += loss_.item()
-            __, predicted_ = outputs_.max(1)
-            total_ += corrected_labels.size(0)
-            correct_ += predicted_.eq(corrected_labels).sum().item()
-            
-
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                         % (test_loss_/(batch_idx+1), 100.*correct_/total_, correct_, total_))
-
-        print("Acc.", 100.*correct/total)
-        print("Acc.", 100.*correct_/total_)
     # Save checkpoint.
     acc = 100.*correct/total
     if acc > best_acc:
@@ -182,8 +147,8 @@ def test(epoch):
         torch.save(state, './checkpoint/ckpt.pth')
         best_acc = acc
 
-test(epoch = 1)
-'''for epoch in range(start_epoch, start_epoch+75):
+
+for epoch in range(start_epoch, start_epoch+200):
     train(epoch)
     test(epoch)
-    #scheduler.step()'''
+    scheduler.step()
