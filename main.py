@@ -54,9 +54,6 @@ print('==> Building model..')
 net = Reduced_ResNet18(100)
 
 net = net.to(device)
-if device == 'cuda':
-    net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr,
