@@ -127,7 +127,7 @@ labels = [subset_data[i][1] for i in range(225)]
 # Make a grid from these images
 grid = torchvision.utils.make_grid(images, nrow=15)  # 5 images per row
 
-torchvision.utils.save_image(grid, 'grid_image.png')'''
+torchvision.utils.save_image(grid, 'grid_image.png')
 
 
 
@@ -154,4 +154,4 @@ for i, txt in enumerate(filtered_indices):
   if txt in top_indices_sorted:
     plt.annotate(txt, (X_tsne[i, 0], X_tsne[i, 1]), fontsize=8, alpha=0.5)
 
-plt.savefig("tsne-image")
+plt.savefig("tsne-image")'''
