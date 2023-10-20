@@ -39,6 +39,7 @@ filtered_indices = [i for i, label in enumerate(trainset.targets) if label in [2
 filtered_data = torch.utils.data.Subset(trainset, filtered_indices)
 trainloader = torch.utils.data.DataLoader(filtered_data, batch_size=len(filtered_indices), shuffle=False)
 
+mapping = {value: index for index, value in enumerate([20, 90])}
 
 net = ResNet18()
 net = net.to(device)
@@ -58,6 +59,9 @@ def train(epoch):
     confidence_epoch = []
     for batch_idx, (inputs, targets, indices_1) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
+
+        targets = torch.tensor([mapping[val.item()] for val in targets]).to(device)
+      
         optimizer.zero_grad()
         outputs, soft_ = net(inputs)
         confidence_batch = []
