@@ -115,7 +115,7 @@ top_indices = sorted_indices[-top_n:]
 
 #top_indices = top_indices[::-1]
 
-top_indices_sorted = top_indices[:100]
+top_indices_sorted = top_indices[:30]
 
 
 '''subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
@@ -154,6 +154,5 @@ plt.title('t-SNE - CIFAR10 Class 0 & 1')
 for i, txt in enumerate(filtered_indices):
   if txt in top_indices_sorted:
     plt.annotate(txt, (X_tsne[i, 0], X_tsne[i, 1]), fontsize=8, alpha=0.5)
-    print(txt)
 
 plt.savefig("tsne-image")
