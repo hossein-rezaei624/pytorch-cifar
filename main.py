@@ -44,6 +44,10 @@ mapping = {value: index for index, value in enumerate([26, 86, 2, 55, 75, 93, 16
 net = ResNet18()
 net = net.to(device)
 
+if device == 'cuda':
+    net = torch.nn.DataParallel(net)
+    cudnn.benchmark = True
+
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
@@ -127,7 +131,7 @@ labels = [subset_data[i][1] for i in range(225)]
 # Make a grid from these images
 grid = torchvision.utils.make_grid(images, nrow=15)  # 5 images per row
 
-torchvision.utils.save_image(grid, 'grid_image.png')
+torchvision.utils.save_image(grid, 'grid_image.png')'''
 
 
 
@@ -154,4 +158,4 @@ for i, txt in enumerate(filtered_indices):
   if txt in top_indices_sorted:
     plt.annotate(txt, (X_tsne[i, 0], X_tsne[i, 1]), fontsize=8, alpha=0.5)
 
-plt.savefig("tsne-image")'''
+plt.savefig("tsne-image")
