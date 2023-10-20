@@ -109,20 +109,20 @@ plt.savefig('scatter_plot.png')
 
 top_n = len(filtered_indices)
 
-sorted_indices = np.argsort(Variability.numpy())
+sorted_indices = np.argsort(Confidence_mean.numpy())
 
 top_indices = sorted_indices[-top_n:]
 
-top_indices = top_indices[::-1]
+#top_indices = top_indices[::-1]
 
-top_indices_sorted = top_indices[:30]
+top_indices_sorted = top_indices[:25]
 
 
 subset_data1 = torch.utils.data.Subset(trainset, top_indices_sorted)
 
 # Extract the first 10 images
-images1 = [subset_data1[i][0] for i in range(10)]
-labels1 = [subset_data1[i][1] for i in range(10)]
+images1 = [subset_data1[i][0] for i in range(25)]
+labels1 = [subset_data1[i][1] for i in range(25)]
 
 # Make a grid from these images
 grid = torchvision.utils.make_grid(images1, nrow=5)  # 5 images per row
