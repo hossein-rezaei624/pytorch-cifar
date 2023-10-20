@@ -17,6 +17,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torchvision
 
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+
+
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
@@ -27,48 +31,21 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
-# Data
-print('==> Preparing data..')
-transform_train = transforms.Compose([
-    transforms.ToTensor(),
-])
 
-transform_test = transforms.Compose([
-    transforms.ToTensor(),
-])
+transform_train = transforms.Compose([transforms.ToTensor(),])
 
-batch_size_ = 128
-
-trainset = torchvision.datasets.CIFAR10(
-    root='./data', train=True, download=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=batch_size_, shuffle=True, num_workers=0)
-
-testset = torchvision.datasets.CIFAR10(
-    root='./data', train=False, download=True, transform=transform_test)
-testloader = torch.utils.data.DataLoader(
-    testset, batch_size=100, shuffle=False, num_workers=0)
+trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
+filtered_indices = [i for i, label in enumerate(trainset.targets) if label in [20, 90]]
+filtered_data = torch.utils.data.Subset(trainset, filtered_indices)
+trainloader = torch.utils.data.DataLoader(filtered_data, batch_size=len(filtered_indices), shuffle=False)
 
 
-# Model
-print('==> Building model..')
 net = ResNet18()
-net_ = ResNet18()
 net = net.to(device)
-if device == 'cuda':
-    net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True
-
-net_ = net_.to(device)
 
 criterion = nn.CrossEntropyLoss()
-criterion_ = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=args.lr,
-                      momentum=0.9, weight_decay=5e-4)
-optimizer_ = optim.SGD(net_.parameters(), lr=args.lr,
-                      momentum=0.9, weight_decay=5e-4)
+optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
-scheduler_ = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_, T_max=200)
 
 
 # Training
@@ -104,33 +81,11 @@ def train(epoch):
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
   
 
-def test(epoch):
-    global best_acc
-    net.eval()
-    test_loss = 0
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for batch_idx, (inputs, targets, indices_1) in enumerate(testloader):
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs, __ = net(inputs)
-            loss = criterion(outputs, targets)
-
-            test_loss += loss.item()
-            _, predicted = outputs.max(1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
-
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                         % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-  
 
 Carto = torch.zeros((6, len(trainset)))
 
 for epoch in range(start_epoch, start_epoch+6):
     train(epoch)
-    test(epoch)
     scheduler.step()
 
 
@@ -157,7 +112,7 @@ top_indices = top_indices[::-1]
 top_indices_sorted = top_indices
 
 
-subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
+'''subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
 trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=128, shuffle=True)
 
 
@@ -168,56 +123,31 @@ labels = [subset_data[i][1] for i in range(225)]
 # Make a grid from these images
 grid = torchvision.utils.make_grid(images, nrow=15)  # 5 images per row
 
-torchvision.utils.save_image(grid, 'grid_image.png')
+torchvision.utils.save_image(grid, 'grid_image.png')'''
 
 
 
-def train_(epoch):
-  net_.train()
-  train_loss = 0
-  correct = 0
-  total = 0
-  for batch_idx, (inputs, targets, indices_1) in enumerate(trainloader_):
-      inputs, targets = inputs.to(device), targets.to(device)
-      optimizer_.zero_grad()
-      outputs, soft_ = net_(inputs)
+# Get all the filtered images and labels
+images, labels = next(iter(trainloader))
 
-      loss = criterion_(outputs, targets)
-      loss.backward()
-      optimizer_.step()
+# Flatten the images
+images_flat = images.view(images.shape[0], -1).numpy()
+mean = np.mean(images_flat, axis=0)
+std = np.std(images_flat, axis=0)
+images_normalized = (images_flat - mean) / std
 
-      train_loss += loss.item()
-      _, predicted = outputs.max(1)
-      total += targets.size(0)
-      correct += predicted.eq(targets).sum().item()
+# Apply t-SNE
+X_tsne = TSNE(n_components=2, random_state = 0).fit_transform(images_normalized)
 
-      progress_bar(batch_idx, len(trainloader_), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                   % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-    
 
-def test_(epoch):
-    net_.eval()
-    test_loss = 0
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for batch_idx, (inputs, targets, indices_1) in enumerate(testloader):
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs, __ = net_(inputs)
-            loss = criterion_(outputs, targets)
+# 3. Plot the results
+plt.figure(figsize=(15, 10))
+scatter = plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=labels, cmap="jet", edgecolor="None", alpha=0.5, s = 50)
+plt.title('t-SNE - CIFAR10 Class 0 & 1')
 
-            test_loss += loss.item()
-            _, predicted = outputs.max(1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
+# Annotate the points with their respective indices
+for i, txt in enumerate(filtered_indices):
+  if txt in top_indices_sorted:
+    plt.annotate(txt, (X_tsne[i, 0], X_tsne[i, 1]), fontsize=8, alpha=0.5)
 
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                         % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-    print("\n")
-
-print("Trainning with cartography...")
-for epoch in range(start_epoch, start_epoch+20):
-    train_(epoch)
-    test_(epoch)
-    scheduler_.step()
+plt.savefig("tsne-image")
