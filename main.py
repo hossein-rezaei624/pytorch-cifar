@@ -39,14 +39,12 @@ filtered_indices = [i for i, label in enumerate(trainset.targets) if label in [2
 filtered_data = torch.utils.data.Subset(trainset, filtered_indices)
 trainloader = torch.utils.data.DataLoader(filtered_data, batch_size=len(filtered_indices), shuffle=False)
 
+trainloader_ = torch.utils.data.DataLoader(filtered_data, batch_size=128, shuffle=True)
+
 mapping = {value: index for index, value in enumerate([26, 86, 2, 55, 75, 93, 16, 73, 54, 95])}
 
 net = ResNet18()
 net = net.to(device)
-
-if device == 'cuda':
-    net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
@@ -61,7 +59,7 @@ def train(epoch):
     correct = 0
     total = 0
     confidence_epoch = []
-    for batch_idx, (inputs, targets, indices_1) in enumerate(trainloader):
+    for batch_idx, (inputs, targets, indices_1) in enumerate(trainloader_):
         inputs, targets = inputs.to(device), targets.to(device)
 
         targets = torch.tensor([mapping[val.item()] for val in targets]).to(device)
