@@ -107,7 +107,7 @@ plt.ylabel("Confidence")
 plt.savefig('scatter_plot.png')
 
 
-top_n = Variability.shape[0]//100
+top_n = len(filtered_indices)//10
 
 sorted_indices = np.argsort(Variability.numpy())
 
@@ -132,7 +132,6 @@ grid = torchvision.utils.make_grid(images, nrow=15)  # 5 images per row
 torchvision.utils.save_image(grid, 'grid_image.png')'''
 
 
-
 # Get all the filtered images and labels
 images, labels, __ = next(iter(trainloader))
 
@@ -151,11 +150,9 @@ plt.figure(figsize=(15, 10))
 scatter = plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=labels, cmap="jet", edgecolor="None", alpha=0.5, s = 50)
 plt.title('t-SNE - CIFAR10 Class 0 & 1')
 
-print("top_indices_sorted", top_indices_sorted, len(top_indices_sorted))
 # Annotate the points with their respective indices
 for i, txt in enumerate(filtered_indices):
   if txt in top_indices_sorted:
     plt.annotate(txt, (X_tsne[i, 0], X_tsne[i, 1]), fontsize=8, alpha=0.5)
-    print(txt)
 
 plt.savefig("tsne-image")
