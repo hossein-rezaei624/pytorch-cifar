@@ -155,5 +155,6 @@ plt.title('t-SNE - CIFAR10 Class 0 & 1')
 for i, txt in enumerate(filtered_indices):
   if txt in top_indices_sorted:
     plt.annotate(txt, (X_tsne[i, 0], X_tsne[i, 1]), fontsize=8, alpha=0.5)
+    print(i)
 
 plt.savefig("tsne-image")
