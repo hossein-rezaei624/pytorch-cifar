@@ -107,16 +107,15 @@ plt.ylabel("Confidence")
 plt.savefig('scatter_plot.png')
 
 
-top_n = len(filtered_indices)//10
+top_n = len(filtered_indices)
 
 sorted_indices = np.argsort(Confidence_mean.numpy())
 
-top_indices = sorted_indices[:top_n]
+top_indices = sorted_indices[-top_n:]
 
 #top_indices = top_indices[::-1]
 
-top_indices_sorted = top_indices
-print("top_indices_sorted", top_indices_sorted)
+top_indices_sorted = top_indices[:100]
 
 
 '''subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
