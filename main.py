@@ -132,7 +132,7 @@ torchvision.utils.save_image(grid, 'grid_image.png')'''
 
 
 # Get all the filtered images and labels
-images, labels = next(iter(trainloader))
+images, labels, __ = next(iter(trainloader))
 
 # Flatten the images
 images_flat = images.view(images.shape[0], -1).numpy()
