@@ -35,11 +35,11 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 transform_train = transforms.Compose([transforms.ToTensor(),])
 
 trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
-filtered_indices = [i for i, label in enumerate(trainset.targets) if label in [20, 90]]
+filtered_indices = [i for i, label in enumerate(trainset.targets) if label in [26, 86, 2, 55, 75, 93, 16, 73, 54, 95]]
 filtered_data = torch.utils.data.Subset(trainset, filtered_indices)
 trainloader = torch.utils.data.DataLoader(filtered_data, batch_size=len(filtered_indices), shuffle=False)
 
-mapping = {value: index for index, value in enumerate([20, 90])}
+mapping = {value: index for index, value in enumerate([26, 86, 2, 55, 75, 93, 16, 73, 54, 95])}
 
 net = ResNet18()
 net = net.to(device)
