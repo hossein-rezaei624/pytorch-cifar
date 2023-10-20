@@ -35,13 +35,13 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 transform_train = transforms.Compose([transforms.ToTensor(),])
 
 trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
-filtered_indices = [i for i, label in enumerate(trainset.targets) if label in [26, 86, 2, 55, 75, 93, 16, 73, 54, 95]]
+filtered_indices = [i for i, label in enumerate(trainset.targets) if label in [20, 90]]
 filtered_data = torch.utils.data.Subset(trainset, filtered_indices)
 trainloader = torch.utils.data.DataLoader(filtered_data, batch_size=len(filtered_indices), shuffle=False)
 
 trainloader_ = torch.utils.data.DataLoader(filtered_data, batch_size=128, shuffle=True)
 
-mapping = {value: index for index, value in enumerate([26, 86, 2, 55, 75, 93, 16, 73, 54, 95])}
+mapping = {value: index for index, value in enumerate([20, 90])}
 
 net = ResNet18()
 net = net.to(device)
@@ -83,7 +83,7 @@ def train(epoch):
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+        progress_bar(batch_idx, len(trainloader_), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                      % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
   
 
