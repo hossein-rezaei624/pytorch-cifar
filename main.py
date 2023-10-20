@@ -107,7 +107,7 @@ plt.ylabel("Confidence")
 plt.savefig('scatter_plot.png')
 
 
-top_n = Variability.shape[0]//10
+top_n = Variability.shape[0]//100
 
 sorted_indices = np.argsort(Variability.numpy())
 
@@ -151,7 +151,7 @@ plt.figure(figsize=(15, 10))
 scatter = plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=labels, cmap="jet", edgecolor="None", alpha=0.5, s = 50)
 plt.title('t-SNE - CIFAR10 Class 0 & 1')
 
-print("top_indices_sorted", top_indices_sorted)
+print("top_indices_sorted", top_indices_sorted, len(top_indices_sorted))
 # Annotate the points with their respective indices
 for i, txt in enumerate(filtered_indices):
   if txt in top_indices_sorted:
