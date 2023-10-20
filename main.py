@@ -118,18 +118,16 @@ top_indices = top_indices[::-1]
 top_indices_sorted = top_indices[:30]
 
 
-'''subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
-trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=128, shuffle=True)
-
+subset_data1 = torch.utils.data.Subset(trainset, top_indices_sorted)
 
 # Extract the first 10 images
-images = [subset_data[i][0] for i in range(225)]
-labels = [subset_data[i][1] for i in range(225)]
+images1 = [subset_data1[i][0] for i in range(10)]
+labels1 = [subset_data1[i][1] for i in range(10)]
 
 # Make a grid from these images
-grid = torchvision.utils.make_grid(images, nrow=15)  # 5 images per row
+grid = torchvision.utils.make_grid(images1, nrow=5)  # 5 images per row
 
-torchvision.utils.save_image(grid, 'grid_image.png')'''
+torchvision.utils.save_image(grid, 'grid_image.png')
 
 
 # Get all the filtered images and labels
