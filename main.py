@@ -34,14 +34,14 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 transform_train = transforms.Compose([transforms.ToTensor(),])
 
-trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
-filtered_indices = [i for i, label in enumerate(trainset.targets) if label in [20, 90]]
+trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
+filtered_indices = [i for i, label in enumerate(trainset.targets) if label in [2, 8]]
 filtered_data = torch.utils.data.Subset(trainset, filtered_indices)
 trainloader = torch.utils.data.DataLoader(filtered_data, batch_size=len(filtered_indices), shuffle=False)
 
 trainloader_ = torch.utils.data.DataLoader(filtered_data, batch_size=128, shuffle=True)
 
-mapping = {value: index for index, value in enumerate([20, 90])}
+mapping = {value: index for index, value in enumerate([2, 8])}
 
 net = ResNet18()
 net = net.to(device)
@@ -115,17 +115,17 @@ top_indices = sorted_indices[-top_n:]
 
 #top_indices = top_indices[::-1]
 
-top_indices_sorted = top_indices[:25]
+top_indices_sorted = top_indices[:100]
 
 
 subset_data1 = torch.utils.data.Subset(trainset, top_indices_sorted)
 
 # Extract the first 10 images
-images1 = [subset_data1[i][0] for i in range(25)]
-labels1 = [subset_data1[i][1] for i in range(25)]
+images1 = [subset_data1[i][0] for i in range(100)]
+labels1 = [subset_data1[i][1] for i in range(100)]
 
 # Make a grid from these images
-grid = torchvision.utils.make_grid(images1, nrow=5)  # 5 images per row
+grid = torchvision.utils.make_grid(images1, nrow=10)  # 5 images per row
 
 torchvision.utils.save_image(grid, 'grid_image.png')
 
