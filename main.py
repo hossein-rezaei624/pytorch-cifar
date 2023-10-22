@@ -138,11 +138,12 @@ images, labels, __ = next(iter(trainloader))
 images_flat = images.view(images.shape[0], -1).numpy()
 mean = np.mean(images_flat, axis=0)
 std = np.std(images_flat, axis=0)
+std_modified = np.where(std == 0, 1e-10, std)
+images_normalized = (images_flat - mean) / std_modified
 images_normalized = (images_flat - mean) / std
 
 # Apply t-SNE
 X_tsne = TSNE(n_components=2, random_state = 0).fit_transform(images_normalized)
-
 
 # 3. Plot the results
 plt.figure(figsize=(15, 10))
