@@ -32,7 +32,7 @@ best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 
-transform_train = transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor(),])
+transform_train = transforms.Compose([transforms.Resize((3, 32, 32)), transforms.ToTensor(),])
 
 trainset = torchvision.datasets.MNIST(root='./data', train = True, download=True, transform=transform_train)
 filtered_indices = [i for i, label in enumerate(trainset.targets) if label in [0, 1]]
