@@ -114,14 +114,14 @@ top_indices = sorted_indices[-top_n:]
 
 #top_indices = top_indices[::-1]
 
-top_indices_sorted = top_indices[:50]
+top_indices_sorted = top_indices[:75]
 
 
 subset_data1 = torch.utils.data.Subset(trainset, top_indices_sorted)
 
 # Extract the first 10 images
-images1 = [subset_data1[i][0] for i in range(50)]
-labels1 = [subset_data1[i][1] for i in range(50)]
+images1 = [subset_data1[i][0] for i in range(75)]
+labels1 = [subset_data1[i][1] for i in range(75)]
 
 # Make a grid from these images
 grid = torchvision.utils.make_grid(images1, nrow=5)  # 5 images per row
