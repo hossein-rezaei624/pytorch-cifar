@@ -31,16 +31,14 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
-transform_train = transforms.Compose([transforms.ToTensor(),])
-transform_train_ = transforms.Compose([transforms.Resize((32, 32)), transforms.Lambda(lambda x: x.convert("RGB")), transforms.ToTensor(),])
+transform_train = transforms.Compose([transforms.Resize((32, 32)), transforms.Lambda(lambda x: x.convert("RGB")), transforms.ToTensor(),])
 
 trainset = torchvision.datasets.MNIST(root='./data', train = True, download=True, transform=transform_train)
-trainset_ = torchvision.datasets.MNIST(root='./data', train = True, download=True, transform=transform_train_)
 filtered_indices = [idx for idx, (_, target, __) in enumerate(trainset) if target in [0, 1]]
 filtered_data = torch.utils.data.Subset(trainset, filtered_indices)
-filtered_data_ = torch.utils.data.Subset(trainset_, filtered_indices)
 trainloader = torch.utils.data.DataLoader(filtered_data, batch_size=len(filtered_indices), shuffle=False)
-trainloader_ = torch.utils.data.DataLoader(filtered_data_, batch_size=128, shuffle=True)
+
+trainloader_ = torch.utils.data.DataLoader(filtered_data, batch_size=128, shuffle=True)
 
 mapping = {value: index for index, value in enumerate([0, 1])}
 
