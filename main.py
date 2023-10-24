@@ -49,7 +49,7 @@ filtered_indices = [idx for idx, (_, target, __) in enumerate(trainset) if targe
 filtered_data = torch.utils.data.Subset(trainset, filtered_indices)
 trainloader = torch.utils.data.DataLoader(filtered_data, batch_size=len(filtered_indices), shuffle=False)
 
-trainloader_ = torch.utils.data.DataLoader(filtered_data, batch_size=10, shuffle=True)
+trainloader_ = torch.utils.data.DataLoader(filtered_data, batch_size=128, shuffle=True)
 
 mapping = {value: index for index, value in enumerate([20, 90])}
 
