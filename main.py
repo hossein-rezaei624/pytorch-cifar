@@ -134,9 +134,9 @@ def test(epoch):
 
   
 
-Carto = torch.zeros((4, len(trainset)))
+Carto = torch.zeros((6, len(trainset)))
 
-for epoch in range(start_epoch, start_epoch+4):
+for epoch in range(start_epoch, start_epoch+6):
     train(epoch)
     test(epoch)
     scheduler.step()
@@ -160,7 +160,7 @@ sorted_indices = np.argsort(Confidence_mean.numpy())
 
 top_indices = sorted_indices[-top_n:]
 
-top_indices = top_indices[::-1]
+#top_indices = top_indices[::-1]
 
 top_indices_sorted = top_indices
 
