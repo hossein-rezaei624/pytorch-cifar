@@ -17,6 +17,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torchvision
 
+import random
+
+
+np.random.seed(0)
+random.seed(0)
+torch.manual_seed(0)
+if torch.cuda.is_available():
+  torch.cuda.manual_seed(0)
+  torch.backends.cudnn.deterministic = True
+  torch.backends.cudnn.benchmark = False
+
+
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
@@ -55,10 +67,6 @@ print('==> Building model..')
 net = ResNet18()
 net_ = ResNet18()
 net = net.to(device)
-if device == 'cuda':
-    net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True
-
 net_ = net_.to(device)
 
 criterion = nn.CrossEntropyLoss()
@@ -166,7 +174,7 @@ images = [subset_data[i][0] for i in range(225)]
 labels = [subset_data[i][1] for i in range(225)]
 
 # Make a grid from these images
-grid = torchvision.utils.make_grid(images, nrow=15)  # 5 images per row
+grid = torchvision.utils.make_grid(images, nrow=10)  # 5 images per row
 
 torchvision.utils.save_image(grid, 'grid_image.png')
 
