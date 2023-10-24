@@ -108,11 +108,11 @@ plt.savefig('scatter_plot.png')
 
 top_n = len(filtered_indices)
 
-sorted_indices = np.argsort(Variability.numpy())
+sorted_indices = np.argsort(Confidence_mean.numpy())
 
 top_indices = sorted_indices[-top_n:]
 
-top_indices = top_indices[::-1]
+#top_indices = top_indices[::-1]
 
 top_indices_sorted = top_indices[:75]
 
@@ -144,7 +144,7 @@ X_tsne = TSNE(n_components=2, random_state = 0).fit_transform(images_normalized)
 
 # 3. Plot the results
 plt.figure(figsize=(15, 10))
-scatter = plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=labels, cmap="jet", edgecolor="None", alpha=0.5, s = 50)
+scatter = plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=labels, cmap="jet", edgecolor="None", alpha=0.5, s = 75)
 plt.title('t-SNE - CIFAR10 Class 0 & 1')
 
 # Annotate the points with their respective indices
