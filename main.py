@@ -21,6 +21,15 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 
+np.random.seed(0)
+random.seed(0)
+torch.manual_seed(0)
+if torch.cuda.is_available():
+  torch.cuda.manual_seed(0)
+  torch.backends.cudnn.deterministic = True
+  torch.backends.cudnn.benchmark = False
+
+
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
@@ -114,14 +123,14 @@ top_indices = sorted_indices[-top_n:]
 
 #top_indices = top_indices[::-1]
 
-top_indices_sorted = top_indices[:75]
+top_indices_sorted = top_indices[:70]
 
 
 subset_data1 = torch.utils.data.Subset(trainset, top_indices_sorted)
 
 # Extract the first 10 images
-images1 = [subset_data1[i][0] for i in range(75)]
-labels1 = [subset_data1[i][1] for i in range(75)]
+images1 = [subset_data1[i][0] for i in range(70)]
+labels1 = [subset_data1[i][1] for i in range(70)]
 
 # Make a grid from these images
 grid = torchvision.utils.make_grid(images1, nrow=5)  # 5 images per row
