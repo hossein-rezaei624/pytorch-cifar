@@ -170,11 +170,11 @@ trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=128, shuffle=
 
 
 # Extract the first 10 images
-images = [subset_data[i][0] for i in range(225)]
-labels = [subset_data[i][1] for i in range(225)]
+images = [subset_data[i][0] for i in range(15)]
+labels = [subset_data[i][1] for i in range(15)]
 
 # Make a grid from these images
-grid = torchvision.utils.make_grid(images, nrow=10)  # 5 images per row
+grid = torchvision.utils.make_grid(images, nrow=15)  # 5 images per row
 
 torchvision.utils.save_image(grid, 'grid_image.png')
 
