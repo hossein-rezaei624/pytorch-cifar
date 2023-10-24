@@ -156,7 +156,7 @@ X_tsne = TSNE(n_components=2, random_state = 0).fit_transform(images_normalized)
 # 3. Plot the results
 plt.figure(figsize=(15, 10))
 scatter = plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=labels, cmap="jet", edgecolor="None", alpha=0.4, s = 200)
-plt.title('t-SNE - CIFAR10 Class 0 & 1')
+#plt.title('t-SNE - CIFAR10 Class 0 & 1')
 
 # Annotate the points with their respective indices
 for i, txt in enumerate(filtered_indices):
