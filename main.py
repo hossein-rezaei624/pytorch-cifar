@@ -23,11 +23,11 @@ from sklearn.manifold import TSNE
 import random
 
 
-np.random.seed(1)
-random.seed(1)
-torch.manual_seed(1)
+np.random.seed(0)
+random.seed(0)
+torch.manual_seed(0)
 if torch.cuda.is_available():
-  torch.cuda.manual_seed(1)
+  torch.cuda.manual_seed(0)
   torch.backends.cudnn.deterministic = True
   torch.backends.cudnn.benchmark = False
 
@@ -123,16 +123,16 @@ sorted_indices = np.argsort(Confidence_mean.numpy())
 
 top_indices = sorted_indices[-top_n:]
 
-top_indices = top_indices[::-1]
+#top_indices = top_indices[::-1]
 
-top_indices_sorted = top_indices[:85]
+top_indices_sorted = top_indices[:75]
 
 
 subset_data1 = torch.utils.data.Subset(trainset, top_indices_sorted)
 
 # Extract the first 10 images
-images1 = [subset_data1[i][0] for i in range(85)]
-labels1 = [subset_data1[i][1] for i in range(85)]
+images1 = [subset_data1[i][0] for i in range(75)]
+labels1 = [subset_data1[i][1] for i in range(75)]
 
 # Make a grid from these images
 grid = torchvision.utils.make_grid(images1, nrow=10)  # 5 images per row
