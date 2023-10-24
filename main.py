@@ -158,7 +158,7 @@ top_n = Variability.shape[0]//3
 
 sorted_indices = np.argsort(Confidence_mean.numpy())
 
-top_indices = sorted_indices[-top_n:]
+top_indices = sorted_indices[:top_n]
 
 #top_indices = top_indices[::-1]
 
