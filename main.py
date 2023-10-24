@@ -20,6 +20,8 @@ import torchvision
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
+import random
+
 
 np.random.seed(0)
 random.seed(0)
