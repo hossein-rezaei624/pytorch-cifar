@@ -130,9 +130,9 @@ def test(epoch):
 
   
 
-Carto = torch.zeros((8, len(trainset)))
+Carto = torch.zeros((4, len(trainset)))
 
-for epoch in range(start_epoch, start_epoch+8):
+for epoch in range(start_epoch, start_epoch+4):
     train(epoch)
     test(epoch)
     scheduler.step()
@@ -162,7 +162,7 @@ top_indices_sorted = top_indices
 
 
 subset_data = torch.utils.data.Subset(trainset, top_indices_sorted)
-trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=128, shuffle=True, num_workers=0)
+trainloader_ = torch.utils.data.DataLoader(subset_data, batch_size=64, shuffle=True, num_workers=0)
 
 
 # Extract the first 10 images
