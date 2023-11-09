@@ -33,7 +33,7 @@ args = parser.parse_args()
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
-start_epoch = 1  # start from epoch 0 or last checkpoint epoch
+start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 # Data
 print('==> Preparing data..')
@@ -248,7 +248,7 @@ for epoch in range(start_epoch, start_epoch+5):
 
 
 
-epochs = range(start_epoch, start_epoch + 5)
+epochs = range(1, 6)
 print("epochs", epochs)
 print("test_accuracies", test_accuracies)
 plt.plot(epochs, test_accuracies, label='Model 1')
