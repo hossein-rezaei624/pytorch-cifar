@@ -152,7 +152,7 @@ plt.savefig('scatter_plot.png')
 
 top_n = Variability.shape[0]//4
 
-sorted_indices = np.argsort(Confidence_mean.numpy())
+sorted_indices = np.argsort(Variability.numpy())
 
 top_indices = sorted_indices[-top_n:]
 
