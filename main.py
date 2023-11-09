@@ -246,7 +246,9 @@ for epoch in range(start_epoch, start_epoch+2):
     scheduler_.step()
 
 
-plt.clf()
+# Clear previous axes and figure
+plt.cla()  # Clear the current axes
+plt.clf()  # Clear the current figure
 
 start_epoch = 0
 num_epochs = 5
