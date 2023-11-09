@@ -62,10 +62,10 @@ testloader = torch.utils.data.DataLoader(
 num_samples_random = len(trainset) // 4
 
 # Create a random index array
-#indices_random = torch.randperm(len(trainset))[:num_samples_random]
+indices_random = torch.randperm(len(trainset))[:num_samples_random]
 
 # Create a subset of the dataset using the random indices
-#trainset_subset_random = torch.utils.data.Subset(trainset, indices_random)
+trainset_subset_random = torch.utils.data.Subset(trainset, indices_random)
 
 
 
@@ -142,9 +142,9 @@ def test(epoch):
 
   
 
-Carto = torch.zeros((2, len(trainset)))
+Carto = torch.zeros((4, len(trainset)))
 
-for epoch in range(start_epoch, start_epoch+2):
+for epoch in range(start_epoch, start_epoch+4):
     train(epoch)
     test(epoch)
     scheduler.step()
@@ -236,13 +236,13 @@ def test_(epoch):
     test_accuracy = 100. * correct / total
     return test_accuracy
         
-
+print("\n")
 print("Trainning with cartography...")
+print("\n")
 test_accuracies = []
-for epoch in range(start_epoch, start_epoch+2):
+for epoch in range(start_epoch, start_epoch+20):
     train_(epoch)
-    sss = test_(epoch)
-    test_accuracies.append(sss)
+    test_accuracies.append(test_(epoch))
     scheduler_.step()
 
 
@@ -250,7 +250,7 @@ for epoch in range(start_epoch, start_epoch+2):
 plt.cla()  # Clear the current axes
 plt.clf()  # Clear the current figure
 
-epochs = range(start_epoch, start_epoch + 2) 
+epochs = range(start_epoch, start_epoch + 20) 
 
 # Plotting
 plt.plot(epochs, test_accuracies, label='Model 1')
