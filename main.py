@@ -246,7 +246,7 @@ for epoch in range(start_epoch, start_epoch+2):
     scheduler_.step()
 
 
-
+plt.clf()
 
 start_epoch = 0
 num_epochs = 5
