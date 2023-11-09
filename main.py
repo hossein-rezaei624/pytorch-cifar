@@ -332,7 +332,8 @@ print("\n")
 print("Trainning with all...")
 print("\n")
 test_accuracies_all = []
-for epoch in range(start_epoch, start_epoch+5):
+for epoch in range(start_epoch, start_epoch+50):
+    print("Epoch: ", epoch)
     train_all(epoch)
     test_accuracies_all.append(test_all(epoch))
     scheduler_all.step()
@@ -394,7 +395,8 @@ print("\n")
 print("Trainning with random...")
 print("\n")
 test_accuracies_random = []
-for epoch in range(start_epoch, start_epoch+5):
+for epoch in range(start_epoch, start_epoch+50):
+    print("Epoch: ", epoch)
     train_random(epoch)
     test_accuracies_random.append(test_random(epoch))
     scheduler_random.step()
@@ -456,7 +458,8 @@ print("\n")
 print("Trainning with Variability...")
 print("\n")
 test_accuracies_Variability = []
-for epoch in range(start_epoch, start_epoch+5):
+for epoch in range(start_epoch, start_epoch+50):
+    print("Epoch: ", epoch)
     train_Variability(epoch)
     test_accuracies_Variability.append(test_Variability(epoch))
     scheduler_Variability.step()
@@ -522,7 +525,8 @@ print("\n")
 print("Trainning with Confidence_mean...")
 print("\n")
 test_accuracies_Confidence_mean = []
-for epoch in range(start_epoch, start_epoch+5):
+for epoch in range(start_epoch, start_epoch+50):
+    print("Epoch: ", epoch)
     train_Confidence_mean(epoch)
     test_accuracies_Confidence_mean.append(test_Confidence_mean(epoch))
     scheduler_Confidence_mean.step()
@@ -589,7 +593,8 @@ print("\n")
 print("Trainning with Confidence_mean_hard...")
 print("\n")
 test_accuracies_Confidence_mean_hard = []
-for epoch in range(start_epoch, start_epoch+5):
+for epoch in range(start_epoch, start_epoch+50):
+    print("Epoch: ", epoch)
     train_Confidence_mean_hard(epoch)
     test_accuracies_Confidence_mean_hard.append(test_Confidence_mean_hard(epoch))
     scheduler_Confidence_mean_hard.step()
@@ -603,7 +608,7 @@ for epoch in range(start_epoch, start_epoch+5):
 plt.cla()  # Clear the current axes
 plt.clf()  # Clear the current figure
 
-epochs = range(start_epoch, start_epoch + 5) 
+epochs = range(start_epoch, start_epoch + 50) 
 
 # Plotting
 plt.plot(epochs, test_accuracies_all, label='All data')
@@ -620,6 +625,6 @@ plt.legend()
 
 plt.ylim(0, 100)
 
-plt.xticks(range(start_epoch, start_epoch + 5, 1))
+plt.xticks(range(start_epoch, start_epoch + 50, 1))
 
 plt.savefig("results.png")
