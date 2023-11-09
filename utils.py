@@ -8,10 +8,6 @@ import sys
 import time
 import math
 
-import torch.nn as nn
-import torch.nn.init as init
-
-
 
 
 _, term_width = os.popen('stty size', 'r').read().split()
