@@ -60,8 +60,8 @@ testloader = torch.utils.data.DataLoader(
 
 # Model
 print('==> Building model..')
-net = ResNet18()
-net_ = ResNet18()
+net = ResNet18(10)
+net_ = ResNet18(10)
 net = net.to(device)
 net_ = net_.to(device)
 
