@@ -62,10 +62,10 @@ testloader = torch.utils.data.DataLoader(
 num_samples_random = len(trainset) // 4
 
 # Create a random index array
-indices_random = torch.randperm(len(trainset))[:num_samples_random]
+#indices_random = torch.randperm(len(trainset))[:num_samples_random]
 
 # Create a subset of the dataset using the random indices
-trainset_subset_random = torch.utils.data.Subset(trainset, indices_random)
+#trainset_subset_random = torch.utils.data.Subset(trainset, indices_random)
 
 
 
@@ -249,6 +249,8 @@ for epoch in range(start_epoch, start_epoch+5):
 
 
 epochs = range(start_epoch, start_epoch + 5)
+print("epochs", epochs)
+print("test_accuracies", test_accuracies)
 plt.plot(epochs, test_accuracies, label='Model 1')
 #plt.plot(epochs, test_accuracies_model2, label='Model 2')
 plt.xlabel('Epoch')
