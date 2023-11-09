@@ -130,9 +130,9 @@ def test(epoch):
 
   
 
-Carto = torch.zeros((7, len(trainset)))
+Carto = torch.zeros((8, len(trainset)))
 
-for epoch in range(start_epoch, start_epoch+7):
+for epoch in range(start_epoch, start_epoch+8):
     train(epoch)
     test(epoch)
     scheduler.step()
