@@ -154,7 +154,7 @@ plt.ylabel("Confidence")
 plt.savefig('scatter_plot.png')
 
 
-top_n = Variability.shape[0]//3
+top_n = Variability.shape[0]//4
 
 sorted_indices = np.argsort(Confidence_mean.numpy())
 
