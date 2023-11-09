@@ -29,6 +29,7 @@ if torch.cuda.is_available():
   torch.backends.cudnn.benchmark = False
 
 
+
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true',
@@ -59,7 +60,7 @@ trainloader = torch.utils.data.DataLoader(
 testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
-    testset, batch_size=100, shuffle=False, num_workers=0)
+    testset, batch_size=128, shuffle=False, num_workers=0)
 
 
 # Model
