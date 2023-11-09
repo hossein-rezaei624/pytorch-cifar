@@ -232,25 +232,27 @@ def test_(epoch):
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-        test_accuracy = 100. * correct / total
-        print("\n")
-        return test_accuracy
+    print("\n")
+    test_accuracy = 100. * correct / total
+    return test_accuracy
         
 
 print("Trainning with cartography...")
 test_accuracies = []
 for epoch in range(start_epoch, start_epoch+5):
     train_(epoch)
-    test_accuracies.append(test_(epoch))
+    sss = test_(epoch)
+    test_accuracies.append(sss)
     scheduler_.step()
 
 
 
 
 epochs = range(start_epoch, start_epoch + 5)
-plt.plot(epochs, test_accuracies, label='Model 1')
+plt.plot(epochs, test_accuracies)
 #plt.plot(epochs, test_accuracies_model2, label='Model 2')
 plt.xlabel('Epoch')
 plt.ylabel('Test Accuracy')
 plt.title('Test Accuracy over Epochs')
+plt.legend()
 plt.savefig("results")
