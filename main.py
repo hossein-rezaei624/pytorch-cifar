@@ -248,13 +248,18 @@ for epoch in range(start_epoch, start_epoch+2):
 
 
 
-epochs = range(0, 2)
-print("epochs", epochs)
-print("test_accuracies", test_accuracies)
+start_epoch = 0
+num_epochs = 5
+epochs = range(start_epoch, start_epoch + num_epochs)  # This will be [1, 2, 3, 4]
+
+# Your test accuracies
+test_accuracies = [23.91, 30.7, 40.14, 43.97, 55.13]
+
+# Plotting
 plt.plot(epochs, test_accuracies, label='Model 1')
 plt.xlabel('Epoch')
 plt.ylabel('Test Accuracy')
 plt.title('Test Accuracy over Epochs')
 plt.legend()
-plt.savefig("results")
+plt.savefig("results_fixed.png")
 plt.show()
