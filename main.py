@@ -142,9 +142,9 @@ def test(epoch):
 
   
 
-Carto = torch.zeros((4, len(trainset)))
+Carto = torch.zeros((2, len(trainset)))
 
-for epoch in range(start_epoch, start_epoch+4):
+for epoch in range(start_epoch, start_epoch+2):
     train(epoch)
     test(epoch)
     scheduler.step()
@@ -239,7 +239,7 @@ def test_(epoch):
 
 print("Trainning with cartography...")
 test_accuracies = []
-for epoch in range(start_epoch, start_epoch+5):
+for epoch in range(start_epoch, start_epoch+2):
     train_(epoch)
     sss = test_(epoch)
     test_accuracies.append(sss)
@@ -248,13 +248,13 @@ for epoch in range(start_epoch, start_epoch+5):
 
 
 
-epochs = range(1, 6)
+epochs = range(0, 2)
 print("epochs", epochs)
 print("test_accuracies", test_accuracies)
 plt.plot(epochs, test_accuracies, label='Model 1')
-#plt.plot(epochs, test_accuracies_model2, label='Model 2')
 plt.xlabel('Epoch')
 plt.ylabel('Test Accuracy')
 plt.title('Test Accuracy over Epochs')
 plt.legend()
 plt.savefig("results")
+plt.show()
