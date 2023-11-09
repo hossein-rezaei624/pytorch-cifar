@@ -58,6 +58,18 @@ testloader = torch.utils.data.DataLoader(
     testset, batch_size=128, shuffle=False, num_workers=0)
 
 
+
+num_samples_random = len(trainset) // 4
+
+# Create a random index array
+indices_random = np.random.choice(len(trainset), num_samples_random, replace=False)
+
+# Create a subset of the dataset using the random indices
+trainset_subset_random = torch.utils.data.Subset(trainset, indices_random)
+
+
+
+
 # Model
 print('==> Building model..')
 net = ResNet18(10)
