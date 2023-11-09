@@ -3,11 +3,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
-
-import os
 import argparse
 
-from models import *
+from models import ResNet18
 from utils import progress_bar
 
 import numpy as np
