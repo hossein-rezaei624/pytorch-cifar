@@ -250,7 +250,7 @@ for epoch in range(start_epoch, start_epoch+2):
 plt.cla()  # Clear the current axes
 plt.clf()  # Clear the current figure
 
-epochs = range(start_epoch, start_epoch + num_epochs) 
+epochs = range(start_epoch, start_epoch + 2) 
 
 # Plotting
 plt.plot(epochs, test_accuracies, label='Model 1')
