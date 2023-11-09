@@ -228,19 +228,20 @@ def test_(epoch):
             correct += predicted.eq(targets).sum().item()
 
 
-            test_accuracy = 100. * correct / total
-            test_accuracies.append(test_accuracy)
           
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
+        test_accuracy = 100. * correct / total
+        return test_accuracy
+        
     print("\n")
 
 print("Trainning with cartography...")
 test_accuracies = []
 for epoch in range(start_epoch, start_epoch+10):
     train_(epoch)
-    test_(epoch)
+    test_accuracies.append(test_(epoch))
     scheduler_.step()
 
 
