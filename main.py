@@ -361,13 +361,28 @@ for i in range(len(subset_data_Confidence_mean_hard)):
 # Ensure that we have 1 image per class, this should be equal to the number of classes
 assert len(images_Confidence_mean_hard) == len(trainset.classes)
 
+
+
+# Combine the labels and images into a list of tuples
+combined_list_Confidence_mean_hard = list(zip(labels_Confidence_mean_hard, images_Confidence_mean_hard))
+
+# Sort the combined list by the label (which is the first item in each tuple)
+combined_list_sorted_Confidence_mean_hard = sorted(combined_list_Confidence_mean_hard, key=lambda x: x[0])
+
+# Unzip the sorted list back into labels and images
+labels_Confidence_mean_hard, images_Confidence_mean_hard = zip(*combined_list_sorted_Confidence_mean_hard)
+
+# Convert the tuples back to lists (if necessary)
+labels_Confidence_mean_hard = list(labels_Confidence_mean_hard)
+images_Confidence_mean_hard = list(images_Confidence_mean_hard)
+
+
+
 # Make a grid from these images
 grid_Confidence_mean_hard = torchvision.utils.make_grid(images_Confidence_mean_hard, nrow=len(trainset.classes))
 
 # Save the grid of images
 torchvision.utils.save_image(grid_Confidence_mean_hard, 'grid_image_Confidence_mean_hard.png')
-
-
 
 
 
@@ -425,7 +440,7 @@ print("\n")
 print("Trainning with all...")
 print("\n")
 test_accuracies_all = []
-for epoch in range(start_epoch, start_epoch+100):
+for epoch in range(start_epoch, start_epoch+151):
     print("Epoch: ", epoch)
     train_all(epoch)
     test_accuracies_all.append(test_all(epoch))
@@ -488,7 +503,7 @@ print("\n")
 print("Trainning with random...")
 print("\n")
 test_accuracies_random = []
-for epoch in range(start_epoch, start_epoch+100):
+for epoch in range(start_epoch, start_epoch+151):
     print("Epoch: ", epoch)
     train_random(epoch)
     test_accuracies_random.append(test_random(epoch))
@@ -551,7 +566,7 @@ print("\n")
 print("Trainning with Variability...")
 print("\n")
 test_accuracies_Variability = []
-for epoch in range(start_epoch, start_epoch+100):
+for epoch in range(start_epoch, start_epoch+151):
     print("Epoch: ", epoch)
     train_Variability(epoch)
     test_accuracies_Variability.append(test_Variability(epoch))
@@ -618,7 +633,7 @@ print("\n")
 print("Trainning with Confidence_mean...")
 print("\n")
 test_accuracies_Confidence_mean = []
-for epoch in range(start_epoch, start_epoch+100):
+for epoch in range(start_epoch, start_epoch+151):
     print("Epoch: ", epoch)
     train_Confidence_mean(epoch)
     test_accuracies_Confidence_mean.append(test_Confidence_mean(epoch))
@@ -686,7 +701,7 @@ print("\n")
 print("Trainning with Confidence_mean_hard...")
 print("\n")
 test_accuracies_Confidence_mean_hard = []
-for epoch in range(start_epoch, start_epoch+100):
+for epoch in range(start_epoch, start_epoch+151):
     print("Epoch: ", epoch)
     train_Confidence_mean_hard(epoch)
     test_accuracies_Confidence_mean_hard.append(test_Confidence_mean_hard(epoch))
@@ -701,7 +716,7 @@ for epoch in range(start_epoch, start_epoch+100):
 plt.cla()  # Clear the current axes
 plt.clf()  # Clear the current figure
 
-epochs = range(start_epoch, start_epoch + 100)
+epochs = range(start_epoch, start_epoch + 151)
 
 # Plotting
 plt.plot(epochs, test_accuracies_all, label='Complete Dataset')
@@ -717,7 +732,7 @@ plt.legend(fontsize=12)
 
 plt.ylim(0, 100)
 
-plt.xticks(range(start_epoch, start_epoch + 100, 10), fontsize=12)
+plt.xticks(range(start_epoch, start_epoch + 151, 10), fontsize=12)
 plt.yticks(fontsize=12)
 
 plt.savefig("results.png")
