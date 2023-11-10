@@ -302,14 +302,26 @@ for i in range(len(subset_data_Confidence_mean)):
 # Ensure that we have 1 image per class, this should be equal to the number of classes
 assert len(images_Confidence_mean) == len(trainset.classes)
 
+
+# Combine the labels and images into a list of tuples
+combined_list_Confidence_mean = list(zip(labels_Confidence_mean, images_Confidence_mean))
+
+# Sort the combined list by the label (which is the first item in each tuple)
+combined_list_sorted_Confidence_mean = sorted(combined_list_Confidence_mean, key=lambda x: x[0])
+
+# Unzip the sorted list back into labels and images
+labels_Confidence_mean, images_Confidence_mean = zip(*combined_list_sorted_Confidence_mean)
+
+# Convert the tuples back to lists (if necessary)
+labels_Confidence_mean = list(labels_Confidence_mean)
+images_Confidence_mean = list(images_Confidence_mean)
+
+
 # Make a grid from these images
 grid_Confidence_mean = torchvision.utils.make_grid(images_Confidence_mean, nrow=len(trainset.classes))
 
 # Save the grid of images
 torchvision.utils.save_image(grid_Confidence_mean, 'grid_image_Confidence_mean.png')
-
-
-
 
 
 
