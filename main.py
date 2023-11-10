@@ -62,7 +62,7 @@ trainloader_all = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=
 
 
 
-num_samples_random = len(trainset) // 8
+num_samples_random = len(trainset) // 7
 
 # Create a random index array
 indices_random = np.random.choice(len(trainset), num_samples_random, replace=False)
@@ -201,7 +201,7 @@ plt.ylabel("Confidence")
 plt.savefig('scatter_plot.png')
 
 
-top_n = Variability.shape[0]//8
+top_n = Variability.shape[0]//7
 
 sorted_indices_Variability = np.argsort(Variability.numpy())
 
