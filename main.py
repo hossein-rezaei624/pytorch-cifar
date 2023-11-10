@@ -217,11 +217,11 @@ trainloader_Variability = torch.utils.data.DataLoader(subset_data_Variability, b
 
 
 # Extract the first 10 images
-images_Variability = [subset_data_Variability[i][0] for i in range(225)]
-labels_Variability = [subset_data_Variability[i][1] for i in range(225)]
+images_Variability = [subset_data_Variability[i][0] for i in range(400)]
+labels_Variability = [subset_data_Variability[i][1] for i in range(400)]
 
 # Make a grid from these images
-grid_Variability = torchvision.utils.make_grid(images_Variability, nrow=15)  # 5 images per row
+grid_Variability = torchvision.utils.make_grid(images_Variability, nrow=20)  # 5 images per row
 
 torchvision.utils.save_image(grid_Variability, 'grid_image_Variability.png')
 
@@ -243,11 +243,11 @@ trainloader_Confidence_mean = torch.utils.data.DataLoader(subset_data_Confidence
 
 
 # Extract the first 10 images
-images_Confidence_mean = [subset_data_Confidence_mean[i][0] for i in range(225)]
-labels_Confidence_mean = [subset_data_Confidence_mean[i][1] for i in range(225)]
+images_Confidence_mean = [subset_data_Confidence_mean[i][0] for i in range(400)]
+labels_Confidence_mean = [subset_data_Confidence_mean[i][1] for i in range(400)]
 
 # Make a grid from these images
-grid_Confidence_mean = torchvision.utils.make_grid(images_Confidence_mean, nrow=15)  # 5 images per row
+grid_Confidence_mean = torchvision.utils.make_grid(images_Confidence_mean, nrow=20)  # 5 images per row
 
 torchvision.utils.save_image(grid_Confidence_mean, 'grid_image_Confidence_mean.png')
 
@@ -268,11 +268,11 @@ trainloader_Confidence_mean_hard = torch.utils.data.DataLoader(subset_data_Confi
 
 
 # Extract the first 10 images
-images_Confidence_mean_hard = [subset_data_Confidence_mean_hard[i][0] for i in range(225)]
-labels_Confidence_mean_hard = [subset_data_Confidence_mean_hard[i][1] for i in range(225)]
+images_Confidence_mean_hard = [subset_data_Confidence_mean_hard[i][0] for i in range(400)]
+labels_Confidence_mean_hard = [subset_data_Confidence_mean_hard[i][1] for i in range(400)]
 
 # Make a grid from these images
-grid_Confidence_mean_hard = torchvision.utils.make_grid(images_Confidence_mean_hard, nrow=15)  # 5 images per row
+grid_Confidence_mean_hard = torchvision.utils.make_grid(images_Confidence_mean_hard, nrow=20)  # 5 images per row
 
 torchvision.utils.save_image(grid_Confidence_mean_hard, 'grid_image_Confidence_mean_hard.png')
 
@@ -332,7 +332,7 @@ print("\n")
 print("Trainning with all...")
 print("\n")
 test_accuracies_all = []
-for epoch in range(start_epoch, start_epoch+50):
+for epoch in range(start_epoch, start_epoch+100):
     print("Epoch: ", epoch)
     train_all(epoch)
     test_accuracies_all.append(test_all(epoch))
@@ -395,7 +395,7 @@ print("\n")
 print("Trainning with random...")
 print("\n")
 test_accuracies_random = []
-for epoch in range(start_epoch, start_epoch+50):
+for epoch in range(start_epoch, start_epoch+100):
     print("Epoch: ", epoch)
     train_random(epoch)
     test_accuracies_random.append(test_random(epoch))
@@ -458,7 +458,7 @@ print("\n")
 print("Trainning with Variability...")
 print("\n")
 test_accuracies_Variability = []
-for epoch in range(start_epoch, start_epoch+50):
+for epoch in range(start_epoch, start_epoch+100):
     print("Epoch: ", epoch)
     train_Variability(epoch)
     test_accuracies_Variability.append(test_Variability(epoch))
@@ -525,7 +525,7 @@ print("\n")
 print("Trainning with Confidence_mean...")
 print("\n")
 test_accuracies_Confidence_mean = []
-for epoch in range(start_epoch, start_epoch+50):
+for epoch in range(start_epoch, start_epoch+100):
     print("Epoch: ", epoch)
     train_Confidence_mean(epoch)
     test_accuracies_Confidence_mean.append(test_Confidence_mean(epoch))
@@ -593,7 +593,7 @@ print("\n")
 print("Trainning with Confidence_mean_hard...")
 print("\n")
 test_accuracies_Confidence_mean_hard = []
-for epoch in range(start_epoch, start_epoch+50):
+for epoch in range(start_epoch, start_epoch+100):
     print("Epoch: ", epoch)
     train_Confidence_mean_hard(epoch)
     test_accuracies_Confidence_mean_hard.append(test_Confidence_mean_hard(epoch))
@@ -608,7 +608,7 @@ for epoch in range(start_epoch, start_epoch+50):
 plt.cla()  # Clear the current axes
 plt.clf()  # Clear the current figure
 
-epochs = range(start_epoch, start_epoch + 50) 
+epochs = range(start_epoch, start_epoch + 100)
 
 # Plotting
 plt.plot(epochs, test_accuracies_all, label='All data')
@@ -625,6 +625,6 @@ plt.legend()
 
 plt.ylim(0, 100)
 
-plt.xticks(range(start_epoch, start_epoch + 50, 1))
+plt.xticks(range(start_epoch, start_epoch + 100, 10))
 
 plt.savefig("results.png")
