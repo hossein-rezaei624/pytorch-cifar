@@ -217,7 +217,7 @@ trainloader_Variability = torch.utils.data.DataLoader(subset_data_Variability, b
 
 
 
-# Initialize lists to hold the first image of each class
+'''# Initialize lists to hold the first image of each class
 images_Variability = []
 labels_Variability = []
 
@@ -260,7 +260,7 @@ images_Variability = list(images_Variability)
 grid_Variability = torchvision.utils.make_grid(images_Variability, nrow=len(trainset.classes))
 
 # Save the grid of images
-torchvision.utils.save_image(grid_Variability, 'grid_image_Variability.png')
+torchvision.utils.save_image(grid_Variability, 'grid_image_Variability.png')'''
 
 
 
@@ -280,7 +280,7 @@ trainloader_Confidence_mean = torch.utils.data.DataLoader(subset_data_Confidence
 
 
 
-# Initialize lists to hold the first image of each class
+'''# Initialize lists to hold the first image of each class
 images_Confidence_mean = []
 labels_Confidence_mean = []
 
@@ -321,7 +321,7 @@ images_Confidence_mean = list(images_Confidence_mean)
 grid_Confidence_mean = torchvision.utils.make_grid(images_Confidence_mean, nrow=len(trainset.classes))
 
 # Save the grid of images
-torchvision.utils.save_image(grid_Confidence_mean, 'grid_image_Confidence_mean.png')
+torchvision.utils.save_image(grid_Confidence_mean, 'grid_image_Confidence_mean.png')'''
 
 
 
@@ -339,7 +339,7 @@ trainloader_Confidence_mean_hard = torch.utils.data.DataLoader(subset_data_Confi
 
 
 
-# Initialize lists to hold the first image of each class
+'''# Initialize lists to hold the first image of each class
 images_Confidence_mean_hard = []
 labels_Confidence_mean_hard = []
 
@@ -382,7 +382,7 @@ images_Confidence_mean_hard = list(images_Confidence_mean_hard)
 grid_Confidence_mean_hard = torchvision.utils.make_grid(images_Confidence_mean_hard, nrow=len(trainset.classes))
 
 # Save the grid of images
-torchvision.utils.save_image(grid_Confidence_mean_hard, 'grid_image_Confidence_mean_hard.png')
+torchvision.utils.save_image(grid_Confidence_mean_hard, 'grid_image_Confidence_mean_hard.png')'''
 
 
 
