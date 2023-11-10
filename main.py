@@ -216,14 +216,31 @@ subset_data_Variability = torch.utils.data.Subset(trainset, top_indices_sorted_V
 trainloader_Variability = torch.utils.data.DataLoader(subset_data_Variability, batch_size=128, shuffle=True, num_workers=0)
 
 
-# Extract the first 10 images
-images_Variability = [subset_data_Variability[i][0] for i in range(400)]
-labels_Variability = [subset_data_Variability[i][1] for i in range(400)]
+# Initialize dictionaries to hold the first image of each class
+first_images_Variability = {}
+first_labels_Variability = {}
+
+# Iterate over the subset and save the first image of each class
+for i, (image, label) in enumerate(subset_data_Variability):
+    label = label.item()  # Assuming label is a tensor, convert to int
+    if label not in first_images_Variability:
+        first_images_Variability[label] = image
+        first_labels_Variability[label] = label
+    # Break the loop if we have found the first image for each class
+    if len(first_images_Variability) == len(trainset.classes):  # Assuming trainset has a 'classes' attribute
+        break
+
+# Make a list of the images and labels
+images_Variability = list(first_images_Variability.values())
+labels_Variability = list(first_labels_Variability.values())
 
 # Make a grid from these images
-grid_Variability = torchvision.utils.make_grid(images_Variability, nrow=20)  # 5 images per row
+grid_Variability = torchvision.utils.make_grid(images_Variability, nrow=10)  # Adjust nrow to the number of classes if needed
 
+# Save the grid of images
 torchvision.utils.save_image(grid_Variability, 'grid_image_Variability.png')
+
+
 
 
 
