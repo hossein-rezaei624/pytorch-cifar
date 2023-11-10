@@ -221,7 +221,7 @@ first_images_Variability = {}
 first_labels_Variability = {}
 
 # Iterate over the subset and save the first image of each class
-for i, (image, label) in enumerate(subset_data_Variability):
+for i, (image, label, __1) in enumerate(subset_data_Variability):
     label = label.item()  # Assuming label is a tensor, convert to int
     if label not in first_images_Variability:
         first_images_Variability[label] = image
