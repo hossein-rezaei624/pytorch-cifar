@@ -313,14 +313,37 @@ subset_data_Confidence_mean_hard = torch.utils.data.Subset(trainset, top_indices
 trainloader_Confidence_mean_hard = torch.utils.data.DataLoader(subset_data_Confidence_mean_hard, batch_size=128, shuffle=True, num_workers=0)
 
 
-# Extract the first 10 images
-images_Confidence_mean_hard = [subset_data_Confidence_mean_hard[i][0] for i in range(400)]
-labels_Confidence_mean_hard = [subset_data_Confidence_mean_hard[i][1] for i in range(400)]
+
+
+# Initialize lists to hold the first image of each class
+images_Confidence_mean_hard = []
+labels_Confidence_mean_hard = []
+
+# Initialize a set to keep track of which classes we've seen
+seen_classes_Confidence_mean_hard = set()
+
+# Iterate over the subset and save the first image of each class
+for i in range(len(subset_data_Confidence_mean_hard)):
+    image, label, __12 = subset_data_Confidence_mean_hard[i]
+    # Check if we've already seen this class
+    if label not in seen_classes_Confidence_mean_hard:
+        seen_classes_Confidence_mean_hard.add(label)
+        images_Confidence_mean_hard.append(image)
+        labels_Confidence_mean_hard.append(label)
+    # If we've seen all classes, stop looping
+    if len(seen_classes_Confidence_mean_hard) == len(trainset.classes):  # Assuming trainset has a 'classes' attribute
+        break
+
+# Ensure that we have 1 image per class, this should be equal to the number of classes
+assert len(images_Confidence_mean_hard) == len(trainset.classes)
 
 # Make a grid from these images
-grid_Confidence_mean_hard = torchvision.utils.make_grid(images_Confidence_mean_hard, nrow=20)  # 5 images per row
+grid_Confidence_mean_hard = torchvision.utils.make_grid(images_Confidence_mean_hard, nrow=len(trainset.classes))
 
+# Save the grid of images
 torchvision.utils.save_image(grid_Confidence_mean_hard, 'grid_image_Confidence_mean_hard.png')
+
+
 
 
 
