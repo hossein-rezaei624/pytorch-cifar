@@ -62,7 +62,7 @@ trainloader_all = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=
 
 
 
-num_samples_random = len(trainset) // 4
+num_samples_random = len(trainset) // 10
 
 # Create a random index array
 indices_random = np.random.choice(len(trainset), num_samples_random, replace=False)
@@ -201,7 +201,7 @@ plt.ylabel("Confidence")
 plt.savefig('scatter_plot.png')
 
 
-top_n = Variability.shape[0]//4
+top_n = Variability.shape[0]//10
 
 sorted_indices_Variability = np.argsort(Variability.numpy())
 
@@ -440,7 +440,7 @@ print("\n")
 print("Trainning with all...")
 print("\n")
 test_accuracies_all = []
-for epoch in range(start_epoch, start_epoch+151):
+for epoch in range(start_epoch, start_epoch+201):
     print("Epoch: ", epoch)
     train_all(epoch)
     test_accuracies_all.append(test_all(epoch))
@@ -503,7 +503,7 @@ print("\n")
 print("Trainning with random...")
 print("\n")
 test_accuracies_random = []
-for epoch in range(start_epoch, start_epoch+151):
+for epoch in range(start_epoch, start_epoch+201):
     print("Epoch: ", epoch)
     train_random(epoch)
     test_accuracies_random.append(test_random(epoch))
@@ -566,7 +566,7 @@ print("\n")
 print("Trainning with Variability...")
 print("\n")
 test_accuracies_Variability = []
-for epoch in range(start_epoch, start_epoch+151):
+for epoch in range(start_epoch, start_epoch+201):
     print("Epoch: ", epoch)
     train_Variability(epoch)
     test_accuracies_Variability.append(test_Variability(epoch))
@@ -633,7 +633,7 @@ print("\n")
 print("Trainning with Confidence_mean...")
 print("\n")
 test_accuracies_Confidence_mean = []
-for epoch in range(start_epoch, start_epoch+151):
+for epoch in range(start_epoch, start_epoch+201):
     print("Epoch: ", epoch)
     train_Confidence_mean(epoch)
     test_accuracies_Confidence_mean.append(test_Confidence_mean(epoch))
@@ -701,7 +701,7 @@ print("\n")
 print("Trainning with Confidence_mean_hard...")
 print("\n")
 test_accuracies_Confidence_mean_hard = []
-for epoch in range(start_epoch, start_epoch+151):
+for epoch in range(start_epoch, start_epoch+201):
     print("Epoch: ", epoch)
     train_Confidence_mean_hard(epoch)
     test_accuracies_Confidence_mean_hard.append(test_Confidence_mean_hard(epoch))
@@ -714,7 +714,7 @@ for epoch in range(start_epoch, start_epoch+151):
 plt.cla()  # Clear the current axes
 plt.clf()  # Clear the current figure
 
-epochs = range(start_epoch, start_epoch + 151)
+epochs = range(start_epoch, start_epoch + 201)
 
 # Plotting
 plt.plot(epochs, test_accuracies_all)
@@ -728,7 +728,7 @@ plt.ylabel('Test Accuracy', fontsize=14)
 
 plt.ylim(0, 100)
 
-plt.xticks(range(start_epoch, start_epoch + 151, 10), fontsize=12)
+plt.xticks(range(start_epoch, start_epoch + 201, 25), fontsize=12)
 plt.yticks(fontsize=12)
 
 plt.savefig("results.png")
