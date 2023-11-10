@@ -62,14 +62,14 @@ trainloader_all = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=
 
 
 
-num_samples_random = len(trainset) // 10
+num_samples_random = len(trainset) // 50
 
 # Create a random index array
 indices_random = np.random.choice(len(trainset), num_samples_random, replace=False)
 
 # Create a subset of the dataset using the random indices
 trainset_subset_random = torch.utils.data.Subset(trainset, indices_random)
-trainloader_random = torch.utils.data.DataLoader(trainset_subset_random, batch_size=64, shuffle=True, num_workers=0)
+trainloader_random = torch.utils.data.DataLoader(trainset_subset_random, batch_size=10, shuffle=True, num_workers=0)
 
 
 
@@ -201,7 +201,7 @@ plt.ylabel("Confidence")
 plt.savefig('scatter_plot.png')
 
 
-top_n = Variability.shape[0]//10
+top_n = Variability.shape[0]//50
 
 sorted_indices_Variability = np.argsort(Variability.numpy())
 
@@ -213,7 +213,7 @@ top_indices_sorted_Variability = top_indices_Variability
 
 
 subset_data_Variability = torch.utils.data.Subset(trainset, top_indices_sorted_Variability)
-trainloader_Variability = torch.utils.data.DataLoader(subset_data_Variability, batch_size=64, shuffle=True, num_workers=0)
+trainloader_Variability = torch.utils.data.DataLoader(subset_data_Variability, batch_size=10, shuffle=True, num_workers=0)
 
 
 
@@ -275,7 +275,7 @@ top_indices_sorted_Confidence_mean = top_indices_Confidence_mean
 
 
 subset_data_Confidence_mean = torch.utils.data.Subset(trainset, top_indices_sorted_Confidence_mean)
-trainloader_Confidence_mean = torch.utils.data.DataLoader(subset_data_Confidence_mean, batch_size=64, shuffle=True, num_workers=0)
+trainloader_Confidence_mean = torch.utils.data.DataLoader(subset_data_Confidence_mean, batch_size=10, shuffle=True, num_workers=0)
 
 
 
@@ -334,7 +334,7 @@ top_indices_sorted_Confidence_mean_hard = top_indices_Confidence_mean_hard
 
 
 subset_data_Confidence_mean_hard = torch.utils.data.Subset(trainset, top_indices_sorted_Confidence_mean_hard)
-trainloader_Confidence_mean_hard = torch.utils.data.DataLoader(subset_data_Confidence_mean_hard, batch_size=64, shuffle=True, num_workers=0)
+trainloader_Confidence_mean_hard = torch.utils.data.DataLoader(subset_data_Confidence_mean_hard, batch_size=10, shuffle=True, num_workers=0)
 
 
 
