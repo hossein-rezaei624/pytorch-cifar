@@ -216,29 +216,36 @@ subset_data_Variability = torch.utils.data.Subset(trainset, top_indices_sorted_V
 trainloader_Variability = torch.utils.data.DataLoader(subset_data_Variability, batch_size=128, shuffle=True, num_workers=0)
 
 
-# Initialize dictionaries to hold the first image of each class
-first_images_Variability = {}
-first_labels_Variability = {}
+
+# Initialize lists to hold the first image of each class
+images_Variability = []
+labels_Variability = []
+
+# Initialize a set to keep track of which classes we've seen
+seen_classes = set()
 
 # Iterate over the subset and save the first image of each class
-for i, (image, label, __1) in enumerate(subset_data_Variability):
-    label = label.item()  # Assuming label is a tensor, convert to int
-    if label not in first_images_Variability:
-        first_images_Variability[label] = image
-        first_labels_Variability[label] = label
-    # Break the loop if we have found the first image for each class
-    if len(first_images_Variability) == len(trainset.classes):  # Assuming trainset has a 'classes' attribute
+for i in range(len(subset_data_Variability)):
+    image, label, __12 = subset_data_Variability[i]
+    # Check if we've already seen this class
+    if label not in seen_classes:
+        seen_classes.add(label)
+        images_Variability.append(image)
+        labels_Variability.append(label)
+    # If we've seen all classes, stop looping
+    if len(seen_classes) == len(trainset.classes):  # Assuming trainset has a 'classes' attribute
         break
 
-# Make a list of the images and labels
-images_Variability = list(first_images_Variability.values())
-labels_Variability = list(first_labels_Variability.values())
+# Ensure that we have 1 image per class, this should be equal to the number of classes
+assert len(images_Variability) == len(trainset.classes)
 
 # Make a grid from these images
-grid_Variability = torchvision.utils.make_grid(images_Variability, nrow=10)  # Adjust nrow to the number of classes if needed
+grid_Variability = torchvision.utils.make_grid(images_Variability, nrow=len(trainset.classes))
 
 # Save the grid of images
 torchvision.utils.save_image(grid_Variability, 'grid_image_Variability.png')
+
+
 
 
 
