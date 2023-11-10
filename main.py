@@ -710,8 +710,6 @@ for epoch in range(start_epoch, start_epoch+151):
 
 
 
-
-
 # Clear previous axes and figure
 plt.cla()  # Clear the current axes
 plt.clf()  # Clear the current figure
@@ -719,16 +717,14 @@ plt.clf()  # Clear the current figure
 epochs = range(start_epoch, start_epoch + 151)
 
 # Plotting
-plt.plot(epochs, test_accuracies_all, label='Complete Dataset')
-plt.plot(epochs, test_accuracies_random, label='Random Subset (25%)')
-plt.plot(epochs, test_accuracies_Variability, label='Most Variable (25%)')
-plt.plot(epochs, test_accuracies_Confidence_mean, label='Simplest (25%)')
-plt.plot(epochs, test_accuracies_Confidence_mean_hard, label='Most Complex (25%)')
-
+plt.plot(epochs, test_accuracies_all)
+plt.plot(epochs, test_accuracies_random)
+plt.plot(epochs, test_accuracies_Variability)
+plt.plot(epochs, test_accuracies_Confidence_mean)
+plt.plot(epochs, test_accuracies_Confidence_mean_hard)
 
 plt.xlabel('Epoch', fontsize=14)
 plt.ylabel('Test Accuracy', fontsize=14)
-plt.legend(fontsize=12)
 
 plt.ylim(0, 100)
 
