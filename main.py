@@ -69,7 +69,7 @@ indices_random = np.random.choice(len(trainset), num_samples_random, replace=Fal
 
 # Create a subset of the dataset using the random indices
 trainset_subset_random = torch.utils.data.Subset(trainset, indices_random)
-trainloader_random = torch.utils.data.DataLoader(trainset_subset_random, batch_size=10, shuffle=True, num_workers=0)
+trainloader_random = torch.utils.data.DataLoader(trainset_subset_random, batch_size=16, shuffle=True, num_workers=0)
 
 
 
@@ -213,7 +213,7 @@ top_indices_sorted_Variability = top_indices_Variability
 
 
 subset_data_Variability = torch.utils.data.Subset(trainset, top_indices_sorted_Variability)
-trainloader_Variability = torch.utils.data.DataLoader(subset_data_Variability, batch_size=10, shuffle=True, num_workers=0)
+trainloader_Variability = torch.utils.data.DataLoader(subset_data_Variability, batch_size=16, shuffle=True, num_workers=0)
 
 
 
@@ -275,7 +275,7 @@ top_indices_sorted_Confidence_mean = top_indices_Confidence_mean
 
 
 subset_data_Confidence_mean = torch.utils.data.Subset(trainset, top_indices_sorted_Confidence_mean)
-trainloader_Confidence_mean = torch.utils.data.DataLoader(subset_data_Confidence_mean, batch_size=10, shuffle=True, num_workers=0)
+trainloader_Confidence_mean = torch.utils.data.DataLoader(subset_data_Confidence_mean, batch_size=16, shuffle=True, num_workers=0)
 
 
 
@@ -334,7 +334,7 @@ top_indices_sorted_Confidence_mean_hard = top_indices_Confidence_mean_hard
 
 
 subset_data_Confidence_mean_hard = torch.utils.data.Subset(trainset, top_indices_sorted_Confidence_mean_hard)
-trainloader_Confidence_mean_hard = torch.utils.data.DataLoader(subset_data_Confidence_mean_hard, batch_size=10, shuffle=True, num_workers=0)
+trainloader_Confidence_mean_hard = torch.utils.data.DataLoader(subset_data_Confidence_mean_hard, batch_size=16, shuffle=True, num_workers=0)
 
 
 
@@ -731,4 +731,4 @@ plt.ylim(0, 100)
 plt.xticks(range(start_epoch, start_epoch + 201, 20), fontsize=12)
 plt.yticks(fontsize=12)
 
-plt.savefig("results10.png")
+plt.savefig("results50.png")
