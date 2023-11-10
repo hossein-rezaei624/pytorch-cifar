@@ -239,16 +239,28 @@ for i in range(len(subset_data_Variability)):
 # Ensure that we have 1 image per class, this should be equal to the number of classes
 assert len(images_Variability) == len(trainset.classes)
 
+
+
+# Combine the labels and images into a list of tuples
+combined_list = list(zip(labels_Variability, images_Variability))
+
+# Sort the combined list by the label (which is the first item in each tuple)
+combined_list_sorted = sorted(combined_list, key=lambda x: x[0])
+
+# Unzip the sorted list back into labels and images
+labels_Variability, images_Variability = zip(*combined_list_sorted)
+
+# Convert the tuples back to lists (if necessary)
+labels_Variability = list(labels_Variability)
+images_Variability = list(images_Variability)
+
+
+
 # Make a grid from these images
 grid_Variability = torchvision.utils.make_grid(images_Variability, nrow=len(trainset.classes))
 
 # Save the grid of images
 torchvision.utils.save_image(grid_Variability, 'grid_image_Variability.png')
-
-
-
-
-
 
 
 
