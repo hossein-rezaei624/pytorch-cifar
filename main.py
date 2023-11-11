@@ -14,6 +14,12 @@ import torchvision
 
 import random
 
+from torch.utils.data import Dataset
+import pickle
+
+from collections import defaultdict
+from torch.utils.data import Subset
+
 
 np.random.seed(0)
 random.seed(0)
@@ -34,6 +40,69 @@ args = parser.parse_args()
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
+
+
+
+
+def distribute_samples(self, probabilities, M):
+
+    # Normalize the probabilities
+    total_probability = sum(probabilities.values())
+    normalized_probabilities = {k: v / total_probability for k, v in probabilities.items()}
+
+    # Calculate the number of samples for each class
+    samples = {k: round(v * M) for k, v in normalized_probabilities.items()}
+    
+    # Check if there's any discrepancy due to rounding and correct it
+    discrepancy = M - sum(samples.values())
+    
+    for key in samples:
+        if discrepancy == 0:
+            break
+        if discrepancy > 0:
+            samples[key] += 1
+            discrepancy -= 1
+        elif discrepancy < 0 and samples[key] > 0:
+            samples[key] -= 1
+            discrepancy += 1
+
+    return samples
+
+
+def distribute_excess(self, lst):
+    # Calculate the total excess value
+    total_excess = sum(val - 500 for val in lst if val > 500)
+
+    # Number of elements that are not greater than 500
+    recipients = [i for i, val in enumerate(lst) if val < 500]
+
+    num_recipients = len(recipients)
+
+    # Calculate the average share and remainder
+    avg_share, remainder = divmod(total_excess, num_recipients)
+
+    lst = [val if val <= 500 else 500 for val in lst]
+    
+    # Distribute the average share
+    for idx in recipients:
+        lst[idx] += avg_share
+    
+    # Distribute the remainder
+    for idx in recipients[:remainder]:
+        lst[idx] += 1
+    
+    # Cap values greater than 500
+    for i, val in enumerate(lst):
+        if val > 500:
+            return distribute_excess(lst)
+            break
+
+    return lst
+
+
+
+
+
 
 # Data
 print('==> Preparing data..')
@@ -62,14 +131,14 @@ trainloader_all = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=
 
 
 
-num_samples_random = len(trainset) // 25
+num_samples_random = len(trainset) // 10
 
 # Create a random index array
 indices_random = np.random.choice(len(trainset), num_samples_random, replace=False)
 
 # Create a subset of the dataset using the random indices
 trainset_subset_random = torch.utils.data.Subset(trainset, indices_random)
-trainloader_random = torch.utils.data.DataLoader(trainset_subset_random, batch_size=32, shuffle=True, num_workers=0)
+trainloader_random = torch.utils.data.DataLoader(trainset_subset_random, batch_size=64, shuffle=True, num_workers=0)
 
 
 
@@ -124,6 +193,10 @@ scheduler_Variability = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_Var
 scheduler_Confidence_mean = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_Confidence_mean, T_max=200)
 scheduler_Confidence_mean_hard = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_Confidence_mean_hard, T_max=200)
 
+unique_classes = set()
+for _, labels, indices_1 in trainloader:
+    unique_classes.update(labels.numpy())
+
 
 
 # Training
@@ -141,6 +214,9 @@ def train(epoch):
         confidence_batch = []
         for i in range(targets.shape[0]):
           confidence_batch.append(soft_[i,targets[i]].item())
+
+          # Update the dictionary with the confidence score for the current class for the current epoch
+          confidence_by_class[targets[i].item()][epoch].append(soft_[i, targets[i]].item())
       
         # ... [Rest of the batch processing code]
         conf_tensor = torch.tensor(confidence_batch)
@@ -181,208 +257,135 @@ def test(epoch):
 
   
 
-Carto = torch.zeros((4, len(trainset)))
 
+confidence_by_class = {class_id: {epoch: [] for epoch in range(4)} for class_id, __ in enumerate(unique_classes)}
+
+Carto = torch.zeros((4, len(trainset)))
 for epoch in range(start_epoch, start_epoch+4):
     train(epoch)
     test(epoch)
     scheduler.step()
 
 
-Confidence_mean = Carto.mean(dim=0)
-Variability = Carto.std(dim=0)
-
-
-plt.scatter(Variability, Confidence_mean, s = 2)
-
-plt.xlabel("Variability") 
-plt.ylabel("Confidence") 
-
-plt.savefig('scatter_plot.png')
-
-
-top_n = Variability.shape[0]//25
-
-sorted_indices_Variability = np.argsort(Variability.numpy())
-
-top_indices_Variability = sorted_indices_Variability[-top_n:]
-
-top_indices_Variability = top_indices_Variability[::-1]
-
-top_indices_sorted_Variability = top_indices_Variability
-
-
-subset_data_Variability = torch.utils.data.Subset(trainset, top_indices_sorted_Variability)
-trainloader_Variability = torch.utils.data.DataLoader(subset_data_Variability, batch_size=32, shuffle=True, num_workers=0)
+mean_by_class = {class_id: {epoch: torch.mean(torch.tensor(confidences[epoch])) for epoch in confidences} for class_id, confidences in confidence_by_class.items()}
+std_of_means_by_class = {class_id: torch.std(torch.tensor([mean_by_class[class_id][epoch] for epoch in range(4)])) for class_id, __ in enumerate(unique_classes)}
+mean_of_means_by_class = {class_id: torch.mean(torch.tensor([mean_by_class[class_id][epoch] for epoch in range(4)])) for class_id, __ in enumerate(unique_classes)}
 
 
 
-'''# Initialize lists to hold the first image of each class
-images_Variability = []
-labels_Variability = []
+top_n = len(trainset) // 10
 
-# Initialize a set to keep track of which classes we've seen
-seen_classes = set()
 
-# Iterate over the subset and save the first image of each class
-for i in range(len(subset_data_Variability)):
-    image, label, __12 = subset_data_Variability[i]
-    # Check if we've already seen this class
-    if label not in seen_classes:
-        seen_classes.add(label)
-        images_Variability.append(image)
-        labels_Variability.append(label)
-    # If we've seen all classes, stop looping
-    if len(seen_classes) == len(trainset.classes):  # Assuming trainset has a 'classes' attribute
+updated_std_of_means_by_class = {k: v.item() for k, v in std_of_means_by_class.items()}
+
+print("updated_std_of_means_by_class", updated_std_of_means_by_class)
+
+dist = distribute_samples(updated_std_of_means_by_class, top_n)
+
+
+num_per_class = top_n//len(trainset.classes)
+counter_class = [0 for _ in range(len(trainset.classes))]
+
+condition = [value for k, value in dist.items()]
+
+check_bound = len(trainset)/len(trainset.classes)
+
+for i in range(len(condition)):
+    if condition[i] > check_bound:
+        condition = distribute_excess(condition)
         break
 
-# Ensure that we have 1 image per class, this should be equal to the number of classes
-assert len(images_Variability) == len(trainset.classes)
 
+class_indices = defaultdict(list)
+for idx, (_, label, __) in enumerate(trainset):
+    class_indices[label.item()].append(idx)
 
+selected_indices = []
 
-# Combine the labels and images into a list of tuples
-combined_list = list(zip(labels_Variability, images_Variability))
+for class_id, num_samples in enumerate(condition):
+    class_samples = class_indices[class_id]  # get indices for the class
+    selected_for_class = random.sample(class_samples, num_samples)
+    selected_indices.extend(selected_for_class)
 
-# Sort the combined list by the label (which is the first item in each tuple)
-combined_list_sorted = sorted(combined_list, key=lambda x: x[0])
-
-# Unzip the sorted list back into labels and images
-labels_Variability, images_Variability = zip(*combined_list_sorted)
-
-# Convert the tuples back to lists (if necessary)
-labels_Variability = list(labels_Variability)
-images_Variability = list(images_Variability)
-
-
-
-# Make a grid from these images
-grid_Variability = torchvision.utils.make_grid(images_Variability, nrow=len(trainset.classes))
-
-# Save the grid of images
-torchvision.utils.save_image(grid_Variability, 'grid_image_Variability.png')'''
+selected_dataset_Variability = Subset(trainset, selected_indices)
+trainloader_Variability = torch.utils.data.DataLoader(selected_dataset_Variability, batch_size=64, shuffle=True, num_workers=0)
 
 
 
 
-sorted_indices_Confidence_mean = np.argsort(Confidence_mean.numpy())
 
-top_indices_Confidence_mean = sorted_indices_Confidence_mean[-top_n:]
+updated_mean_of_means_by_class = {k: v.item() for k, v in mean_of_means_by_class.items()}
 
-top_indices_Confidence_mean = top_indices_Confidence_mean[::-1]
+print("updated_mean_of_means_by_class", updated_mean_of_means_by_class)
 
-top_indices_sorted_Confidence_mean = top_indices_Confidence_mean
-
-
-subset_data_Confidence_mean = torch.utils.data.Subset(trainset, top_indices_sorted_Confidence_mean)
-trainloader_Confidence_mean = torch.utils.data.DataLoader(subset_data_Confidence_mean, batch_size=32, shuffle=True, num_workers=0)
+dist = distribute_samples(updated_mean_of_means_by_class, top_n)
 
 
+num_per_class = top_n//len(trainset.classes)
+counter_class = [0 for _ in range(len(trainset.classes))]
 
+condition = [value for k, value in dist.items()]
 
-'''# Initialize lists to hold the first image of each class
-images_Confidence_mean = []
-labels_Confidence_mean = []
+check_bound = len(trainset)/len(trainset.classes)
 
-# Initialize a set to keep track of which classes we've seen
-seen_classes_Confidence_mean = set()
-
-# Iterate over the subset and save the first image of each class
-for i in range(len(subset_data_Confidence_mean)):
-    image, label, __12 = subset_data_Confidence_mean[i]
-    # Check if we've already seen this class
-    if label not in seen_classes_Confidence_mean:
-        seen_classes_Confidence_mean.add(label)
-        images_Confidence_mean.append(image)
-        labels_Confidence_mean.append(label)
-    # If we've seen all classes, stop looping
-    if len(seen_classes_Confidence_mean) == len(trainset.classes):  # Assuming trainset has a 'classes' attribute
+for i in range(len(condition)):
+    if condition[i] > check_bound:
+        condition = distribute_excess(condition)
         break
 
-# Ensure that we have 1 image per class, this should be equal to the number of classes
-assert len(images_Confidence_mean) == len(trainset.classes)
 
+class_indices = defaultdict(list)
+for idx, (_, label, __) in enumerate(trainset):
+    class_indices[label.item()].append(idx)
 
-# Combine the labels and images into a list of tuples
-combined_list_Confidence_mean = list(zip(labels_Confidence_mean, images_Confidence_mean))
+selected_indices = []
 
-# Sort the combined list by the label (which is the first item in each tuple)
-combined_list_sorted_Confidence_mean = sorted(combined_list_Confidence_mean, key=lambda x: x[0])
+for class_id, num_samples in enumerate(condition):
+    class_samples = class_indices[class_id]  # get indices for the class
+    selected_for_class = random.sample(class_samples, num_samples)
+    selected_indices.extend(selected_for_class)
 
-# Unzip the sorted list back into labels and images
-labels_Confidence_mean, images_Confidence_mean = zip(*combined_list_sorted_Confidence_mean)
-
-# Convert the tuples back to lists (if necessary)
-labels_Confidence_mean = list(labels_Confidence_mean)
-images_Confidence_mean = list(images_Confidence_mean)
-
-
-# Make a grid from these images
-grid_Confidence_mean = torchvision.utils.make_grid(images_Confidence_mean, nrow=len(trainset.classes))
-
-# Save the grid of images
-torchvision.utils.save_image(grid_Confidence_mean, 'grid_image_Confidence_mean.png')'''
+selected_dataset_Confidence_mean = Subset(trainset, selected_indices)
+trainloader_Confidence_mean = torch.utils.data.DataLoader(selected_dataset_Confidence_mean, batch_size=64, shuffle=True, num_workers=0)
 
 
 
 
-sorted_indices_Confidence_mean_hard = np.argsort(Confidence_mean.numpy())
-
-top_indices_Confidence_mean_hard = sorted_indices_Confidence_mean_hard[:top_n]
-
-top_indices_sorted_Confidence_mean_hard = top_indices_Confidence_mean_hard
-
-
-subset_data_Confidence_mean_hard = torch.utils.data.Subset(trainset, top_indices_sorted_Confidence_mean_hard)
-trainloader_Confidence_mean_hard = torch.utils.data.DataLoader(subset_data_Confidence_mean_hard, batch_size=32, shuffle=True, num_workers=0)
 
 
 
+updated_mean_of_means_by_class = {k: 1 - v.item() for k, v in mean_of_means_by_class.items()}
 
-'''# Initialize lists to hold the first image of each class
-images_Confidence_mean_hard = []
-labels_Confidence_mean_hard = []
+dist = distribute_samples(updated_mean_of_means_by_class, top_n)
 
-# Initialize a set to keep track of which classes we've seen
-seen_classes_Confidence_mean_hard = set()
+num_per_class = top_n//len(trainset.classes)
+counter_class = [0 for _ in range(len(trainset.classes))]
 
-# Iterate over the subset and save the first image of each class
-for i in range(len(subset_data_Confidence_mean_hard)):
-    image, label, __12 = subset_data_Confidence_mean_hard[i]
-    # Check if we've already seen this class
-    if label not in seen_classes_Confidence_mean_hard:
-        seen_classes_Confidence_mean_hard.add(label)
-        images_Confidence_mean_hard.append(image)
-        labels_Confidence_mean_hard.append(label)
-    # If we've seen all classes, stop looping
-    if len(seen_classes_Confidence_mean_hard) == len(trainset.classes):  # Assuming trainset has a 'classes' attribute
+condition = [value for k, value in dist.items()]
+
+check_bound = len(trainset)/len(trainset.classes)
+
+for i in range(len(condition)):
+    if condition[i] > check_bound:
+        condition = distribute_excess(condition)
         break
 
-# Ensure that we have 1 image per class, this should be equal to the number of classes
-assert len(images_Confidence_mean_hard) == len(trainset.classes)
+
+class_indices = defaultdict(list)
+for idx, (_, label, __) in enumerate(trainset):
+    class_indices[label.item()].append(idx)
+
+selected_indices = []
+
+for class_id, num_samples in enumerate(condition):
+    class_samples = class_indices[class_id]  # get indices for the class
+    selected_for_class = random.sample(class_samples, num_samples)
+    selected_indices.extend(selected_for_class)
+
+selected_dataset_Confidence_mean_hard = Subset(trainset, selected_indices)
+trainloader_Confidence_mean_hard = torch.utils.data.DataLoader(selected_dataset_Confidence_mean_hard, batch_size=64, shuffle=True, num_workers=0)
 
 
-
-# Combine the labels and images into a list of tuples
-combined_list_Confidence_mean_hard = list(zip(labels_Confidence_mean_hard, images_Confidence_mean_hard))
-
-# Sort the combined list by the label (which is the first item in each tuple)
-combined_list_sorted_Confidence_mean_hard = sorted(combined_list_Confidence_mean_hard, key=lambda x: x[0])
-
-# Unzip the sorted list back into labels and images
-labels_Confidence_mean_hard, images_Confidence_mean_hard = zip(*combined_list_sorted_Confidence_mean_hard)
-
-# Convert the tuples back to lists (if necessary)
-labels_Confidence_mean_hard = list(labels_Confidence_mean_hard)
-images_Confidence_mean_hard = list(images_Confidence_mean_hard)
-
-
-
-# Make a grid from these images
-grid_Confidence_mean_hard = torchvision.utils.make_grid(images_Confidence_mean_hard, nrow=len(trainset.classes))
-
-# Save the grid of images
-torchvision.utils.save_image(grid_Confidence_mean_hard, 'grid_image_Confidence_mean_hard.png')'''
 
 
 
