@@ -44,7 +44,7 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 
 
-def distribute_samples(self, probabilities, M):
+def distribute_samples(probabilities, M):
 
     # Normalize the probabilities
     total_probability = sum(probabilities.values())
@@ -69,7 +69,7 @@ def distribute_samples(self, probabilities, M):
     return samples
 
 
-def distribute_excess(self, lst):
+def distribute_excess(lst):
     # Calculate the total excess value
     total_excess = sum(val - 500 for val in lst if val > 500)
 
