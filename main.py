@@ -298,7 +298,7 @@ for i in range(len(condition)):
 
 class_indices = defaultdict(list)
 for idx, (_, label, __) in enumerate(trainset):
-    class_indices[label.item()].append(idx)
+    class_indices[label].append(idx)
 
 selected_indices = []
 
@@ -336,7 +336,7 @@ for i in range(len(condition)):
 
 class_indices = defaultdict(list)
 for idx, (_, label, __) in enumerate(trainset):
-    class_indices[label.item()].append(idx)
+    class_indices[label].append(idx)
 
 selected_indices = []
 
@@ -373,7 +373,7 @@ for i in range(len(condition)):
 
 class_indices = defaultdict(list)
 for idx, (_, label, __) in enumerate(trainset):
-    class_indices[label.item()].append(idx)
+    class_indices[label].append(idx)
 
 selected_indices = []
 
