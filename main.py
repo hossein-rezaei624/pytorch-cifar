@@ -131,14 +131,14 @@ trainloader_all = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=
 
 
 
-num_samples_random = len(trainset) // 25
+num_samples_random = len(trainset) // 10
 
 # Create a random index array
 indices_random = np.random.choice(len(trainset), num_samples_random, replace=False)
 
 # Create a subset of the dataset using the random indices
 trainset_subset_random = torch.utils.data.Subset(trainset, indices_random)
-trainloader_random = torch.utils.data.DataLoader(trainset_subset_random, batch_size=32, shuffle=True, num_workers=0)
+trainloader_random = torch.utils.data.DataLoader(trainset_subset_random, batch_size=64, shuffle=True, num_workers=0)
 
 
 
@@ -273,7 +273,7 @@ mean_of_means_by_class = {class_id: torch.mean(torch.tensor([mean_by_class[class
 
 
 
-top_n = len(trainset) // 25
+top_n = len(trainset) // 10
 
 
 updated_std_of_means_by_class = {k: v.item() for k, v in std_of_means_by_class.items()}
@@ -308,7 +308,7 @@ for class_id, num_samples in enumerate(condition):
     selected_indices.extend(selected_for_class)
 
 selected_dataset_Variability = Subset(trainset, selected_indices)
-trainloader_Variability = torch.utils.data.DataLoader(selected_dataset_Variability, batch_size=32, shuffle=True, num_workers=0)
+trainloader_Variability = torch.utils.data.DataLoader(selected_dataset_Variability, batch_size=64, shuffle=True, num_workers=0)
 
 
 
@@ -346,7 +346,7 @@ for class_id, num_samples in enumerate(condition):
     selected_indices.extend(selected_for_class)
 
 selected_dataset_Confidence_mean = Subset(trainset, selected_indices)
-trainloader_Confidence_mean = torch.utils.data.DataLoader(selected_dataset_Confidence_mean, batch_size=32, shuffle=True, num_workers=0)
+trainloader_Confidence_mean = torch.utils.data.DataLoader(selected_dataset_Confidence_mean, batch_size=64, shuffle=True, num_workers=0)
 
 
 
@@ -383,7 +383,7 @@ for class_id, num_samples in enumerate(condition):
     selected_indices.extend(selected_for_class)
 
 selected_dataset_Confidence_mean_hard = Subset(trainset, selected_indices)
-trainloader_Confidence_mean_hard = torch.utils.data.DataLoader(selected_dataset_Confidence_mean_hard, batch_size=32, shuffle=True, num_workers=0)
+trainloader_Confidence_mean_hard = torch.utils.data.DataLoader(selected_dataset_Confidence_mean_hard, batch_size=64, shuffle=True, num_workers=0)
 
 
 
@@ -726,12 +726,12 @@ plt.plot(epochs, test_accuracies_Variability)
 plt.plot(epochs, test_accuracies_Confidence_mean)
 plt.plot(epochs, test_accuracies_Confidence_mean_hard)
 
-plt.xlabel('Epoch', fontsize=14)
-plt.ylabel('Test Accuracy', fontsize=14)
+plt.xlabel('Epoch', fontsize=16)
+plt.ylabel('Test Accuracy', fontsize=16)
 
 plt.ylim(0, 100)
 
-plt.xticks(range(start_epoch, start_epoch + 201, 20), fontsize=12)
-plt.yticks(fontsize=12)
+plt.xticks(range(start_epoch, start_epoch + 201, 20), fontsize=15)
+plt.yticks(fontsize=15)
 
-plt.savefig("resultsClass25.png")
+plt.savefig("resultsClass10.png")
