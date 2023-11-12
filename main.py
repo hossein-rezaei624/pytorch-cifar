@@ -217,7 +217,7 @@ trainloader_Variability = torch.utils.data.DataLoader(subset_data_Variability, b
 
 
 
-# Initialize lists to hold the first image of each class
+# Initialize lists to hold the images and labels
 images_Variability = []
 labels_Variability = []
 
@@ -233,34 +233,35 @@ for i in range(len(subset_data_Variability)):
         images_Variability.append(image)
         labels_Variability.append(label)
     # If we've seen all classes, stop looping
-    if len(seen_classes) == len(trainset.classes):  # Assuming trainset has a 'classes' attribute
+    if len(seen_classes) == len(trainset.classes):
         break
 
 # Ensure that we have 1 image per class, this should be equal to the number of classes
 assert len(images_Variability) == len(trainset.classes)
 
-
-
 # Combine the labels and images into a list of tuples
 combined_list = list(zip(labels_Variability, images_Variability))
 
-# Sort the combined list by the label (which is the first item in each tuple)
-combined_list_sorted = sorted(combined_list, key=lambda x: x[0])
+# Define the desired order
+desired_order = [9, 1, 8, 6, 7, 4, 0, 2, 5, 3]
 
-# Unzip the sorted list back into labels and images
-labels_Variability, images_Variability = zip(*combined_list_sorted)
+# Create a dictionary for easy lookup
+label_to_image_dict = dict(combined_list)
 
-# Convert the tuples back to lists (if necessary)
-labels_Variability = list(labels_Variability)
-images_Variability = list(images_Variability)
-
-
+# Arrange the images according to the desired order
+sorted_images = [label_to_image_dict[label] for label in desired_order]
 
 # Make a grid from these images
-grid_Variability = torchvision.utils.make_grid(images_Variability, nrow=len(trainset.classes))
+grid_Variability = torchvision.utils.make_grid(sorted_images, nrow=len(trainset.classes))
 
 # Save the grid of images
 torchvision.utils.save_image(grid_Variability, 'grid_image_Variability.png')
+
+
+
+
+
+
 
 
 
