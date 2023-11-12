@@ -62,7 +62,7 @@ trainloader_all = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=
 
 
 
-num_samples_random = len(trainset) // 10
+num_samples_random = len(trainset) // 3
 
 # Create a random index array
 indices_random = np.random.choice(len(trainset), num_samples_random, replace=False)
@@ -201,7 +201,7 @@ plt.ylabel("Confidence")
 plt.savefig('scatter_plot.png')
 
 
-top_n = Variability.shape[0]//10
+top_n = Variability.shape[0]//3
 
 sorted_indices_Variability = np.argsort(Variability.numpy())
 
@@ -261,11 +261,6 @@ torchvision.utils.save_image(grid_Variability, 'grid_image_Variability.png')
 
 
 
-
-
-
-
-
 sorted_indices_Confidence_mean = np.argsort(Confidence_mean.numpy())
 
 top_indices_Confidence_mean = sorted_indices_Confidence_mean[-top_n:]
@@ -297,33 +292,29 @@ for i in range(len(subset_data_Confidence_mean)):
         images_Confidence_mean.append(image)
         labels_Confidence_mean.append(label)
     # If we've seen all classes, stop looping
-    if len(seen_classes_Confidence_mean) == len(trainset.classes):  # Assuming trainset has a 'classes' attribute
+    if len(seen_classes_Confidence_mean) == len(trainset.classes):
         break
 
 # Ensure that we have 1 image per class, this should be equal to the number of classes
 assert len(images_Confidence_mean) == len(trainset.classes)
 
-
 # Combine the labels and images into a list of tuples
 combined_list_Confidence_mean = list(zip(labels_Confidence_mean, images_Confidence_mean))
 
-# Sort the combined list by the label (which is the first item in each tuple)
-combined_list_sorted_Confidence_mean = sorted(combined_list_Confidence_mean, key=lambda x: x[0])
+# Define the desired order
+desired_order = [9, 1, 8, 6, 7, 4, 0, 2, 5, 3]
 
-# Unzip the sorted list back into labels and images
-labels_Confidence_mean, images_Confidence_mean = zip(*combined_list_sorted_Confidence_mean)
+# Create a dictionary for easy lookup
+label_to_image_dict_Confidence_mean = dict(combined_list_Confidence_mean)
 
-# Convert the tuples back to lists (if necessary)
-labels_Confidence_mean = list(labels_Confidence_mean)
-images_Confidence_mean = list(images_Confidence_mean)
-
+# Arrange the images according to the desired order
+sorted_images_Confidence_mean = [label_to_image_dict_Confidence_mean[label] for label in desired_order]
 
 # Make a grid from these images
-grid_Confidence_mean = torchvision.utils.make_grid(images_Confidence_mean, nrow=len(trainset.classes))
+grid_Confidence_mean = torchvision.utils.make_grid(sorted_images_Confidence_mean, nrow=len(trainset.classes))
 
 # Save the grid of images
 torchvision.utils.save_image(grid_Confidence_mean, 'grid_image_Confidence_mean.png')
-
 
 
 
@@ -356,31 +347,26 @@ for i in range(len(subset_data_Confidence_mean_hard)):
         images_Confidence_mean_hard.append(image)
         labels_Confidence_mean_hard.append(label)
     # If we've seen all classes, stop looping
-    if len(seen_classes_Confidence_mean_hard) == len(trainset.classes):  # Assuming trainset has a 'classes' attribute
+    if len(seen_classes_Confidence_mean_hard) == len(trainset.classes):
         break
 
 # Ensure that we have 1 image per class, this should be equal to the number of classes
 assert len(images_Confidence_mean_hard) == len(trainset.classes)
 
-
-
 # Combine the labels and images into a list of tuples
 combined_list_Confidence_mean_hard = list(zip(labels_Confidence_mean_hard, images_Confidence_mean_hard))
 
-# Sort the combined list by the label (which is the first item in each tuple)
-combined_list_sorted_Confidence_mean_hard = sorted(combined_list_Confidence_mean_hard, key=lambda x: x[0])
+# Define the desired order
+desired_order = [9, 1, 8, 6, 7, 4, 0, 2, 5, 3]
 
-# Unzip the sorted list back into labels and images
-labels_Confidence_mean_hard, images_Confidence_mean_hard = zip(*combined_list_sorted_Confidence_mean_hard)
+# Create a dictionary for easy lookup
+label_to_image_dict_Confidence_mean_hard = dict(combined_list_Confidence_mean_hard)
 
-# Convert the tuples back to lists (if necessary)
-labels_Confidence_mean_hard = list(labels_Confidence_mean_hard)
-images_Confidence_mean_hard = list(images_Confidence_mean_hard)
-
-
+# Arrange the images according to the desired order
+sorted_images_Confidence_mean_hard = [label_to_image_dict_Confidence_mean_hard[label] for label in desired_order]
 
 # Make a grid from these images
-grid_Confidence_mean_hard = torchvision.utils.make_grid(images_Confidence_mean_hard, nrow=len(trainset.classes))
+grid_Confidence_mean_hard = torchvision.utils.make_grid(sorted_images_Confidence_mean_hard, nrow=len(trainset.classes))
 
 # Save the grid of images
 torchvision.utils.save_image(grid_Confidence_mean_hard, 'grid_image_Confidence_mean_hard.png')
