@@ -311,37 +311,6 @@ selected_dataset_Variability = Subset(trainset, selected_indices)
 trainloader_Variability = torch.utils.data.DataLoader(selected_dataset_Variability, batch_size=64, shuffle=True, num_workers=0)
 
 
-# Dictionary to store one image and its label per class
-class_images = {}
-
-# Iterate through DataLoader
-for images, labels, __ in trainloader_Variability:
-    for image, label in zip(images, labels):
-        # Convert label to a Python scalar
-        label = label.item()
-
-        # Store the image and label if this class hasn't been encountered yet
-        if label not in class_images:
-            class_images[label] = (image, label)
-
-        # Check if we have collected images for all classes
-        if len(class_images) == 10:
-            break
-    if len(class_images) == 10:
-        break
-
-# Plotting the images with labels
-fig, axs = plt.subplots(2, 5, figsize=(15, 6))
-axs = axs.flatten()
-for i, (label, (image, _)) in enumerate(class_images.items()):
-    axs[i].imshow(image.permute(1, 2, 0))  # Convert (C, H, W) to (H, W, C)
-    axs[i].set_title(f'Class {label}')
-    axs[i].axis('off')
-
-plt.tight_layout()
-plt.savefig("someeeee")
-
-
 
 
 
@@ -757,12 +726,12 @@ plt.plot(epochs, test_accuracies_Variability)
 plt.plot(epochs, test_accuracies_Confidence_mean)
 plt.plot(epochs, test_accuracies_Confidence_mean_hard)
 
-plt.xlabel('Epoch', fontsize=16)
-plt.ylabel('Test Accuracy', fontsize=16)
+plt.xlabel('Epoch', fontsize=17)
+plt.ylabel('Test Accuracy', fontsize=17)
 
 plt.ylim(0, 100)
 
-plt.xticks(range(start_epoch, start_epoch + 201, 20), fontsize=15)
-plt.yticks(fontsize=15)
+plt.xticks(range(start_epoch, start_epoch + 201, 25), fontsize=16)
+plt.yticks(fontsize=16)
 
-plt.savefig("resultsClass10.png")
+plt.savefig("resultsClass10again.png")
