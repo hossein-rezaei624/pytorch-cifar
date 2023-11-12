@@ -1,4 +1,4 @@
-import torch #figure1 train on 5 splits (third)
+import torch #figure1 train on 5 splits (fourth)
 import torch.nn as nn
 import torch.optim as optim
 import torchvision
