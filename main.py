@@ -440,7 +440,7 @@ print("\n")
 print("Trainning with all...")
 print("\n")
 test_accuracies_all = []
-for epoch in range(start_epoch, start_epoch+201):
+for epoch in range(start_epoch, start_epoch+5):
     print("Epoch: ", epoch)
     train_all(epoch)
     test_accuracies_all.append(test_all(epoch))
@@ -503,7 +503,7 @@ print("\n")
 print("Trainning with random...")
 print("\n")
 test_accuracies_random = []
-for epoch in range(start_epoch, start_epoch+201):
+for epoch in range(start_epoch, start_epoch+5):
     print("Epoch: ", epoch)
     train_random(epoch)
     test_accuracies_random.append(test_random(epoch))
@@ -566,7 +566,7 @@ print("\n")
 print("Trainning with Variability...")
 print("\n")
 test_accuracies_Variability = []
-for epoch in range(start_epoch, start_epoch+201):
+for epoch in range(start_epoch, start_epoch+5):
     print("Epoch: ", epoch)
     train_Variability(epoch)
     test_accuracies_Variability.append(test_Variability(epoch))
@@ -633,7 +633,7 @@ print("\n")
 print("Trainning with Confidence_mean...")
 print("\n")
 test_accuracies_Confidence_mean = []
-for epoch in range(start_epoch, start_epoch+201):
+for epoch in range(start_epoch, start_epoch+5):
     print("Epoch: ", epoch)
     train_Confidence_mean(epoch)
     test_accuracies_Confidence_mean.append(test_Confidence_mean(epoch))
@@ -701,7 +701,7 @@ print("\n")
 print("Trainning with Confidence_mean_hard...")
 print("\n")
 test_accuracies_Confidence_mean_hard = []
-for epoch in range(start_epoch, start_epoch+201):
+for epoch in range(start_epoch, start_epoch+5):
     print("Epoch: ", epoch)
     train_Confidence_mean_hard(epoch)
     test_accuracies_Confidence_mean_hard.append(test_Confidence_mean_hard(epoch))
@@ -714,21 +714,21 @@ for epoch in range(start_epoch, start_epoch+201):
 plt.cla()  # Clear the current axes
 plt.clf()  # Clear the current figure
 
-epochs = range(start_epoch, start_epoch + 201)
+epochs = range(start_epoch, start_epoch + 5)
 
 # Plotting
-plt.plot(epochs, test_accuracies_all)
-plt.plot(epochs, test_accuracies_random)
-plt.plot(epochs, test_accuracies_Variability)
-plt.plot(epochs, test_accuracies_Confidence_mean)
-plt.plot(epochs, test_accuracies_Confidence_mean_hard)
+plt.plot(epochs, [10 for _ in range(5)])
+plt.plot(epochs, [20 for _ in range(5)])
+plt.plot(epochs, [30 for _ in range(5)])
+plt.plot(epochs, [40 for _ in range(5)])
+plt.plot(epochs, [50 for _ in range(5)])
 
 plt.xlabel('Epoch', fontsize=17)
 plt.ylabel('Test Accuracy', fontsize=17)
 
 plt.ylim(0, 100)
 
-plt.xticks(range(start_epoch, start_epoch + 201, 25), fontsize=16)
+plt.xticks(range(start_epoch, start_epoch + 5, 1), fontsize=16)
 plt.yticks(fontsize=16)
 
-plt.savefig("resultsSample10again.png")
+plt.savefig("resultsExample.png")
