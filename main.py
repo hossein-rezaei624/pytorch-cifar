@@ -51,6 +51,46 @@ trainset = torchvision.datasets.CIFAR10(
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=128, shuffle=True, num_workers=0)
 
+
+
+# Initialize an empty list for images and labels
+images = []
+labels = []
+
+# Iterate over batches in the trainloader
+for data in trainloader:
+    inputs, targets, ssssdddd = data
+
+    # Iterate over each image in the batch
+    for i in range(len(targets)):
+        # Check if the class is 1
+        if targets[i] == 1:
+            # Add the image and label to their respective lists
+            images.append(inputs[i])
+            labels.append(targets[i])
+
+            # Break if we have collected 30 images
+            if len(images) == 30:
+                break
+
+    # Break the outer loop if we have collected 30 images
+    if len(images) == 30:
+        break
+
+# Make a grid from these images
+grid = torchvision.utils.make_grid(images, nrow=10)  # 10 images per row
+
+# Save the grid image
+torchvision.utils.save_image(grid, 'class111.png')
+
+
+
+
+
+
+
+
+
 testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
