@@ -63,8 +63,8 @@ for data in trainloader:
 
     # Iterate over each image in the batch
     for i in range(len(targets)):
-        # Check if the class is 3
-        if targets[i] == 3:
+        # Check if the class is 9
+        if targets[i] == 9:
             # Add the image and label to their respective lists
             images.append(inputs[i])
             labels.append(targets[i])
@@ -81,7 +81,7 @@ for data in trainloader:
 grid = torchvision.utils.make_grid(images, nrow=10)  # 10 images per row
 
 # Save the grid image
-torchvision.utils.save_image(grid, 'class333.png')
+torchvision.utils.save_image(grid, 'class999.png')
 
 
 
