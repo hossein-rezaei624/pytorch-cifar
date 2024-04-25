@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torchvision
 import random
+import copy
 
 def get_parser() -> ArgumentParser:
     parser = ArgumentParser(description='Continual learning via'
@@ -101,6 +102,8 @@ class Casp(ContinualModel):
         self.n_sample_per_task = None
         self.class_portion = []
         self.task_portion = []
+        self.task_history = []
+        self.task_class = {}
 
     def begin_train(self, dataset):
         self.n_sample_per_task = dataset.get_examples_number()//dataset.N_TASKS
@@ -117,8 +120,19 @@ class Casp(ContinualModel):
         self.reverse_mapping = {index: value for value, index in self.mapping.items()}
         self.confidence_by_class = {class_id: {epoch: [] for epoch in range(self.args.casp_epoch)} for class_id, __ in enumerate(self.unique_classes)}
         self.confidence_by_sample = torch.zeros((self.args.casp_epoch, self.n_sample_per_task))
+        self.confidence_by_task = {task_id: {epoch: [] for epoch in range(self.args.casp_epoch)} for task_id in range(self.task)}
+        self.task_class.update({value: (self.task - 1) for index, value in enumerate(self.unique_classes)})
+        ##print("self.task_class", self.task_class)
     
     def end_epoch(self, dataset, train_loader):
+        
+        if self.epoch >= (self.args.n_epochs - self.args.casp_epoch) and not self.buffer.is_empty():
+            buffer_logits, _ = self.net.pcrForward(self.buffer.examples)
+            soft_buffer = soft_1(buffer_logits)
+            for j in range(len(self.buffer)):
+                self.confidence_by_task[self.task_class[self.buffer.labels[j].item()]][self.epoch - (self.args.n_epochs - self.args.casp_epoch)].append(soft_buffer[j, self.buffer.labels[j]].item())
+                    
+        
         self.epoch += 1
         
         if self.epoch == self.args.n_epochs:
@@ -127,6 +141,11 @@ class Casp(ContinualModel):
             
             # Calculate standard deviation of mean confidences by class
             std_of_means_by_class = {class_id: torch.mean(torch.tensor([mean_by_class[class_id][epoch] for epoch in range(self.args.casp_epoch)])) for class_id, __ in enumerate(self.unique_classes)}
+
+
+            mean_by_task = {task_id: {epoch: torch.std(torch.tensor(confidences[epoch])) for epoch in confidences} for task_id, confidences in self.confidence_by_task.items()}
+            std_of_means_by_task = {task_id: torch.mean(torch.tensor([mean_by_task[task_id][epoch] for epoch in range(self.args.casp_epoch)])) for task_id in range(self.task)}
+            print("std_of_means_by_task", std_of_means_by_task)
             
             # Compute mean and variability of confidences for each sample
             Confidence_mean = self.confidence_by_sample.mean(dim=0)
@@ -371,6 +390,11 @@ class Casp(ContinualModel):
             self.confidence_by_sample[self.epoch, index_] = conf_tensor
 
 
+        if self.epoch >= (self.args.n_epochs - self.args.casp_epoch):
+            soft_task = soft_1(logits)
+            for j in range(labels.shape[0]):
+                self.confidence_by_task[self.task_class[labels[j].item()]][self.epoch - (self.args.n_epochs - self.args.casp_epoch)].append(soft_task[j, labels[j]].item())
+            
 
         if self.buffer.is_empty():
             feas_aug = self.net.pcrLinear.L.weight[batch_y_combine]
