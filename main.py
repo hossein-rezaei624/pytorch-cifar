@@ -166,7 +166,8 @@ def test_train(epoch, new_trainloader):
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets, idx) in enumerate(new_trainloader):
-            print("idx", idx)
+            if batch_idx == 0:
+                print("idx", idx)
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
