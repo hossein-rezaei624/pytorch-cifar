@@ -14,7 +14,7 @@ import argparse
 from models import *
 from utils import progress_bar
 
-import numpy
+import numpy as np
 import random
 
 
