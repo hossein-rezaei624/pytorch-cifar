@@ -129,7 +129,7 @@ def train(epoch):
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
       
-    print(100.*correct/total)
+    print("Train Accuracy:", 100.*correct/total)
 
 def test(epoch):
     global best_acc
@@ -150,6 +150,8 @@ def test(epoch):
 
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+          
+        print("Test Accuracy:", 100.*correct/total)
 
     # Save checkpoint.
     acc = 100.*correct/total
