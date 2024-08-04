@@ -79,11 +79,11 @@ numpy.random.seed(0)
 random.seed(0)
 torch.manual_seed(0)
 if torch.cuda.is_available():
+    print("aaaaaaaaaaaaaa")
     torch.cuda.manual_seed_all(0)
     torch.cuda.manual_seed(0)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    cudnn.benchmark = True
 
 
 if args.resume:
