@@ -14,6 +14,9 @@ import argparse
 from models import *
 from utils import progress_bar
 
+import numpy
+import random
+
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
@@ -70,9 +73,18 @@ net = ResNet18()
 # net = RegNetX_200MF()
 # net = SimpleDLA()
 net = net.to(device)
-if device == 'cuda':
-    net = torch.nn.DataParallel(net)
+
+# set up seed
+numpy.random.seed(0)
+random.seed(0)
+torch.manual_seed(0)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(0)
+    torch.cuda.manual_seed(0)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     cudnn.benchmark = True
+
 
 if args.resume:
     # Load checkpoint.
