@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import torch.backends.cudnn as cudnn
 
 import torchvision
 import torchvision.transforms as transforms
@@ -72,13 +73,15 @@ net = ResNet18()
 # net = RegNetX_200MF()
 # net = SimpleDLA()
 net = net.to(device)
+if device == 'cuda':
+    net = torch.nn.DataParallel(net)
+    cudnn.benchmark = True
 
 # set up seed
 numpy.random.seed(0)
 random.seed(0)
 torch.manual_seed(0)
 if torch.cuda.is_available():
-    print("aaaaaaaaaaaaaa")
     torch.cuda.manual_seed_all(0)
     torch.cuda.manual_seed(0)
     torch.backends.cudnn.deterministic = True
