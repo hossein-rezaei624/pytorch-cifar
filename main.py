@@ -94,8 +94,14 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
+
+    all_inputs = []
+    all_targets = []
+    all_idx_ = []
+    
     for batch_idx, (inputs, targets, idx_) in enumerate(trainloader):
-        print("idx_", idx_)
+        if batch_idx ==0:
+            print("idx_", idx_)
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = net(inputs)
@@ -107,8 +113,18 @@ def train(epoch):
         _, predicted = outputs.max(1)
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
-      
+
+        # Collect inputs and targets
+        all_inputs.append(inputs.cpu())
+        all_targets.append(targets.cpu())
+        all_idx_.append(idx_.cpu())
+    
     print("Train Accuracy:", 100.*correct/total)
+
+    # Create new DataLoader with collected data
+    collected_dataset = torch.utils.data.TensorDataset(torch.cat(all_inputs), torch.cat(all_targets), torch.cat(all_idx_))
+    return torch.utils.data.DataLoader(collected_dataset, batch_size=128, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
+
 
 def test(epoch):
     net.eval()
@@ -117,6 +133,8 @@ def test(epoch):
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets, __) in enumerate(testloader):
+            if batch_idx == 0:
+                print("idx test:", __)
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
@@ -141,13 +159,13 @@ def test(epoch):
     torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/resnet18_without_aug/ckpt{epoch}.pth')    
 
 
-def test_train(epoch):
+def test_train(epoch, new_trainloader):
     net.eval()
     test_loss = 0
     correct = 0
     total = 0
     with torch.no_grad():
-        for batch_idx, (inputs, targets, idx) in enumerate(trainloader):
+        for batch_idx, (inputs, targets, idx) in enumerate(new_trainloader):
             print("idx", idx)
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
@@ -162,7 +180,7 @@ def test_train(epoch):
                          % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
 for epoch in range(start_epoch, start_epoch+200):
-    train(epoch)
+    new_trainloader = train(epoch)
     test(epoch)
-    test_train(epoch)
+    test_train(epoch, new_trainloader)
     scheduler.step()
