@@ -99,9 +99,7 @@ def train(epoch):
     all_targets = []
     all_idx_ = []
     
-    for batch_idx, (inputs, targets, idx_) in enumerate(trainloader):
-        if batch_idx ==0:
-            print("idx_", idx_)
+    for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = net(inputs)
@@ -132,9 +130,7 @@ def test(epoch):
     correct = 0
     total = 0
     with torch.no_grad():
-        for batch_idx, (inputs, targets, __) in enumerate(testloader):
-            if batch_idx == 0:
-                print("idx test:", __)
+        for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
@@ -165,9 +161,7 @@ def test_train(epoch, new_trainloader):
     correct = 0
     total = 0
     with torch.no_grad():
-        for batch_idx, (inputs, targets, idx) in enumerate(new_trainloader):
-            if batch_idx == 0:
-                print("idx", idx)
+        for batch_idx, (inputs, targets) in enumerate(new_trainloader):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
@@ -177,8 +171,7 @@ def test_train(epoch, new_trainloader):
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                         % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+        print("Train Accuracy on eval mode", 100.*correct/total)
 
 for epoch in range(start_epoch, start_epoch+200):
     new_trainloader = train(epoch)
