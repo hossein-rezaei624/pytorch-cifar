@@ -97,7 +97,6 @@ def train(epoch):
 
     all_inputs = []
     all_targets = []
-    all_idx_ = []
     
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
@@ -115,12 +114,11 @@ def train(epoch):
         # Collect inputs and targets
         all_inputs.append(inputs.cpu())
         all_targets.append(targets.cpu())
-        all_idx_.append(idx_.cpu())
     
     print("Train Accuracy:", 100.*correct/total)
 
     # Create new DataLoader with collected data
-    collected_dataset = torch.utils.data.TensorDataset(torch.cat(all_inputs), torch.cat(all_targets), torch.cat(all_idx_))
+    collected_dataset = torch.utils.data.TensorDataset(torch.cat(all_inputs), torch.cat(all_targets))
     return torch.utils.data.DataLoader(collected_dataset, batch_size=128, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
 
