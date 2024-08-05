@@ -37,14 +37,15 @@ set_seed(0)
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(degrees=90),
+    ##transforms.RandomCrop(32, padding=4),
+    ##transforms.RandomHorizontalFlip(),
+    ##transforms.RandomRotation(degrees=90),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -120,6 +121,7 @@ def train(epoch):
 
 
 def test(epoch):
+    global best_acc
     net.eval()
     test_loss = 0
     correct = 0
@@ -140,14 +142,24 @@ def test(epoch):
     # Save checkpoint.
     acc = 100.*correct/total
 
+    if acc > best_acc:
+        print('Saving..')
+        state = {
+            'net': net.state_dict(),
+            'acc': acc,
+            'epoch': epoch,
+        }
+        if not os.path.isdir('checkpoint'):
+            os.mkdir('checkpoint')
+        torch.save(state, './checkpoint/ckpt.pth')
+        best_acc = acc
 
-    print('Saving on the local drive')
     state = {
         'net': net.state_dict(),
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/5/ckpt{epoch}.pth')    
+    torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/1/ckpt{epoch}.pth')    
 
 
 def test_train(epoch):
