@@ -37,6 +37,7 @@ set_seed(0)
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 # Data
@@ -44,7 +45,7 @@ print('==> Preparing data..')
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(degrees=90),
+    ##transforms.RandomRotation(degrees=90),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
@@ -59,6 +60,13 @@ trainset = torchvision.datasets.CIFAR10(
 
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=128, shuffle=True, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
+
+
+trainset_test = torchvision.datasets.CIFAR10(
+    root='./data', train=True, download=True, transform=transform_test)
+
+trainloader_test = torch.utils.data.DataLoader(
+    trainset_test, batch_size=128, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
 
 testset = torchvision.datasets.CIFAR10(
@@ -95,9 +103,6 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
-
-    all_inputs = []
-    all_targets = []
     
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
@@ -111,19 +116,12 @@ def train(epoch):
         _, predicted = outputs.max(1)
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
-
-        # Collect inputs and targets
-        all_inputs.append(inputs.cpu())
-        all_targets.append(targets.cpu())
     
     print("Train Accuracy:", 100.*correct/total)
 
-    # Create new DataLoader with collected data
-    collected_dataset = torch.utils.data.TensorDataset(torch.cat(all_inputs), torch.cat(all_targets))
-    return torch.utils.data.DataLoader(collected_dataset, batch_size=128, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
-
 
 def test(epoch):
+    global best_acc
     net.eval()
     test_loss = 0
     correct = 0
@@ -144,23 +142,33 @@ def test(epoch):
     # Save checkpoint.
     acc = 100.*correct/total
 
+    if acc > best_acc:
+        print('Saving..')
+        state = {
+            'net': net.state_dict(),
+            'acc': acc,
+            'epoch': epoch,
+        }
+        if not os.path.isdir('checkpoint'):
+            os.mkdir('checkpoint')
+        torch.save(state, './checkpoint/ckpt.pth')
+        best_acc = acc
 
-    print('Saving on the local drive')
     state = {
         'net': net.state_dict(),
         'acc': acc,
         'epoch': epoch,
     }
-    torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/5/ckpt{epoch}.pth')    
+    torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/4/ckpt{epoch}.pth')    
 
 
-def test_train(epoch, new_trainloader):
+def test_train(epoch):
     net.eval()
     test_loss = 0
     correct = 0
     total = 0
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(new_trainloader):
+        for batch_idx, (inputs, targets) in enumerate(trainloader_test):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
@@ -173,7 +181,7 @@ def test_train(epoch, new_trainloader):
         print("Train Accuracy on eval mode", 100.*correct/total)
 
 for epoch in range(start_epoch, start_epoch+200):
-    new_trainloader = train(epoch)
+    train(epoch)
     test(epoch)
-    test_train(epoch, new_trainloader)
+    test_train(epoch)
     scheduler.step()
