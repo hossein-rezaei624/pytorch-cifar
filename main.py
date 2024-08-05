@@ -61,6 +61,13 @@ trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=128, shuffle=True, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
 
+trainset_test = torchvision.datasets.CIFAR10(
+    root='./data', train=True, download=True, transform=transform_test)
+
+trainloader_test = torch.utils.data.DataLoader(
+    trainset_test, batch_size=128, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
+
+
 testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 
@@ -95,9 +102,6 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
-
-    all_inputs = []
-    all_targets = []
     
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         inputs, targets = inputs.to(device), targets.to(device)
@@ -117,10 +121,6 @@ def train(epoch):
         all_targets.append(targets.cpu())
     
     print("Train Accuracy:", 100.*correct/total)
-
-    # Create new DataLoader with collected data
-    collected_dataset = torch.utils.data.TensorDataset(torch.cat(all_inputs), torch.cat(all_targets))
-    return torch.utils.data.DataLoader(collected_dataset, batch_size=128, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
 
 def test(epoch):
@@ -154,13 +154,13 @@ def test(epoch):
     torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/5/ckpt{epoch}.pth')    
 
 
-def test_train(epoch, new_trainloader):
+def test_train(epoch):
     net.eval()
     test_loss = 0
     correct = 0
     total = 0
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(new_trainloader):
+        for batch_idx, (inputs, targets) in enumerate(trainloader_test):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
@@ -173,7 +173,7 @@ def test_train(epoch, new_trainloader):
         print("Train Accuracy on eval mode", 100.*correct/total)
 
 for epoch in range(start_epoch, start_epoch+200):
-    new_trainloader = train(epoch)
+    train(epoch)
     test(epoch)
-    test_train(epoch, new_trainloader)
+    test_train(epoch)
     scheduler.step()
