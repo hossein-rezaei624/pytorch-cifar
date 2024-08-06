@@ -79,8 +79,17 @@ net.load_state_dict(checkpoint['net'])
 # Accessing the last fully connected layer correctly
 last_fc = net.module.linear if hasattr(net, 'module') else net.linear
 W = last_fc.weight.data
+#print("shape of weights", W.shape)
 
-print("shape of weights", W.shape)
+# Use pseudo-inverse to compute projection matrices
+Wt = W.T
+WWt_pinv = torch.pinverse(W @ Wt)
+WtW_pinv = torch.pinverse(Wt @ W)
+
+proj_column_space = W @ WtW_pinv @ Wt
+proj_row_space = Wt @ WWt_pinv @ W
+proj_null_space = torch.eye(W.shape[0]) - proj_column_space
+
 
 def test(epoch):
     global best_acc
@@ -92,14 +101,24 @@ def test(epoch):
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
-            loss = criterion(logits, targets)
 
+            # Apply projections to the representations
+            col_space_repr = proj_column_space @ representations
+            row_space_repr = proj_row_space @ representations
+            null_space_repr = proj_null_space @ representations            
+            
+            loss = criterion(logits, targets)
             test_loss += loss.item()
             _, predicted = logits.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
           
         print("Test Accuracy:", 100.*correct/total)
+        
+        print("Sample Projection Outputs for Test:")
+        print("Column Space:", col_space_repr[0])  # Print first sample projection
+        print("Row Space:", row_space_repr[0])
+        print("Null Space:", null_space_repr[0])
 
 
 def test_train(epoch):
@@ -111,14 +130,25 @@ def test_train(epoch):
         for batch_idx, (inputs, targets) in enumerate(trainloader_test):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
-            loss = criterion(logits, targets)
 
+            # Apply projections to the representations
+            col_space_repr = proj_column_space @ representations
+            row_space_repr = proj_row_space @ representations
+            null_space_repr = proj_null_space @ representations 
+            
+            loss = criterion(logits, targets)
             test_loss += loss.item()
             _, predicted = logits.max(1)
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
         print("Train Accuracy on eval mode", 100.*correct/total)
+
+        print("Sample Projection Outputs for Train:")
+        print("Column Space:", col_space_repr[0])  # Print first sample projection
+        print("Row Space:", row_space_repr[0])
+        print("Null Space:", null_space_repr[0])
+
 
 test(1)
 test_train(1)
