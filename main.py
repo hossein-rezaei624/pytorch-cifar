@@ -73,6 +73,10 @@ if device == 'cuda':
 criterion = nn.CrossEntropyLoss()
 
 
+checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/1/ckpt199.pth')
+net.load_state_dict(checkpoint['net'])
+
+
 def test(epoch):
     global best_acc
     net.eval()
