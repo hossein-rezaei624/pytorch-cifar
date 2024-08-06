@@ -76,7 +76,8 @@ criterion = nn.CrossEntropyLoss()
 checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/1/ckpt199.pth')
 net.load_state_dict(checkpoint['net'])
 
-last_fc = net.fc if not torch.cuda.is_available() else net.module.fc
+# Extract the weight matrix of the last fully connected layer
+last_fc = net.linear
 W = last_fc.weight.data
 
 print("shape of weights", W.shape)
