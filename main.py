@@ -73,7 +73,7 @@ if device == 'cuda':
 criterion = nn.CrossEntropyLoss()
 
 
-checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/1/ckpt199.pth')
+checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/1/ckpt183.pth')
 net.load_state_dict(checkpoint['net'])
 
 
