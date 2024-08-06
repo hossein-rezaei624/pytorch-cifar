@@ -93,6 +93,10 @@ def test(epoch):
     test_loss = 0
     correct = 0
     total = 0
+
+    col_list = []
+    null_list = []
+    
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
@@ -104,6 +108,9 @@ def test(epoch):
 
             col_space_repr_norm = (torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
             null_space_repr_norm = (torch.norm(null_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
+
+            col_list.append(col_space_repr_norm.item())
+            null_list.append(null_space_repr_norm.item())
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -112,10 +119,13 @@ def test(epoch):
             correct += predicted.eq(targets).sum().item()
           
         print("Test Accuracy:", 100.*correct/total)
+
+        col_mean = np.mean(col_list)
+        null_mean = np.mean(null_list)
         
         print("Sample Projection Outputs for Test:")
-        print("Column Space:", col_space_repr_norm.item())
-        print("Null Space:", null_space_repr_norm.item())
+        print("Column Space:", col_mean)
+        print("Null Space:", null_mean)
 
 
 def test_train(epoch):
@@ -134,6 +144,9 @@ def test_train(epoch):
 
             col_space_repr_norm = (torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
             null_space_repr_norm = (torch.norm(null_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
+
+            col_list.append(col_space_repr_norm.item())
+            null_list.append(null_space_repr_norm.item())
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -143,9 +156,12 @@ def test_train(epoch):
 
         print("Train Accuracy on eval mode", 100.*correct/total)
 
+        col_mean = np.mean(col_list)
+        null_mean = np.mean(null_list)
+
         print("Sample Projection Outputs for Train:")
-        print("Column Space:", col_space_repr_norm.item())
-        print("Null Space:", null_space_repr_norm.item())
+        print("Column Space:", col_mean)
+        print("Null Space:", null_mean)
 
 
 test(1)
