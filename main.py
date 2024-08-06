@@ -79,7 +79,7 @@ net.load_state_dict(checkpoint['net'])
 # Accessing the last fully connected layer correctly
 last_fc = net.module.linear if hasattr(net, 'module') else net.linear
 W = last_fc.weight.data
-#print("shape of weights", W.shape)
+print("shape of W", W.shape)
 
 # Use pseudo-inverse to compute projection matrices
 Wt = W.T
@@ -101,6 +101,9 @@ def test(epoch):
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
+
+            print("Shape of representations:", representations.shape)
+            print("Shape of proj_column_space:", proj_column_space.shape)
 
             # Apply projections to the representations
             col_space_repr = proj_column_space @ representations
