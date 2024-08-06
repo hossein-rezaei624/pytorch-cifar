@@ -117,8 +117,10 @@ def test(epoch):
     correct = 0
     total = 0
 
-    col_list = []
-    null_list = []
+    col_target_list = []
+    col_non_target_list = []
+    null_target_list = []
+    null_non_target_list = []
     
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
@@ -141,8 +143,14 @@ def test(epoch):
                 
     
                 col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)/torch.norm(output_vector, dim=0)
-                print("col_space_repr_target_norm", col_space_repr_target_norm.item())
-                col_list.append(col_space_repr_norm.item())
+                col_space_repr_non_target_norm = torch.norm(col_space_repr_non_target, dim=0)/torch.norm(output_vector, dim=0)
+                null_space_repr_target_norm = torch.norm(null_space_repr_target, dim=0)/torch.norm(output_vector, dim=0)
+                null_space_repr_non_target_norm = torch.norm(null_space_repr_non_target, dim=0)/torch.norm(output_vector, dim=0)
+
+                col_target_list.append(col_space_repr_target_norm.item())
+                col_non_target_list.append(col_space_repr_non_target_norm.item())
+                null_target_list.append(null_space_repr_target_norm.item())
+                null_non_target_list.append(null_space_repr_non_target_norm.item())
                 
             
             loss = criterion(logits, targets)
@@ -153,12 +161,16 @@ def test(epoch):
           
         print("\nTest Accuracy:", 100.*correct/total)
 
-        col_mean = np.mean(col_list)
-        null_mean = np.mean(null_list)
+        col_target_mean = np.mean(col_target_list)
+        col_non_target_mean = np.mean(col_non_target_list)
+        null_target_mean = np.mean(null_target_list)
+        null_non_target_mean = np.mean(null_non_target_list)
         
         print("Sample Projection Outputs for Test:")
-        print("Column Space:", col_mean)
-        print("Null Space:", null_mean)
+        print("col_target_mean:", col_target_mean)
+        print("col_non_target_mean:", col_non_target_mean)
+        print("null_target_mean:", null_target_mean)
+        print("null_non_target_mean:", null_non_target_mean)
 
 
 def test_train(epoch):
@@ -167,23 +179,40 @@ def test_train(epoch):
     correct = 0
     total = 0
 
-    col_list = []
-    null_list = []
+    col_target_list = []
+    col_non_target_list = []
+    null_target_list = []
+    null_non_target_list = []
     
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(trainloader_test):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
 
-            # Apply projections to the representations
-            col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
-            null_space_repr = proj_null_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
+            # Apply precomputed projections
+            for i in range(representations.size(0)):  # Loop over the batch
+                target_class = targets[i].item()
+                proj_info = projections[target_class]
+    
+                # Reshape outputs[i] to (512, 1) for proper matrix multiplication
+                output_vector = representations[i].unsqueeze(1)  # Now shape (512, 1)
+                
+                col_space_repr_target = proj_info['column_target'] @ output_vector
+                col_space_repr_non_target = proj_info['column_nontarget'] @ output_vector
 
-            col_space_repr_norm = (torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
-            null_space_repr_norm = (torch.norm(null_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
+                null_space_repr_target = proj_info['null_target'] @ output_vector
+                null_space_repr_non_target = proj_info['null_nontarget'] @ output_vector
+                
+    
+                col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)/torch.norm(output_vector, dim=0)
+                col_space_repr_non_target_norm = torch.norm(col_space_repr_non_target, dim=0)/torch.norm(output_vector, dim=0)
+                null_space_repr_target_norm = torch.norm(null_space_repr_target, dim=0)/torch.norm(output_vector, dim=0)
+                null_space_repr_non_target_norm = torch.norm(null_space_repr_non_target, dim=0)/torch.norm(output_vector, dim=0)
 
-            col_list.append(col_space_repr_norm.item())
-            null_list.append(null_space_repr_norm.item())
+                col_target_list.append(col_space_repr_target_norm.item())
+                col_non_target_list.append(col_space_repr_non_target_norm.item())
+                null_target_list.append(null_space_repr_target_norm.item())
+                null_non_target_list.append(null_space_repr_non_target_norm.item())
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -193,12 +222,16 @@ def test_train(epoch):
 
         print("\nTrain Accuracy on eval mode", 100.*correct/total)
 
-        col_mean = np.mean(col_list)
-        null_mean = np.mean(null_list)
-
-        print("Sample Projection Outputs for Train:")
-        print("Column Space:", col_mean)
-        print("Null Space:", null_mean, "\n")
+        col_target_mean = np.mean(col_target_list)
+        col_non_target_mean = np.mean(col_non_target_list)
+        null_target_mean = np.mean(null_target_list)
+        null_non_target_mean = np.mean(null_non_target_list)
+        
+        print("Sample Projection Outputs for Test:")
+        print("col_target_mean:", col_target_mean)
+        print("col_non_target_mean:", col_non_target_mean)
+        print("null_target_mean:", null_target_mean)
+        print("null_non_target_mean:", null_non_target_mean)
 
 
 test(1)
