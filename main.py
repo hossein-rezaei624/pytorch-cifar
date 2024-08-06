@@ -103,10 +103,6 @@ def test(epoch):
             # Apply projections to the representations
             col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
             null_space_repr = proj_null_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
-
-            print("torch.norm(col_space_repr, dim=0).shape", torch.norm(col_space_repr, dim=0).shape)
-            print("torch.norm(representations, dim=1).shape", torch.norm(representations, dim=1).shape)
-            print("shape of all", (torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)).shape)
             
             col_space_repr_norm = (torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
             null_space_repr_norm = (torch.norm(null_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
