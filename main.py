@@ -125,17 +125,6 @@ def test(epoch):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
 
-            # Apply projections to the representations
-            col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
-            null_space_repr = proj_null_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
-
-            col_space_repr_norm = (torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
-            null_space_repr_norm = (torch.norm(null_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
-
-            col_list.append(col_space_repr_norm.item())
-            null_list.append(null_space_repr_norm.item())
-
-
             # Apply precomputed projections
             for i in range(representations.size(0)):  # Loop over the batch
                 target_class = targets[i].item()
@@ -151,12 +140,10 @@ def test(epoch):
                 null_space_repr_non_target = proj_info['null_nontarget'] @ output_vector
                 
     
-                # Perform loss calculation, accuracy updates, etc., as needed
-                # Example: Calculating norms for debug
-                print(torch.norm(target_repr, dim=0).mean().item())
-                print(torch.norm(non_target_repr, dim=0).mean().item())
-
-            
+                col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)/torch.norm(output_vector, dim=0)
+                print("col_space_repr_target_norm", col_space_repr_target_norm)
+                col_list.append(col_space_repr_norm.item())
+                
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
