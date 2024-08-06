@@ -76,6 +76,10 @@ criterion = nn.CrossEntropyLoss()
 checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/1/ckpt199.pth')
 net.load_state_dict(checkpoint['net'])
 
+last_fc = net.fc if not torch.cuda.is_available() else net.module.fc
+W = last_fc.weight.data
+
+print("shape of weights", W.shape)
 
 def test(epoch):
     global best_acc
