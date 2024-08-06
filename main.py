@@ -78,11 +78,42 @@ net.load_state_dict(checkpoint['net'])
 last_fc = net.module.linear if hasattr(net, 'module') else net.linear
 W = last_fc.weight.data
 
-# Assume W is (10, 512) as num_classes x num_features
-WWt_pinv = torch.pinverse(W @ W.T)  # This is (10, 10)
+def calc_projection_matrices(W):
+    """Calculate column and null space projection matrices for a given weight matrix W."""
+    WWt_pinv = torch.pinverse(W @ W.T)
+    proj_column_space = W.T @ WWt_pinv @ W
+    proj_null_space = torch.eye(W.T.shape[0], device=W.device) - proj_column_space
+    return proj_column_space, proj_null_space
 
-proj_column_space = W.T @ WWt_pinv @ W  # (512, 10) @ (10, 10) @ (10, 512) = (512, 512)
-proj_null_space = torch.eye(W.T.shape[0], device=W.device) - proj_column_space  # (512, 512)
+def precompute_projections(W):
+    """Precompute projections for all classes."""
+    projections = {}
+    for i in range(W.shape[0]):  # Assume W is (10, 512)
+        # Isolate weight for target and non-target classes
+        target_weight = W[i].unsqueeze(0)  # Shape (1, 512)
+        non_target_weights = torch.cat([W[:i], W[i+1:]], dim=0)  # Shape (9, 512)
+
+        # Calculate projection matrices
+        proj_column_space_target, proj_null_space_target = calc_projection_matrices(target_weight)
+        proj_column_space_nontarget, proj_null_space_nontarget = calc_projection_matrices(non_target_weights)
+
+        # Store in dictionary
+        projections[i] = {
+            'column_target': proj_column_space_target,
+            'null_target': proj_null_space_target,
+            'column_nontarget': proj_column_space_nontarget,
+            'null_nontarget': proj_null_space_nontarget
+        }
+    return projections
+
+# Precompute the projection matrices
+projections = precompute_projections(W)
+
+
+print("projections[0]['column_target'].shape", projections[0]['column_target'].shape)
+print("projections[0]['null_target'].shape", projections[0]['null_target'].shape)
+print("projections[0]['column_nontarget'].shape", projections[0]['column_nontarget'].shape)
+print("projections[0]['null_nontarget'].shape", projections[0]['null_nontarget'].shape)
 
 
 def test(epoch):
