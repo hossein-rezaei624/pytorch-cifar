@@ -78,36 +78,11 @@ net.load_state_dict(checkpoint['net'])
 last_fc = net.module.linear if hasattr(net, 'module') else net.linear
 W = last_fc.weight.data
 
-def calc_projection_matrices(W):
-    """Calculate column and null space projection matrices for a given weight matrix W."""
-    WWt_pinv = torch.pinverse(W @ W.T)
-    proj_column_space = W.T @ WWt_pinv @ W
-    proj_null_space = torch.eye(W.T.shape[0], device=W.device) - proj_column_space
-    return proj_column_space, proj_null_space
+# Assume W is (10, 512) as num_classes x num_features
+WWt_pinv = torch.pinverse(W @ W.T)  # This is (10, 10)
 
-def precompute_projections(W):
-    """Precompute projections for all classes."""
-    projections = {}
-    for i in range(W.shape[0]):  # Assume W is (10, 512)
-        # Isolate weight for target and non-target classes
-        target_weight = W[i].unsqueeze(0)  # Shape (1, 512)
-        non_target_weights = torch.cat([W[:i], W[i+1:]], dim=0)  # Shape (9, 512)
-
-        # Calculate projection matrices
-        proj_column_space_target, proj_null_space_target = calc_projection_matrices(target_weight)
-        proj_column_space_nontarget, proj_null_space_nontarget = calc_projection_matrices(non_target_weights)
-
-        # Store in dictionary
-        projections[i] = {
-            'column_target': proj_column_space_target,
-            'null_target': proj_null_space_target,
-            'column_nontarget': proj_column_space_nontarget,
-            'null_nontarget': proj_null_space_nontarget
-        }
-    return projections
-
-# Precompute the projection matrices
-projections = precompute_projections(W)
+proj_column_space = W.T @ WWt_pinv @ W  # (512, 10) @ (10, 10) @ (10, 512) = (512, 512)
+proj_null_space = torch.eye(W.T.shape[0], device=W.device) - proj_column_space  # (512, 512)
 
 
 def test(epoch):
@@ -129,34 +104,15 @@ def test(epoch):
             col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
             null_space_repr = proj_null_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
 
+            print("torch.norm(col_space_repr, dim=0).shape", torch.norm(col_space_repr, dim=0).shape)
+            print("torch.norm(representations, dim=1).shape", torch.norm(representations, dim=1).shape)
+            print("shape of all", (torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)).shape)
+            
             col_space_repr_norm = (torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
             null_space_repr_norm = (torch.norm(null_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
 
             col_list.append(col_space_repr_norm.item())
             null_list.append(null_space_repr_norm.item())
-
-
-            # Apply precomputed projections
-            for i in range(representations.size(0)):  # Loop over the batch
-                target_class = targets[i].item()
-                proj_info = projections[target_class]
-    
-                # Reshape outputs[i] to (512, 1) for proper matrix multiplication
-                output_vector = representations[i].unsqueeze(1)  # Now shape (512, 1)
-                
-                col_space_repr_target = proj_info['column_target'] @ output_vector
-                col_space_repr_non_target = proj_info['column_nontarget'] @ output_vector
-
-                null_space_repr_target = proj_info['null_target'] @ output_vector
-                null_space_repr_non_target = proj_info['null_nontarget'] @ output_vector
-                
-    
-                # Perform loss calculation, accuracy updates, etc., as needed
-                # Example: Calculating norms for debug
-                print(torch.norm(target_repr, dim=0).mean().item())
-                print(torch.norm(non_target_repr, dim=0).mean().item())
-
-            
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
