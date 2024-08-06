@@ -81,14 +81,13 @@ last_fc = net.module.linear if hasattr(net, 'module') else net.linear
 W = last_fc.weight.data
 print("shape of W", W.shape)
 
-# Use pseudo-inverse to compute projection matrices
-Wt = W.T
-WWt_pinv = torch.pinverse(W @ Wt)
-WtW_pinv = torch.pinverse(Wt @ W)
+# Assume W is (10, 512) as num_classes x num_features
+WWt_pinv = torch.pinverse(W @ W.T)  # This is (10, 10)
+WtW_pinv = torch.pinverse(W.T @ W)  # This is (512, 512)
 
-proj_column_space = W @ WtW_pinv @ Wt
-proj_row_space = Wt @ WWt_pinv @ W
-proj_null_space = torch.eye(W.shape[0], device=W.device) - proj_column_space
+proj_row_space = W @ WtW_pinv @ W.T  # (10, 512) @ (512, 512) @ (512, 10) = (10, 10)
+proj_column_space = W.T @ WWt_pinv @ W  # (512, 10) @ (10, 10) @ (10, 512) = (512, 512)
+proj_null_space = torch.eye(W.T.shape[0], device=W.device) - proj_column_space  # (512, 512)
 
 
 def test(epoch):
@@ -106,9 +105,9 @@ def test(epoch):
             print("Shape of proj_column_space:", proj_column_space.shape)
 
             # Apply projections to the representations
-            col_space_repr = proj_column_space @ representations
-            row_space_repr = proj_row_space @ representations
-            null_space_repr = proj_null_space @ representations            
+            col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
+            row_space_repr = proj_row_space @ representations.T  # (10, 10) @ (512, 100) = (10, 100) - Incorrect
+            null_space_repr = proj_null_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -119,9 +118,9 @@ def test(epoch):
         print("Test Accuracy:", 100.*correct/total)
         
         print("Sample Projection Outputs for Test:")
-        print("Column Space:", col_space_repr[0])  # Print first sample projection
-        print("Row Space:", row_space_repr[0])
-        print("Null Space:", null_space_repr[0])
+        print("Column Space:", col_space_repr[:, 0])  # Print first sample projection
+        print("Row Space:", row_space_repr[:, 0])  # Check dimension correctness
+        print("Null Space:", null_space_repr[:, 0])
 
 
 def test_train(epoch):
@@ -135,9 +134,9 @@ def test_train(epoch):
             representations, logits = net(inputs)
 
             # Apply projections to the representations
-            col_space_repr = proj_column_space @ representations
-            row_space_repr = proj_row_space @ representations
-            null_space_repr = proj_null_space @ representations 
+            col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
+            row_space_repr = proj_row_space @ representations.T  # (10, 10) @ (512, 100) = (10, 100) - Incorrect
+            null_space_repr = proj_null_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -148,9 +147,9 @@ def test_train(epoch):
         print("Train Accuracy on eval mode", 100.*correct/total)
 
         print("Sample Projection Outputs for Train:")
-        print("Column Space:", col_space_repr[0])  # Print first sample projection
-        print("Row Space:", row_space_repr[0])
-        print("Null Space:", null_space_repr[0])
+        print("Column Space:", col_space_repr[:, 0])  # Print first sample projection
+        print("Row Space:", row_space_repr[:, 0])  # Check dimension correctness
+        print("Null Space:", null_space_repr[:, 0])
 
 
 test(1)
