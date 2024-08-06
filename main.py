@@ -141,7 +141,7 @@ def test(epoch):
                 
     
                 col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)/torch.norm(output_vector, dim=0)
-                print("col_space_repr_target_norm", col_space_repr_target_norm)
+                print("col_space_repr_target_norm", col_space_repr_target_norm.item())
                 col_list.append(col_space_repr_norm.item())
                 
             
