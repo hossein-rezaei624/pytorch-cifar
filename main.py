@@ -133,6 +133,10 @@ def test_train(epoch):
     test_loss = 0
     correct = 0
     total = 0
+
+    col_list = []
+    null_list = []
+    
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(trainloader_test):
             inputs, targets = inputs.to(device), targets.to(device)
