@@ -83,9 +83,7 @@ print("shape of W", W.shape)
 
 # Assume W is (10, 512) as num_classes x num_features
 WWt_pinv = torch.pinverse(W @ W.T)  # This is (10, 10)
-WtW_pinv = torch.pinverse(W.T @ W)  # This is (512, 512)
 
-proj_row_space = W @ WtW_pinv @ W.T  # (10, 512) @ (512, 512) @ (512, 10) = (10, 10)
 proj_column_space = W.T @ WWt_pinv @ W  # (512, 10) @ (10, 10) @ (10, 512) = (512, 512)
 proj_null_space = torch.eye(W.T.shape[0], device=W.device) - proj_column_space  # (512, 512)
 
@@ -106,7 +104,6 @@ def test(epoch):
 
             # Apply projections to the representations
             col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
-            row_space_repr = proj_row_space @ representations.T  # (10, 10) @ (512, 100) = (10, 100) - Incorrect
             null_space_repr = proj_null_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
             
             loss = criterion(logits, targets)
@@ -119,7 +116,6 @@ def test(epoch):
         
         print("Sample Projection Outputs for Test:")
         print("Column Space:", col_space_repr[:, 0])  # Print first sample projection
-        print("Row Space:", row_space_repr[:, 0])  # Check dimension correctness
         print("Null Space:", null_space_repr[:, 0])
 
 
@@ -135,7 +131,6 @@ def test_train(epoch):
 
             # Apply projections to the representations
             col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
-            row_space_repr = proj_row_space @ representations.T  # (10, 10) @ (512, 100) = (10, 100) - Incorrect
             null_space_repr = proj_null_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
             
             loss = criterion(logits, targets)
@@ -148,7 +143,6 @@ def test_train(epoch):
 
         print("Sample Projection Outputs for Train:")
         print("Column Space:", col_space_repr[:, 0])  # Print first sample projection
-        print("Row Space:", row_space_repr[:, 0])  # Check dimension correctness
         print("Null Space:", null_space_repr[:, 0])
 
 
