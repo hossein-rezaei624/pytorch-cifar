@@ -76,8 +76,8 @@ criterion = nn.CrossEntropyLoss()
 checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/1/ckpt199.pth')
 net.load_state_dict(checkpoint['net'])
 
-# Extract the weight matrix of the last fully connected layer
-last_fc = net.linear
+# Accessing the last fully connected layer correctly
+last_fc = net.module.linear if hasattr(net, 'module') else net.linear
 W = last_fc.weight.data
 
 print("shape of weights", W.shape)
