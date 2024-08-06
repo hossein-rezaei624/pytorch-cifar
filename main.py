@@ -88,7 +88,7 @@ WtW_pinv = torch.pinverse(Wt @ W)
 
 proj_column_space = W @ WtW_pinv @ Wt
 proj_row_space = Wt @ WWt_pinv @ W
-proj_null_space = torch.eye(W.shape[0]) - proj_column_space
+proj_null_space = torch.eye(W.shape[0], device=W.device) - proj_column_space
 
 
 def test(epoch):
