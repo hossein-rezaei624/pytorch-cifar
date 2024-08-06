@@ -110,12 +110,6 @@ def precompute_projections(W):
 projections = precompute_projections(W)
 
 
-print("projections[0]['column_target'].shape", projections[0]['column_target'].shape)
-print("projections[0]['null_target'].shape", projections[0]['null_target'].shape)
-print("projections[0]['column_nontarget'].shape", projections[0]['column_nontarget'].shape)
-print("projections[0]['null_nontarget'].shape", projections[0]['null_nontarget'].shape)
-
-
 def test(epoch):
     global best_acc
     net.eval()
@@ -140,6 +134,29 @@ def test(epoch):
 
             col_list.append(col_space_repr_norm.item())
             null_list.append(null_space_repr_norm.item())
+
+
+            # Apply precomputed projections
+            for i in range(representations.size(0)):  # Loop over the batch
+                target_class = targets[i].item()
+                proj_info = projections[target_class]
+    
+                # Reshape outputs[i] to (512, 1) for proper matrix multiplication
+                output_vector = representations[i].unsqueeze(1)  # Now shape (512, 1)
+                
+                col_space_repr_target = proj_info['column_target'] @ output_vector
+                col_space_repr_non_target = proj_info['column_nontarget'] @ output_vector
+
+                null_space_repr_target = proj_info['null_target'] @ output_vector
+                null_space_repr_non_target = proj_info['null_nontarget'] @ output_vector
+                
+    
+                # Perform loss calculation, accuracy updates, etc., as needed
+                # Example: Calculating norms for debug
+                print(torch.norm(target_repr, dim=0).mean().item())
+                print(torch.norm(non_target_repr, dim=0).mean().item())
+
+            
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
