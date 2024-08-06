@@ -165,7 +165,7 @@ def test_train(epoch):
 
         print("Sample Projection Outputs for Train:")
         print("Column Space:", col_mean)
-        print("Null Space:", null_mean)
+        print("Null Space:", null_mean, "\n")
 
 
 test(1)
