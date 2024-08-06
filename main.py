@@ -104,6 +104,7 @@ def test(epoch):
 
             print("col_space_repr.shape", col_space_repr.shape)
             print("null_space_repr.shape", null_space_repr.shape)
+            print("representations.shape", representations.shape)
 
             ##torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)
             
