@@ -102,8 +102,8 @@ def test(epoch):
             col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
             null_space_repr = proj_null_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
 
-            col_space_repr_norm = torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)
-            null_space_repr_norm = torch.norm(null_space_repr, dim=0)/torch.norm(representations, dim=1)
+            col_space_repr_norm = (torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
+            null_space_repr_norm = (torch.norm(null_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -114,8 +114,8 @@ def test(epoch):
         print("Test Accuracy:", 100.*correct/total)
         
         print("Sample Projection Outputs for Test:")
-        print("Column Space:", col_space_repr_norm)
-        print("Null Space:", null_space_repr_norm)
+        print("Column Space:", col_space_repr_norm.item())
+        print("Null Space:", null_space_repr_norm.item())
 
 
 def test_train(epoch):
@@ -132,8 +132,8 @@ def test_train(epoch):
             col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
             null_space_repr = proj_null_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
 
-            col_space_repr_norm = torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)
-            null_space_repr_norm = torch.norm(null_space_repr, dim=0)/torch.norm(representations, dim=1)
+            col_space_repr_norm = (torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
+            null_space_repr_norm = (torch.norm(null_space_repr, dim=0)/torch.norm(representations, dim=1)).mean()
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -144,8 +144,8 @@ def test_train(epoch):
         print("Train Accuracy on eval mode", 100.*correct/total)
 
         print("Sample Projection Outputs for Train:")
-        print("Column Space:", col_space_repr_norm)
-        print("Null Space:", null_space_repr_norm)
+        print("Column Space:", col_space_repr_norm.item())
+        print("Null Space:", null_space_repr_norm.item())
 
 
 test(1)
