@@ -231,7 +231,7 @@ def test_train(epoch):
         print("col_target_mean:", col_target_mean)
         print("col_non_target_mean:", col_non_target_mean)
         print("null_target_mean:", null_target_mean)
-        print("null_non_target_mean:", null_non_target_mean)
+        print("null_non_target_mean:", null_non_target_mean, '\n')
 
 
 test(1)
