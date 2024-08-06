@@ -79,7 +79,6 @@ net.load_state_dict(checkpoint['net'])
 # Accessing the last fully connected layer correctly
 last_fc = net.module.linear if hasattr(net, 'module') else net.linear
 W = last_fc.weight.data
-print("shape of W", W.shape)
 
 # Assume W is (10, 512) as num_classes x num_features
 WWt_pinv = torch.pinverse(W @ W.T)  # This is (10, 10)
@@ -98,9 +97,6 @@ def test(epoch):
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
-
-            print("Shape of representations:", representations.shape)
-            print("Shape of proj_column_space:", proj_column_space.shape)
 
             # Apply projections to the representations
             col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
