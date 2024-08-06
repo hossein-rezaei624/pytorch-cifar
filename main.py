@@ -103,9 +103,9 @@ def test(epoch):
             representations, logits = net(inputs)
 
             # Apply projections to the representations
-            col_space_repr = proj_column_space @ representations.T
-            row_space_repr = proj_row_space @ representations.T
-            null_space_repr = proj_null_space @ representations.T
+            col_space_repr = proj_column_space @ representations
+            row_space_repr = proj_row_space @ representations
+            null_space_repr = proj_null_space @ representations            
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -116,9 +116,9 @@ def test(epoch):
         print("Test Accuracy:", 100.*correct/total)
         
         print("Sample Projection Outputs for Test:")
-        print("Column Space:", col_space_repr[:, 0])  # Print first sample projection
-        print("Row Space:", row_space_repr[:, 0])
-        print("Null Space:", null_space_repr[:, 0])
+        print("Column Space:", col_space_repr[0])  # Print first sample projection
+        print("Row Space:", row_space_repr[0])
+        print("Null Space:", null_space_repr[0])
 
 
 def test_train(epoch):
@@ -132,9 +132,9 @@ def test_train(epoch):
             representations, logits = net(inputs)
 
             # Apply projections to the representations
-            col_space_repr = proj_column_space @ representations.T
-            row_space_repr = proj_row_space @ representations.T
-            null_space_repr = proj_null_space @ representations.T
+            col_space_repr = proj_column_space @ representations
+            row_space_repr = proj_row_space @ representations
+            null_space_repr = proj_null_space @ representations 
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -145,9 +145,9 @@ def test_train(epoch):
         print("Train Accuracy on eval mode", 100.*correct/total)
 
         print("Sample Projection Outputs for Train:")
-        print("Column Space:", col_space_repr[:, 0])  # Print first sample projection
-        print("Row Space:", row_space_repr[:, 0])
-        print("Null Space:", null_space_repr[:, 0])
+        print("Column Space:", col_space_repr[0])  # Print first sample projection
+        print("Row Space:", row_space_repr[0])
+        print("Null Space:", null_space_repr[0])
 
 
 test(1)
