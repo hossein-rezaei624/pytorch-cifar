@@ -118,7 +118,7 @@ def test(epoch):
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
           
-        print("\n Test Accuracy:", 100.*correct/total)
+        print("\nTest Accuracy:", 100.*correct/total)
 
         col_mean = np.mean(col_list)
         null_mean = np.mean(null_list)
@@ -158,7 +158,7 @@ def test_train(epoch):
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-        print("\n Train Accuracy on eval mode", 100.*correct/total)
+        print("\nTrain Accuracy on eval mode", 100.*correct/total)
 
         col_mean = np.mean(col_list)
         null_mean = np.mean(null_list)
