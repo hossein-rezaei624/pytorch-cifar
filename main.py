@@ -101,6 +101,12 @@ def test(epoch):
             # Apply projections to the representations
             col_space_repr = proj_column_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
             null_space_repr = proj_null_space @ representations.T  # (512, 512) @ (512, 100) = (512, 100)
+
+            print("col_space_repr.shape", col_space_repr.shape)
+            print("null_space_repr.shape", null_space_repr.shape)
+
+            ##torch.norm(col_space_repr, dim=0)/torch.norm(representations, dim=1)
+            
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -111,8 +117,8 @@ def test(epoch):
         print("Test Accuracy:", 100.*correct/total)
         
         print("Sample Projection Outputs for Test:")
-        print("Column Space:", col_space_repr[:, 0])  # Print first sample projection
-        print("Null Space:", null_space_repr[:, 0])
+        #print("Column Space:", col_space_repr[:, 0])  # Print first sample projection
+        #print("Null Space:", null_space_repr[:, 0])
 
 
 def test_train(epoch):
@@ -138,8 +144,8 @@ def test_train(epoch):
         print("Train Accuracy on eval mode", 100.*correct/total)
 
         print("Sample Projection Outputs for Train:")
-        print("Column Space:", col_space_repr[:, 0])  # Print first sample projection
-        print("Null Space:", null_space_repr[:, 0])
+        #print("Column Space:", col_space_repr[:, 0])  # Print first sample projection
+        #print("Null Space:", null_space_repr[:, 0])
 
 
 test(1)
