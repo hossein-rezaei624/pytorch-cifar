@@ -42,8 +42,8 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    ##transforms.RandomHorizontalFlip(),
+    ##transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
     ##transforms.RandomRotation(degrees=90),
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -159,7 +159,7 @@ def test(epoch):
             'acc': acc,
             'epoch': epoch,
         }
-        torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/2/ckpt{epoch}.pth')    
+        torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/3/ckpt{epoch}.pth')    
 
 
 def test_train(epoch):
