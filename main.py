@@ -42,44 +42,42 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
+    ##transforms.RandomCrop(32, padding=4),
+    ##transforms.RandomHorizontalFlip(),
     ##transforms.RandomRotation(degrees=90),
     transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
 ])
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
 ])
 
-trainset = torchvision.datasets.CIFAR10(
+trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
 
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=128, shuffle=True, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
 
-trainset_test = torchvision.datasets.CIFAR10(
+trainset_test = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_test)
 
 trainloader_test = torch.utils.data.DataLoader(
     trainset_test, batch_size=128, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
 
-testset = torchvision.datasets.CIFAR10(
+testset = torchvision.datasets.CIFAR100(
     root='./data', train=False, download=True, transform=transform_test)
 
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
-classes = ('plane', 'car', 'bird', 'cat', 'deer',
-           'dog', 'frog', 'horse', 'ship', 'truck')
 
 # Model
 print('==> Building model..')
-net = ResNet34()
+net = ResNet18()
 # net = VGG('VGG19')
 # net = GoogLeNet()
 # net = DenseNet121()
@@ -159,7 +157,7 @@ def test(epoch):
             'acc': acc,
             'epoch': epoch,
         }
-        torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/4/ckpt{epoch}.pth')    
+        torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/1/ckpt{epoch}.pth')    
 
 
 def test_train(epoch):
