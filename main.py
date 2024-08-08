@@ -69,7 +69,7 @@ if device == 'cuda':
 
 criterion = nn.CrossEntropyLoss()
 
-checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/4/ckpt199.pth')
+checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/1/ckpt199.pth')
 net.load_state_dict(checkpoint['net'])
 
 # Accessing the last fully connected layer correctly
@@ -140,10 +140,10 @@ def test(epoch):
                 null_space_repr_non_target = proj_info['null_nontarget'] @ output_vector
                 
     
-                col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)/torch.norm(output_vector, dim=0)
-                col_space_repr_non_target_norm = torch.norm(col_space_repr_non_target, dim=0)/torch.norm(output_vector, dim=0)
-                null_space_repr_target_norm = torch.norm(null_space_repr_target, dim=0)/torch.norm(output_vector, dim=0)
-                null_space_repr_non_target_norm = torch.norm(null_space_repr_non_target, dim=0)/torch.norm(output_vector, dim=0)
+                col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)
+                col_space_repr_non_target_norm = torch.norm(col_space_repr_non_target, dim=0)
+                null_space_repr_target_norm = torch.norm(null_space_repr_target, dim=0)
+                null_space_repr_non_target_norm = torch.norm(null_space_repr_non_target, dim=0)
 
                 col_target_list.append(col_space_repr_target_norm.item())
                 col_non_target_list.append(col_space_repr_non_target_norm.item())
@@ -202,10 +202,10 @@ def test_train(epoch):
                 null_space_repr_non_target = proj_info['null_nontarget'] @ output_vector
                 
     
-                col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)/torch.norm(output_vector, dim=0)
-                col_space_repr_non_target_norm = torch.norm(col_space_repr_non_target, dim=0)/torch.norm(output_vector, dim=0)
-                null_space_repr_target_norm = torch.norm(null_space_repr_target, dim=0)/torch.norm(output_vector, dim=0)
-                null_space_repr_non_target_norm = torch.norm(null_space_repr_non_target, dim=0)/torch.norm(output_vector, dim=0)
+                col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)
+                col_space_repr_non_target_norm = torch.norm(col_space_repr_non_target, dim=0)
+                null_space_repr_target_norm = torch.norm(null_space_repr_target, dim=0)
+                null_space_repr_non_target_norm = torch.norm(null_space_repr_non_target, dim=0)
 
                 col_target_list.append(col_space_repr_target_norm.item())
                 col_non_target_list.append(col_space_repr_non_target_norm.item())
