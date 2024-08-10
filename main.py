@@ -84,6 +84,12 @@ def cosine_similarity(rep, W):
     rep_norm = F.normalize(rep, p=2, dim=1)
     return torch.mm(rep_norm, W_norm.t())
 
+def norm_of_projection_all(rep, W):
+    W_norm = F.normalize(W, p=2, dim=1)
+    dot_products = torch.mm(rep, W_norm.t())
+    projections = dot_products.unsqueeze(2) * W_norm.unsqueeze(0)
+    norms = torch.norm(projections, dim=2)
+    return norms
 
 
 def test(epoch):
@@ -99,7 +105,11 @@ def test(epoch):
             representations, logits = net(inputs)
             cos_sim = cosine_similarity(representations, W)
             print("cos_sim.shape", cos_sim.shape)
-            print("cos_sim", cos_sim)
+            #print("cos_sim", cos_sim)
+
+            projection_norms = norm_of_projection_all(representations, W)
+            print("projection_norms.shape", projection_norms.shape)
+            #print()
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
