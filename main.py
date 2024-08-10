@@ -146,7 +146,11 @@ def test(epoch):
             correct += predicted.eq(targets).sum().item()
           
         print("\nTest Accuracy:", 100.*correct/total)
-        print("cos_sim_batch_target", cos_sim_batch_target)
+        
+        print("cos_sim_batch_target", np.mean(cos_sim_batch_target))
+        print("cos_sim_batch_non_target", np.mean(cos_sim_batch_non_target))
+        print("proj_batch_target", np.mean(proj_batch_target))
+        print("proj_batch_non_target", np.mean(proj_batch_non_target))
 
 def test_train(epoch):
     net.eval()
