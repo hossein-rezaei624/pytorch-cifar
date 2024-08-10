@@ -99,6 +99,7 @@ def test(epoch):
             representations, logits = net(inputs)
             cos_sim = cosine_similarity(representations, W)
             print("cos_sim.shape", cos_sim.shape)
+            print("cos_sim", cos_sim)
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
