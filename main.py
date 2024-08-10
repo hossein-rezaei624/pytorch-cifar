@@ -76,7 +76,15 @@ net.load_state_dict(checkpoint['net'])
 last_fc = net.module.linear if hasattr(net, 'module') else net.linear
 W = last_fc.weight.data
 
-print("W.shape", W.shape)
+
+def cosine_similarity(rep, W):
+    # Normalize the representation and the weights
+    W_norm = F.normalize(W, p=2, dim=1)
+    print("W_norm.shape", W_norm.shape)
+    rep_norm = F.normalize(rep, p=2, dim=1)
+    return torch.mm(rep_norm, W_norm.t())
+
+
 
 def test(epoch):
     global best_acc
@@ -89,6 +97,8 @@ def test(epoch):
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
+            cos_sim = cosine_similarity(representations, W)
+            print("cos_sim.shape", cos_sim.shape)
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
