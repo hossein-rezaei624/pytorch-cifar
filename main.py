@@ -97,6 +97,11 @@ def test(epoch):
     correct = 0
     total = 0
 
+    cos_sim_batch_target = []
+    cos_sim_batch_non_target = []
+    proj_batch_target = []
+    proj_batch_non_target = []
+    
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
@@ -127,7 +132,11 @@ def test(epoch):
                 proj_sample_target.append(target_proj.item())
                 proj_sample_non_target.append(mean_proj_nontarget.item())
 
-            print("proj_sample_non_target", proj_sample_non_target)
+            
+            cos_sim_batch_target.append(np.mean(cos_sim_sample_target))
+            cos_sim_batch_non_target.append(np.mean(cos_sim_sample_non_target))
+            proj_batch_target.append(np.mean(proj_sample_target))
+            proj_batch_non_target.append(np.mean(proj_sample_non_target))
 
             
             loss = criterion(logits, targets)
@@ -137,7 +146,7 @@ def test(epoch):
             correct += predicted.eq(targets).sum().item()
           
         print("\nTest Accuracy:", 100.*correct/total)
-
+        print("cos_sim_batch_target", cos_sim_batch_target)
 
 def test_train(epoch):
     net.eval()
