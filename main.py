@@ -76,7 +76,6 @@ net.load_state_dict(checkpoint['net'])
 last_fc = net.module.linear if hasattr(net, 'module') else net.linear
 W = last_fc.weight.data
 
-
 def cosine_similarity(rep, W):
     # Normalize the representation and the weights
     W_norm = F.normalize(W, p=2, dim=1)
@@ -86,11 +85,7 @@ def cosine_similarity(rep, W):
 def norm_of_projection_all(rep, W):
     W_norm = F.normalize(W, p=2, dim=1)
     dot_products = torch.mm(rep, W_norm.t())
-    print("dot_products.shape", dot_products.shape)
-    print("dot_products.unsqueeze(2).shape", dot_products.unsqueeze(2).shape)
-    print("W_norm.unsqueeze(0).shape", W_norm.unsqueeze(0).shape)
     projections = dot_products.unsqueeze(2) * W_norm.unsqueeze(0)
-    print("projections.shape", projections.shape)
     norms = torch.norm(projections, dim=2)
     return norms
 
