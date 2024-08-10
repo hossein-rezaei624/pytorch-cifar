@@ -102,11 +102,19 @@ def test(epoch):
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
+            
             cos_sim = cosine_similarity(representations, W)
-            print("cos_sim", cos_sim)
-
             projection_norms = norm_of_projection_all(representations, W)
-            print("projection_norms.shape", projection_norms.shape)
+
+            for i in range(inputs.size(0)):
+                target_class = targets[i].item()
+                norm_cos_sim_target = cos_sim[i, target_class]
+                norm_proj_target = projection_norms[i, target_class]
+
+                print("norm_cos_sim_target", norm_cos_sim_target)
+                print("norm_proj_target", norm_proj_target)
+
+            
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
