@@ -105,15 +105,13 @@ def test(epoch):
             
             cos_sim = cosine_similarity(representations, W)
             projection_norms = norm_of_projection_all(representations, W)
-            print("projection_norms", projection_norms)
 
+            
             for i in range(inputs.size(0)):
                 target_class = targets[i].item()
                 norm_cos_sim_target = cos_sim[i, target_class]
                 norm_proj_target = projection_norms[i, target_class]
 
-                ##print("norm_cos_sim_target", norm_cos_sim_target)
-                ##print("norm_proj_target", norm_proj_target)
 
             
             
