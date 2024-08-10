@@ -105,14 +105,30 @@ def test(epoch):
             cos_sim = cosine_similarity(representations, W)
             projection_norms = norm_of_projection_all(representations, W)
 
+            cos_sim_sample_target = []
+            cos_sim_sample_non_target = []
+            proj_sample_target = []
+            proj_sample_non_target = []
             
             for i in range(inputs.size(0)):
                 target_class = targets[i].item()
-                norm_cos_sim_target = cos_sim[i, target_class]
-                norm_proj_target = projection_norms[i, target_class]
+                
+                target_cos_sim = cos_sim[i, target_class]
+                target_proj = projection_norms[i, target_class]
 
+                non_target_cos_sim = torch.cat((cos_sim[i, :target_class], cos_sim[i, target_class+1:]))                
+                mean_cos_sim_nontarget = non_target_cos_sim.mean()
 
-            
+                non_target_proj = torch.cat((projection_norms[i, :target_class], projection_norms[i, target_class+1:]))                
+                mean_proj_nontarget = non_target_proj.mean()
+    
+                cos_sim_sample_target.append(target_cos_sim)
+                cos_sim_sample_non_target.append(mean_cos_sim_nontarget)
+                proj_sample_target.append(target_proj)
+                proj_sample_non_target.append(mean_proj_nontarget)
+
+            print("proj_sample_non_target", proj_sample_non_target)
+
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
