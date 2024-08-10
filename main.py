@@ -122,10 +122,10 @@ def test(epoch):
                 non_target_proj = torch.cat((projection_norms[i, :target_class], projection_norms[i, target_class+1:]))                
                 mean_proj_nontarget = non_target_proj.mean()
     
-                cos_sim_sample_target.append(target_cos_sim)
-                cos_sim_sample_non_target.append(mean_cos_sim_nontarget)
-                proj_sample_target.append(target_proj)
-                proj_sample_non_target.append(mean_proj_nontarget)
+                cos_sim_sample_target.append(target_cos_sim.item())
+                cos_sim_sample_non_target.append(mean_cos_sim_nontarget.item())
+                proj_sample_target.append(target_proj.item())
+                proj_sample_non_target.append(mean_proj_nontarget.item())
 
             print("proj_sample_non_target", proj_sample_non_target)
 
