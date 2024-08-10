@@ -80,7 +80,6 @@ W = last_fc.weight.data
 def cosine_similarity(rep, W):
     # Normalize the representation and the weights
     W_norm = F.normalize(W, p=2, dim=1)
-    print("W_norm.shape", W_norm.shape)
     rep_norm = F.normalize(rep, p=2, dim=1)
     return torch.mm(rep_norm, W_norm.t())
 
@@ -104,12 +103,10 @@ def test(epoch):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
             cos_sim = cosine_similarity(representations, W)
-            print("cos_sim.shape", cos_sim.shape)
-            #print("cos_sim", cos_sim)
+            print("cos_sim", cos_sim)
 
             projection_norms = norm_of_projection_all(representations, W)
             print("projection_norms.shape", projection_norms.shape)
-            #print()
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
