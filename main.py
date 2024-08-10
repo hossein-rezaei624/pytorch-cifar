@@ -76,6 +76,8 @@ net.load_state_dict(checkpoint['net'])
 last_fc = net.module.linear if hasattr(net, 'module') else net.linear
 W = last_fc.weight.data
 
+print("W.shape", W.shape)
+
 def test(epoch):
     global best_acc
     net.eval()
