@@ -42,34 +42,33 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    ##transforms.RandomRotation(degrees=90),
+    ##transforms.RandomCrop(32, padding=4),
+    ##transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
-    transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
+    transforms.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)),
 ])
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
+    transforms.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)),
 ])
 
-trainset = torchvision.datasets.CIFAR100(
-    root='./data', train=True, download=True, transform=transform_train)
+trainset = torchvision.datasets.SVHN(
+    root='./data', split='train', download=True, transform=transform_train)
 
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=128, shuffle=True, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
 
-trainset_test = torchvision.datasets.CIFAR100(
-    root='./data', train=True, download=True, transform=transform_test)
+trainset_test = torchvision.datasets.SVHN(
+    root='./data', split='train', download=True, transform=transform_test)
 
 trainloader_test = torch.utils.data.DataLoader(
     trainset_test, batch_size=128, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
 
-testset = torchvision.datasets.CIFAR100(
-    root='./data', train=False, download=True, transform=transform_test)
+testset = torchvision.datasets.SVHN(
+    root='./data', split='test', download=True, transform=transform_test)
 
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
@@ -77,7 +76,7 @@ testloader = torch.utils.data.DataLoader(
 
 # Model
 print('==> Building model..')
-net = ResNet34()
+net = ResNet18()
 # net = VGG('VGG19')
 # net = GoogLeNet()
 # net = DenseNet121()
@@ -151,13 +150,13 @@ def test(epoch):
         torch.save(state, './checkpoint/ckpt.pth')
         best_acc = acc
 
-    if epoch > 99:
+    if epoch > -1:
         state = {
             'net': net.state_dict(),
             'acc': acc,
             'epoch': epoch,
         }
-        torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/4/ckpt{epoch}.pth')    
+        torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/1/ckpt{epoch}.pth')    
 
 
 def test_train(epoch):
