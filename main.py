@@ -42,17 +42,17 @@ print('==> Preparing data..')
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
 ])
 
-trainset_test = torchvision.datasets.CIFAR10(
+trainset_test = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_test)
 
 trainloader_test = torch.utils.data.DataLoader(
     trainset_test, batch_size=128, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
 
-testset = torchvision.datasets.CIFAR10(
+testset = torchvision.datasets.CIFAR100(
     root='./data', train=False, download=True, transform=transform_test)
 
 testloader = torch.utils.data.DataLoader(
@@ -61,7 +61,7 @@ testloader = torch.utils.data.DataLoader(
 
 # Model
 print('==> Building model..')
-net = ResNet34()
+net = ResNet18()
 net = net.to(device)
 if device == 'cuda':
     net = torch.nn.DataParallel(net)
@@ -69,7 +69,7 @@ if device == 'cuda':
 
 criterion = nn.CrossEntropyLoss()
 
-checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/resnet34_4/ckpt199.pth')
+checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/1/ckpt199.pth')
 net.load_state_dict(checkpoint['net'])
 
 # Accessing the last fully connected layer correctly
