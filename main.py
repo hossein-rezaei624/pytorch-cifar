@@ -69,7 +69,7 @@ if device == 'cuda':
 
 criterion = nn.CrossEntropyLoss()
 
-checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/1/ckpt199.pth')
+checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/2/ckpt199.pth')
 net.load_state_dict(checkpoint['net'])
 
 # Accessing the last fully connected layer correctly
