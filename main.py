@@ -106,10 +106,10 @@ def test(epoch):
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
-            ##soft = F.softmax(logits, dim=1)
+            soft = F.softmax(logits, dim=1)
             
-            cos_sim = cosine_similarity(representations, W)
-            projection_norms = norm_of_projection_all(representations, W)
+            ##cos_sim = cosine_similarity(representations, W)
+            ##projection_norms = norm_of_projection_all(representations, W)
 
             cos_sim_sample_target = []
             cos_sim_sample_non_target = []
@@ -119,13 +119,13 @@ def test(epoch):
             for i in range(inputs.size(0)):
                 target_class = targets[i].item()
                 
-                target_cos_sim = cos_sim[i, target_class]
-                target_proj = projection_norms[i, target_class]
+                target_cos_sim = logits[i, target_class]
+                target_proj = soft[i, target_class]
 
-                non_target_cos_sim = torch.cat((cos_sim[i, :target_class], cos_sim[i, target_class+1:]))   
+                non_target_cos_sim = torch.cat((logits[i, :target_class], logits[i, target_class+1:]))   
                 mean_cos_sim_nontarget = non_target_cos_sim.mean()
 
-                non_target_proj = torch.cat((projection_norms[i, :target_class], projection_norms[i, target_class+1:]))                
+                non_target_proj = torch.cat((soft[i, :target_class], soft[i, target_class+1:]))                
                 mean_proj_nontarget = non_target_proj.mean()
     
                 cos_sim_sample_target.append(target_cos_sim.item())
