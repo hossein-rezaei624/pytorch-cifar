@@ -110,6 +110,9 @@ def test(epoch):
             cos_sim = cosine_similarity(representations, W)
             projection_norms = norm_of_projection_all(representations, W)
 
+            print("logits.shape", logits.shape)
+            print("cos_sim.shape", cos_sim.shape)
+
             cos_sim_sample_target = []
             cos_sim_sample_non_target = []
             proj_sample_target = []
