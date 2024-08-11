@@ -69,7 +69,7 @@ if device == 'cuda':
 
 criterion = nn.CrossEntropyLoss()
 
-checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/4/ckpt199.pth')
+checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/1/ckpt199.pth')
 net.load_state_dict(checkpoint['net'])
 
 # Accessing the last fully connected layer correctly
@@ -106,12 +106,10 @@ def test(epoch):
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
+            ##soft = F.softmax(logits, dim=1)
             
             cos_sim = cosine_similarity(representations, W)
             projection_norms = norm_of_projection_all(representations, W)
-
-            print("logits.shape", logits.shape)
-            print("cos_sim.shape", cos_sim.shape)
 
             cos_sim_sample_target = []
             cos_sim_sample_non_target = []
@@ -125,10 +123,10 @@ def test(epoch):
                 target_proj = projection_norms[i, target_class]
 
                 non_target_cos_sim = torch.cat((cos_sim[i, :target_class], cos_sim[i, target_class+1:]))   
-                mean_cos_sim_nontarget = torch.abs(non_target_cos_sim).mean()
+                mean_cos_sim_nontarget = non_target_cos_sim.mean()
 
                 non_target_proj = torch.cat((projection_norms[i, :target_class], projection_norms[i, target_class+1:]))                
-                mean_proj_nontarget = torch.abs(non_target_proj).mean()
+                mean_proj_nontarget = non_target_proj.mean()
     
                 cos_sim_sample_target.append(target_cos_sim.item())
                 cos_sim_sample_non_target.append(mean_cos_sim_nontarget.item())
