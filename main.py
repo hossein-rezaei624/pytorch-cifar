@@ -42,8 +42,8 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
+    ##transforms.RandomCrop(32, padding=4),
+    ##transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)),
 ])
@@ -76,7 +76,7 @@ testloader = torch.utils.data.DataLoader(
 
 # Model
 print('==> Building model..')
-net = ResNet18()
+net = ResNet34()
 # net = VGG('VGG19')
 # net = GoogLeNet()
 # net = DenseNet121()
@@ -150,13 +150,13 @@ def test(epoch):
         torch.save(state, './checkpoint/ckpt.pth')
         best_acc = acc
 
-    if epoch > -1:
+    if epoch > 49:
         state = {
             'net': net.state_dict(),
             'acc': acc,
             'epoch': epoch,
         }
-        torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/4/ckpt{epoch}.pth')    
+        torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/1/ckpt{epoch}.pth')    
 
 
 def test_train(epoch):
