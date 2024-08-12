@@ -144,11 +144,10 @@ def test(epoch):
                 target_weight = W[target_class].unsqueeze(0)  # Shape (1, 512)
                 non_target_weights = torch.cat([W[:target_class], W[target_class+1:]], dim=0)  # Shape (9, 512)
                 
-    
-                col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)/(torch.norm(output_vector, dim=0))
-                col_space_repr_non_target_norm = torch.norm(col_space_repr_non_target, dim=0)/(torch.norm(output_vector, dim=0))
-                null_space_repr_target_norm = torch.norm(null_space_repr_target, dim=0)/(torch.norm(output_vector, dim=0))
-                null_space_repr_non_target_norm = torch.norm(null_space_repr_non_target, dim=0)/(torch.norm(output_vector, dim=0))
+                col_space_repr_target_norm = torch.dot(col_space_repr_target.squeeze(), output_vector.squeeze()) / (torch.norm(col_space_repr_target, dim=0) * torch.norm(output_vector, dim=0))
+                col_space_repr_non_target_norm = torch.dot(col_space_repr_non_target.squeeze(), output_vector.squeeze()) / (torch.norm(col_space_repr_non_target, dim=0) * torch.norm(output_vector, dim=0))
+                null_space_repr_target_norm = torch.dot(null_space_repr_target.squeeze(), output_vector.squeeze()) / (torch.norm(null_space_repr_target, dim=0) * torch.norm(output_vector, dim=0))
+                null_space_repr_non_target_norm = torch.dot(null_space_repr_non_target.squeeze(), output_vector.squeeze()) / (torch.norm(null_space_repr_non_target, dim=0) * torch.norm(output_vector, dim=0))
 
                 col_target_list.append(col_space_repr_target_norm.item())
                 col_non_target_list.append(col_space_repr_non_target_norm.item())
