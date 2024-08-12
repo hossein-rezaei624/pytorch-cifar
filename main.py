@@ -1,4 +1,4 @@
-import torch
+import torch 
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
@@ -42,22 +42,24 @@ print('==> Preparing data..')
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-trainset_test = torchvision.datasets.SVHN(
-    root='./data', split='train', download=True, transform=transform_test)
+trainset_test = torchvision.datasets.CIFAR10(
+    root='./data', train=True, download=True, transform=transform_test)
 
 trainloader_test = torch.utils.data.DataLoader(
     trainset_test, batch_size=128, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
 
-testset = torchvision.datasets.SVHN(
-    root='./data', split='test', download=True, transform=transform_test)
+testset = torchvision.datasets.CIFAR10(
+    root='./data', train=False, download=True, transform=transform_test)
 
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2, worker_init_fn=lambda worker_id: set_seed(0))
 
+classes = ('plane', 'car', 'bird', 'cat', 'deer',
+           'dog', 'frog', 'horse', 'ship', 'truck')
 
 # Model
 print('==> Building model..')
@@ -69,25 +71,43 @@ if device == 'cuda':
 
 criterion = nn.CrossEntropyLoss()
 
-checkpoint = torch.load('/home/rezaei/pytorch-cifar/checkpoint/4/ckpt199.pth')
+checkpoint = torch.load('/home/rezaei/projection/pytorch-cifar/checkpoint/cifar10/resnet18_1/ckpt199.pth')
 net.load_state_dict(checkpoint['net'])
 
 # Accessing the last fully connected layer correctly
 last_fc = net.module.linear if hasattr(net, 'module') else net.linear
 W = last_fc.weight.data
 
-def cosine_similarity(rep, W):
-    # Normalize the representation and the weights
-    W_norm = F.normalize(W, p=2, dim=1)
-    rep_norm = F.normalize(rep, p=2, dim=1)
-    return torch.mm(rep_norm, W_norm.t())
+def calc_projection_matrices(W):
+    """Calculate column and null space projection matrices for a given weight matrix W."""
+    WWt_pinv = torch.pinverse(W @ W.T)
+    proj_column_space = W.T @ WWt_pinv @ W
+    proj_null_space = torch.eye(W.T.shape[0], device=W.device) - proj_column_space
+    return proj_column_space, proj_null_space
 
-def norm_of_projection_all(rep, W):
-    W_norm = F.normalize(W, p=2, dim=1)
-    dot_products = torch.mm(rep, W_norm.t())
-    projections = dot_products.unsqueeze(2) * W_norm.unsqueeze(0)
-    norms = torch.norm(projections, dim=2)
-    return norms
+def precompute_projections(W):
+    """Precompute projections for all classes."""
+    projections = {}
+    for i in range(W.shape[0]):  # Assume W is (10, 512)
+        # Isolate weight for target and non-target classes
+        target_weight = W[i].unsqueeze(0)  # Shape (1, 512)
+        non_target_weights = torch.cat([W[:i], W[i+1:]], dim=0)  # Shape (9, 512)
+
+        # Calculate projection matrices
+        proj_column_space_target, proj_null_space_target = calc_projection_matrices(target_weight)
+        proj_column_space_nontarget, proj_null_space_nontarget = calc_projection_matrices(non_target_weights)
+
+        # Store in dictionary
+        projections[i] = {
+            'column_target': proj_column_space_target,
+            'null_target': proj_null_space_target,
+            'column_nontarget': proj_column_space_nontarget,
+            'null_nontarget': proj_null_space_nontarget
+        }
+    return projections
+
+# Precompute the projection matrices
+projections = precompute_projections(W)
 
 
 def test(epoch):
@@ -97,48 +117,44 @@ def test(epoch):
     correct = 0
     total = 0
 
-    cos_sim_batch_target = []
-    cos_sim_batch_non_target = []
-    proj_batch_target = []
-    proj_batch_non_target = []
+    col_target_list = []
+    col_non_target_list = []
+    null_target_list = []
+    null_non_target_list = []
     
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
-            soft = F.softmax(logits, dim=1)
-            
-            ##cos_sim = cosine_similarity(representations, W)
-            ##projection_norms = norm_of_projection_all(representations, W)
 
-            cos_sim_sample_target = []
-            cos_sim_sample_non_target = []
-            proj_sample_target = []
-            proj_sample_non_target = []
-            
-            for i in range(inputs.size(0)):
+            # Apply precomputed projections
+            for i in range(representations.size(0)):  # Loop over the batch
                 target_class = targets[i].item()
-                
-                target_cos_sim = logits[i, target_class]
-                target_proj = soft[i, target_class]
-
-                non_target_cos_sim = torch.cat((logits[i, :target_class], logits[i, target_class+1:]))   
-                mean_cos_sim_nontarget = non_target_cos_sim.mean()
-
-                non_target_proj = torch.cat((soft[i, :target_class], soft[i, target_class+1:]))                
-                mean_proj_nontarget = non_target_proj.mean()
+                proj_info = projections[target_class]
     
-                cos_sim_sample_target.append(target_cos_sim.item())
-                cos_sim_sample_non_target.append(mean_cos_sim_nontarget.item())
-                proj_sample_target.append(target_proj.item())
-                proj_sample_non_target.append(mean_proj_nontarget.item())
+                # Reshape outputs[i] to (512, 1) for proper matrix multiplication
+                output_vector = representations[i].unsqueeze(1)  # Now shape (512, 1)
+                
+                col_space_repr_target = proj_info['column_target'] @ output_vector
+                col_space_repr_non_target = proj_info['column_nontarget'] @ output_vector
 
-            
-            cos_sim_batch_target.append(np.mean(cos_sim_sample_target))
-            cos_sim_batch_non_target.append(np.mean(cos_sim_sample_non_target))
-            proj_batch_target.append(np.mean(proj_sample_target))
-            proj_batch_non_target.append(np.mean(proj_sample_non_target))
+                null_space_repr_target = proj_info['null_target'] @ output_vector
+                null_space_repr_non_target = proj_info['null_nontarget'] @ output_vector
 
+                target_weight = W[target_class].unsqueeze(0)  # Shape (1, 512)
+                non_target_weights = torch.cat([W[:target_class], W[target_class+1:]], dim=0)  # Shape (9, 512)
+                
+    
+                col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)/(torch.norm(output_vector, dim=0))
+                col_space_repr_non_target_norm = torch.norm(col_space_repr_non_target, dim=0)/(torch.norm(output_vector, dim=0))
+                null_space_repr_target_norm = torch.norm(null_space_repr_target, dim=0)/(torch.norm(output_vector, dim=0))
+                null_space_repr_non_target_norm = torch.norm(null_space_repr_non_target, dim=0)/(torch.norm(output_vector, dim=0))
+
+                col_target_list.append(col_space_repr_target_norm.item())
+                col_non_target_list.append(col_space_repr_non_target_norm.item())
+                null_target_list.append(null_space_repr_target_norm.item())
+                null_non_target_list.append(null_space_repr_non_target_norm.item())
+                
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -147,23 +163,62 @@ def test(epoch):
             correct += predicted.eq(targets).sum().item()
           
         print("\nTest Accuracy:", 100.*correct/total)
+
+        col_target_mean = np.mean(col_target_list)
+        col_non_target_mean = np.mean(col_non_target_list)
+        null_target_mean = np.mean(null_target_list)
+        null_non_target_mean = np.mean(null_non_target_list)
         
-        print("cos_sim_batch_target", np.mean(cos_sim_batch_target))
-        print("cos_sim_batch_non_target", np.mean(cos_sim_batch_non_target))
-        print("proj_batch_target", np.mean(proj_batch_target))
-        print("proj_batch_non_target", np.mean(proj_batch_non_target))
+        print("Sample Projection Outputs for Test:")
+        print("col_target_mean:", col_target_mean)
+        print("col_non_target_mean:", col_non_target_mean)
+        print("null_target_mean:", null_target_mean)
+        print("null_non_target_mean:", null_non_target_mean)
+
 
 def test_train(epoch):
     net.eval()
     test_loss = 0
     correct = 0
     total = 0
+
+    col_target_list = []
+    col_non_target_list = []
+    null_target_list = []
+    null_non_target_list = []
     
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(trainloader_test):
             inputs, targets = inputs.to(device), targets.to(device)
             representations, logits = net(inputs)
 
+            # Apply precomputed projections
+            for i in range(representations.size(0)):  # Loop over the batch
+                target_class = targets[i].item()
+                proj_info = projections[target_class]
+    
+                # Reshape outputs[i] to (512, 1) for proper matrix multiplication
+                output_vector = representations[i].unsqueeze(1)  # Now shape (512, 1)
+                
+                col_space_repr_target = proj_info['column_target'] @ output_vector
+                col_space_repr_non_target = proj_info['column_nontarget'] @ output_vector
+
+                null_space_repr_target = proj_info['null_target'] @ output_vector
+                null_space_repr_non_target = proj_info['null_nontarget'] @ output_vector
+                
+                target_weight = W[target_class].unsqueeze(0)  # Shape (1, 512)
+                non_target_weights = torch.cat([W[:target_class], W[target_class+1:]], dim=0)  # Shape (9, 512)
+                
+                col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)/(torch.norm(output_vector, dim=0))
+                col_space_repr_non_target_norm = torch.norm(col_space_repr_non_target, dim=0)/(torch.norm(output_vector, dim=0))
+                null_space_repr_target_norm = torch.norm(null_space_repr_target, dim=0)/(torch.norm(output_vector, dim=0))
+                null_space_repr_non_target_norm = torch.norm(null_space_repr_non_target, dim=0)/(torch.norm(output_vector, dim=0))
+                
+                col_target_list.append(col_space_repr_target_norm.item())
+                col_non_target_list.append(col_space_repr_non_target_norm.item())
+                null_target_list.append(null_space_repr_target_norm.item())
+                null_non_target_list.append(null_space_repr_non_target_norm.item())
+            
             loss = criterion(logits, targets)
             test_loss += loss.item()
             _, predicted = logits.max(1)
@@ -171,6 +226,17 @@ def test_train(epoch):
             correct += predicted.eq(targets).sum().item()
 
         print("\nTrain Accuracy on eval mode", 100.*correct/total)
+
+        col_target_mean = np.mean(col_target_list)
+        col_non_target_mean = np.mean(col_non_target_list)
+        null_target_mean = np.mean(null_target_list)
+        null_non_target_mean = np.mean(null_non_target_list)
+        
+        print("Sample Projection Outputs for Test:")
+        print("col_target_mean:", col_target_mean)
+        print("col_non_target_mean:", col_non_target_mean)
+        print("null_target_mean:", null_target_mean)
+        print("null_non_target_mean:", null_non_target_mean, '\n')
 
 
 test(1)
