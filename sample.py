@@ -17,7 +17,7 @@ import numpy as np
 import random
 
 
-parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
+parser = argparse.ArgumentParser(description='Starting..')
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 args = parser.parse_args()
 
@@ -83,25 +83,19 @@ def calc_projection_matrices(W):
     WWt_pinv = torch.pinverse(W @ W.T)
     proj_column_space = W.T @ WWt_pinv @ W
     proj_null_space = torch.eye(W.T.shape[0], device=W.device) - proj_column_space
-    return proj_column_space, proj_null_space
+    return proj_null_space
 
 def precompute_projections(W):
-    """Precompute projections for all classes."""
     projections = {}
     for i in range(W.shape[0]):  # Assume W is (10, 512)
-        # Isolate weight for target and non-target classes
-        target_weight = W[i].unsqueeze(0)  # Shape (1, 512)
+        # Isolate weight for non-target classes
         non_target_weights = torch.cat([W[:i], W[i+1:]], dim=0)  # Shape (9, 512)
 
         # Calculate projection matrices
-        proj_column_space_target, proj_null_space_target = calc_projection_matrices(target_weight)
-        proj_column_space_nontarget, proj_null_space_nontarget = calc_projection_matrices(non_target_weights)
+        proj_null_space_nontarget = calc_projection_matrices(non_target_weights)
 
         # Store in dictionary
         projections[i] = {
-            'column_target': proj_column_space_target,
-            'null_target': proj_null_space_target,
-            'column_nontarget': proj_column_space_nontarget,
             'null_nontarget': proj_null_space_nontarget
         }
     return projections
@@ -117,11 +111,9 @@ def test(epoch):
     correct = 0
     total = 0
 
-    col_target_list = []
-    col_non_target_list = []
-    null_target_list = []
-    null_non_target_list = []
-    
+    angle_target_list = []
+    angle_null_non_target_list = []
+
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
             inputs, targets = inputs.to(device), targets.to(device)
@@ -132,29 +124,36 @@ def test(epoch):
                 target_class = targets[i].item()
                 proj_info = projections[target_class]
     
-                # Reshape outputs[i] to (512, 1) for proper matrix multiplication
-                output_vector = representations[i].unsqueeze(1)  # Now shape (512, 1)
-                
-                col_space_repr_target = proj_info['column_target'] @ output_vector
-                col_space_repr_non_target = proj_info['column_nontarget'] @ output_vector
+                output_vector = representations[i]
 
-                null_space_repr_target = proj_info['null_target'] @ output_vector
-                null_space_repr_non_target = proj_info['null_nontarget'] @ output_vector
+                # Get target weight vector and reshape to (512,)
+                target_weight = W[target_class].squeeze()  # Shape (512,)
 
-                target_weight = W[target_class].unsqueeze(0)  # Shape (1, 512)
-                non_target_weights = torch.cat([W[:target_class], W[target_class+1:]], dim=0)  # Shape (9, 512)
-                
-    
-                col_space_repr_target_norm = torch.norm(col_space_repr_target, dim=0)/(torch.norm(output_vector, dim=0))
-                col_space_repr_non_target_norm = torch.norm(col_space_repr_non_target, dim=0)/(torch.norm(output_vector, dim=0))
-                null_space_repr_target_norm = torch.norm(null_space_repr_target, dim=0)/(torch.norm(output_vector, dim=0))
-                null_space_repr_non_target_norm = torch.norm(null_space_repr_non_target, dim=0)/(torch.norm(output_vector, dim=0))
+                # Compute cosine similarity between output_vector and target_weight
+                cos_theta_target = torch.dot(output_vector, target_weight) / (torch.norm(output_vector) * torch.norm(target_weight))
+                # Clamp cos_theta_target to [-1,1] to avoid NaNs
+                cos_theta_target = torch.clamp(cos_theta_target, -1.0, 1.0)
+                # Compute angle in degrees
+                theta_target = torch.acos(cos_theta_target) * (180 / np.pi)
+                # Append to list
+                angle_target_list.append(theta_target.item())
 
-                col_target_list.append(col_space_repr_target_norm.item())
-                col_non_target_list.append(col_space_repr_non_target_norm.item())
-                null_target_list.append(null_space_repr_target_norm.item())
-                null_non_target_list.append(null_space_repr_non_target_norm.item())
-                
+                # Compute null space projection of non-target classes
+                null_space_repr_non_target = proj_info['null_nontarget'] @ output_vector  # Shape (512,1)
+                null_space_repr_non_target_squeezed = null_space_repr_non_target.squeeze()  # Shape (512,)
+
+                # Compute cosine similarity between output_vector and null_space_repr_non_target
+                norm_null_space_repr_non_target = torch.norm(null_space_repr_non_target_squeezed)
+                if norm_null_space_repr_non_target > 0:
+                    cos_theta_null_non_target = torch.dot(output_vector, null_space_repr_non_target_squeezed) / (torch.norm(output_vector) * norm_null_space_repr_non_target)
+                    cos_theta_null_non_target = torch.clamp(cos_theta_null_non_target, -1.0, 1.0)
+                    theta_null_non_target = torch.acos(cos_theta_null_non_target) * (180 / np.pi)
+                else:
+                    # If the null space projection is zero vector, set angle to 90 degrees
+                    theta_null_non_target = 90.0
+
+                # Append to list
+                angle_null_non_target_list.append(theta_null_non_target)
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
@@ -164,16 +163,12 @@ def test(epoch):
           
         print("\nTest Accuracy:", 100.*correct/total)
 
-        col_target_mean = np.mean(col_target_list)
-        col_non_target_mean = np.mean(col_non_target_list)
-        null_target_mean = np.mean(null_target_list)
-        null_non_target_mean = np.mean(null_non_target_list)
+        angle_target_mean = np.mean(angle_target_list)
+        angle_null_non_target_mean = np.mean(angle_null_non_target_list)
         
-        print("Sample Projection Outputs for Test:")
-        print("col_target_mean:", col_target_mean)
-        print("col_non_target_mean:", col_non_target_mean)
-        print("null_target_mean:", null_target_mean)
-        print("null_non_target_mean:", null_non_target_mean)
+        print("Average Angles:")
+        print("Angle between representation and target class weight (degrees):", angle_target_mean)
+        print("Angle between representation and null space of non-target classes (degrees):", angle_null_non_target_mean)
 
 
 def test_train(epoch):
@@ -198,3 +193,4 @@ def test_train(epoch):
 
 test(1)
 test_train(1)
+
