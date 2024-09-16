@@ -188,7 +188,7 @@ def test_train(epoch):
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-        print("\nTrain Accuracy on eval mode", 100.*correct/total)
+        print("\nTrain Accuracy on eval mode", 100.*correct/total, "\n")
 
 
 test(1)
