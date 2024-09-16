@@ -168,7 +168,7 @@ def test(epoch):
         
         print("Average Angles:")
         print("Angle between representation and target class weight (degrees):", angle_target_mean)
-        print("Angle between representation and null space of non-target classes (degrees):", angle_null_non_target_mean)
+        print("Angle between representation and null space of non-target classes (degrees):", angle_null_non_target_mean - 90)
 
 
 def test_train(epoch):
