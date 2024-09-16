@@ -1,6 +1,6 @@
-# Trained Models
+## Trained Models
 
-You can find all trained model in the paper at this [link](https://drive.google.com/drive/folders/1TbkMMTI99zKu3_slwENDynVy0SwDFJtE?usp=sharing)
+You can find all the trained models described in the paper at this [link](https://drive.google.com/drive/folders/1TbkMMTI99zKu3_slwENDynVy0SwDFJtE?usp=sharing)
 
 ## Prerequisites
 - Python 3.6+
