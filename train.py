@@ -156,7 +156,7 @@ def test(epoch):
             'acc': acc,
             'epoch': epoch,
         }
-        torch.save(state, f'/home/rezaei/pytorch-cifar/checkpoint/4/ckpt{epoch}.pth')    
+        torch.save(state, f'/home/rezaei/thesis/pytorch-cifar/checkpoint/4/ckpt{epoch}.pth')    
 
 
 def test_train(epoch):
