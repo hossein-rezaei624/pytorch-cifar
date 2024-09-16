@@ -153,7 +153,7 @@ def test(epoch):
                     theta_null_non_target = 90.0
 
                 # Append to list
-                angle_null_non_target_list.append(theta_null_non_target)
+                angle_null_non_target_list.append(theta_null_non_target.item())
             
             loss = criterion(logits, targets)
             test_loss += loss.item()
