@@ -172,7 +172,7 @@ def test(epoch):
         best_acc = acc
 
 Carto = []
-for epoch in range(start_epoch, start_epoch+5):
+for epoch in range(start_epoch, start_epoch+50):
     Carto.append(train(epoch).numpy())
     test(epoch)
     scheduler.step()
