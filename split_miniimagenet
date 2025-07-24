@@ -1,72 +1,111 @@
-class SplitCifar100(object):
-    def __init__(self, limit_per_task, data_path=''):
-        self.current_pos = 0
-        self.transform_train = torchvision.transforms.Compose([
-            torchvision.transforms.RandomCrop(32, padding=4),
-            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
-        ])
-        self.transform_test = torchvision.transforms.Compose(
-            [torchvision.transforms.ToTensor(),
-             torchvision.transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))]
+class SplitTinyImageNet(object):
+    def __init__(self, data_path, batch_size):
+        self.data_path = data_path
+        self.batch_size = batch_size
+        # process data to PIL image, load both train and eval dataset
+        self.train_data = []
+        train_sps = []
+        train_labs = []
+        for i in range(20):
+            sp = np.load(
+                os.path.join(self.data_path, 'processed/x_train_%02d.npy' % (i + 1)))
+            train_sps.append(sp)
+            lab = np.load(
+                os.path.join(self.data_path, 'processed/y_train_%02d.npy' % (i + 1)))
+            train_labs.append(lab)
+        train_sps = np.concatenate(train_sps, axis=0)
+        train_labs = np.concatenate(train_labs, axis=0)
+        for i in range(train_sps.shape[0]):
+            np_img = train_sps[i, :]
+            img = Image.fromarray(np.uint8(255 * np_img))
+            lab = int(train_labs[i])
+            self.train_data.append([img, lab])
+        del train_sps
+        del train_labs
+        self.eval_data = []
+        eval_sps = []
+        eval_labs = []
+        for i in range(20):
+            sp = np.load(
+                os.path.join(self.data_path, 'processed/x_val_%02d.npy' % (i + 1)))
+            eval_sps.append(sp)
+            lab = np.load(
+                os.path.join(self.data_path, 'processed/y_val_%02d.npy' % (i + 1)))
+            eval_labs.append(lab)
+        eval_sps = np.concatenate(eval_sps, axis=0)
+        eval_labs = np.concatenate(eval_labs, axis=0)
+        for i in range(eval_sps.shape[0]):
+            np_img = eval_sps[i, :]
+            img = Image.fromarray(np.uint8(255 * np_img))
+            lab = int(eval_labs[i])
+            self.eval_data.append([img, lab])
+
+        # make transforms
+        self.transform_train = torchvision.transforms.Compose(
+            [torchvision.transforms.Resize(32),
+             torchvision.transforms.RandomCrop(32, padding=4),
+             torchvision.transforms.RandomHorizontalFlip(),
+             torchvision.transforms.ToTensor(),
+             torchvision.transforms.Normalize((0.4802, 0.4480, 0.3975), (0.2770, 0.2691, 0.2821))]
         )
-
+        self.transform_test = torchvision.transforms.Compose(
+            [torchvision.transforms.Resize(32),
+             torchvision.transforms.ToTensor(),
+             torchvision.transforms.Normalize((0.4802, 0.4480, 0.3975), (0.2770, 0.2691, 0.2821))]
+        )
         self.to_tensor = torchvision.transforms.ToTensor()
-        self.data_path = '../data/CIFAR100/'
-        if data_path != '':
-            self.data_path = data_path
-        self.train_dataset = torchvision.datasets.CIFAR100(
-            self.data_path, train=True, transform=self.transform_train, download=True)
-        self.train_dataset_wo_augment = torchvision.datasets.CIFAR100(
-            self.data_path, train=True, transform=self.to_tensor, download=False)
-        self.test_dataset = torchvision.datasets.CIFAR100(
-            self.data_path, train=False, transform=self.transform_test, download=False)
-
-        self.Y_train = np.array(self.train_dataset.targets)
-        self.Y_test = np.array(self.test_dataset.targets)
 
         self.task_dic = {}
         self.task_dic = self.make_task_dic()
         self.max_iter = len(self.task_dic)
         self.cur_iter = 0
 
-        self.limit_per_task = limit_per_task
+        # make data loaders
+        self.train_loaders = []
+        self.slt_loaders = []
+        self.test_loaders = []
+        for i in range(self.max_iter):
+            train_loader, slt_loader, test_loader = self.make_dataset(task_id=i)
+            self.train_loaders.append(train_loader)
+            self.slt_loaders.append(slt_loader)
+            self.test_loaders.append(test_loader)
 
-        self.inds = []
-        self.full_inds = []
-        rs = np.random.RandomState(0)
-        for i in range(len(self.task_dic)):
-            cur_inds = []
-            for ci in self.task_dic[i]:
-                inds = np.where(self.Y_train == ci)[0]
-                cur_inds.append(inds)
-            ind = np.concatenate(cur_inds, axis=0)
-            self.full_inds.append(ind)
-            sub_ind = rs.choice(ind, limit_per_task, replace=False)
-            self.inds.append(sub_ind)
-
-        self.all_inds = np.hstack(self.inds)
-
-    def next_task(self):
-        if self.cur_iter >= self.max_iter:
-            raise Exception('Number of tasks exceeded!')
-        else:
-            # Retrieve train data
-            train_ind = self.inds[self.cur_iter]
-            full_train_id = self.full_inds[self.cur_iter]
-            # Retrieve test data
-            test_ind = []
-            for cls in self.task_dic[self.cur_iter]:
-                cls_ind = np.where(self.Y_test == cls)[0]
-                test_ind.append(cls_ind)
-            test_ind = np.concatenate(test_ind, axis=0)
-            self.cur_iter += 1
-            return train_ind, full_train_id, test_ind
+    def make_dataset(self, task_id):
+        # make both train dataset and test dataset
+        class_set = set(self.task_dic[task_id])
+        task_train_data = []
+        for di in self.train_data:
+            sp, lab = di
+            if lab in class_set:
+                task_train_data.append(di)
+        task_train_dataset = MergeDataset(
+            data=task_train_data,
+            transforms=self.transform_train
+        )
+        train_loader = DataLoader(
+            task_train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=False)
+        task_slt_dataset = SimpleDataset(
+            data=task_train_data,
+            transforms=self.to_tensor
+        )
+        slt_loader = DataLoader(
+            task_slt_dataset, batch_size=len(task_train_data), shuffle=False, drop_last=False)
+        task_test_data = []
+        for di in self.eval_data:
+            sp, lab = di
+            if lab in class_set:
+                task_test_data.append(di)
+        task_test_dataset = SimpleDataset(
+            data=task_test_data,
+            transforms=self.transform_test
+        )
+        test_loader = DataLoader(
+            task_test_dataset, batch_size=100, shuffle=False, drop_last=False)
+        return train_loader, slt_loader, test_loader
 
     def make_task_dic(self):
         tasks = 10
-        cls_per_task = 10
+        cls_per_task = 20
         cur_class = 0
         for i in range(tasks):
             self.task_dic[i] = []
@@ -74,6 +113,14 @@ class SplitCifar100(object):
                 self.task_dic[i].append(cur_class)
                 cur_class += 1
         return self.task_dic
+
+    def next_task(self):
+        if self.cur_iter >= self.max_iter:
+            raise Exception('Number of tasks exceeded!')
+        else:
+            self.cur_iter += 1
+            return self.train_loaders[self.cur_iter - 1], self.slt_loaders[self.cur_iter - 1],\
+                self.test_loaders[self.cur_iter - 1]
 
     def get_transforms(self):
         return self.transform_train
