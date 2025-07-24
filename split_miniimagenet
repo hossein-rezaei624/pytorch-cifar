@@ -1,0 +1,85 @@
+class SplitCifar100(object):
+    def __init__(self, limit_per_task, data_path=''):
+        self.current_pos = 0
+        self.transform_train = torchvision.transforms.Compose([
+            torchvision.transforms.RandomCrop(32, padding=4),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+        ])
+        self.transform_test = torchvision.transforms.Compose(
+            [torchvision.transforms.ToTensor(),
+             torchvision.transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))]
+        )
+
+        self.to_tensor = torchvision.transforms.ToTensor()
+        self.data_path = '../data/CIFAR100/'
+        if data_path != '':
+            self.data_path = data_path
+        self.train_dataset = torchvision.datasets.CIFAR100(
+            self.data_path, train=True, transform=self.transform_train, download=True)
+        self.train_dataset_wo_augment = torchvision.datasets.CIFAR100(
+            self.data_path, train=True, transform=self.to_tensor, download=False)
+        self.test_dataset = torchvision.datasets.CIFAR100(
+            self.data_path, train=False, transform=self.transform_test, download=False)
+
+        self.Y_train = np.array(self.train_dataset.targets)
+        self.Y_test = np.array(self.test_dataset.targets)
+
+        self.task_dic = {}
+        self.task_dic = self.make_task_dic()
+        self.max_iter = len(self.task_dic)
+        self.cur_iter = 0
+
+        self.limit_per_task = limit_per_task
+
+        self.inds = []
+        self.full_inds = []
+        rs = np.random.RandomState(0)
+        for i in range(len(self.task_dic)):
+            cur_inds = []
+            for ci in self.task_dic[i]:
+                inds = np.where(self.Y_train == ci)[0]
+                cur_inds.append(inds)
+            ind = np.concatenate(cur_inds, axis=0)
+            self.full_inds.append(ind)
+            sub_ind = rs.choice(ind, limit_per_task, replace=False)
+            self.inds.append(sub_ind)
+
+        self.all_inds = np.hstack(self.inds)
+
+    def next_task(self):
+        if self.cur_iter >= self.max_iter:
+            raise Exception('Number of tasks exceeded!')
+        else:
+            # Retrieve train data
+            train_ind = self.inds[self.cur_iter]
+            full_train_id = self.full_inds[self.cur_iter]
+            # Retrieve test data
+            test_ind = []
+            for cls in self.task_dic[self.cur_iter]:
+                cls_ind = np.where(self.Y_test == cls)[0]
+                test_ind.append(cls_ind)
+            test_ind = np.concatenate(test_ind, axis=0)
+            self.cur_iter += 1
+            return train_ind, full_train_id, test_ind
+
+    def make_task_dic(self):
+        tasks = 10
+        cls_per_task = 10
+        cur_class = 0
+        for i in range(tasks):
+            self.task_dic[i] = []
+            for j in range(cls_per_task):
+                self.task_dic[i].append(cur_class)
+                cur_class += 1
+        return self.task_dic
+
+    def get_transforms(self):
+        return self.transform_train
+
+    def get_task_dic(self):
+        return self.task_dic
+
+    def get_eval_transforms(self):
+        return self.transform_test
