@@ -29,7 +29,7 @@ buffer_type='coreset'
 aug_type='greedy'
 ref_train_lr=3e-3
 cur_train_lr=5e-3
-ref_sample_per_task=0
+ref_sample_per_task=200
 
 
 python3 -u offline_continual_learning.py --local_path=$local_path \
