@@ -308,7 +308,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
 
     confidence_by_task_ = {task_id:0 for task_id in range(dataset.N_TASKS)}
     confidence_by_class_ = {class_id:0 for class_id in range(dataset.N_TASKS*dataset.N_CLASSES_PER_TASK)}
-    for j in range(len(model.buffer)):
+    for j in range(model.args.buffer_size):
         confidence_by_task_[task_class_[model.buffer.labels[j].item()]] += 1
         confidence_by_class_[model.buffer.labels[j].item()] += 1
         
@@ -323,7 +323,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
     for data in task_1:
         with torch.no_grad():
             inputs, labels, not_aug_inputs, index_ = data
-            not_aug_inputs = not_aug_inputs.to(model.device)
+            not_aug_inputs = inputs.to(model.device)
             labels = labels.to(model.device)
             
             # Extract features
@@ -367,7 +367,7 @@ def train(model: ContinualModel, dataset: ContinualDataset,
     plt.title('t-SNE of Learned Representations from the First Task')
     plt.xlabel('t-SNE Dimension 1')
     plt.ylabel('t-SNE Dimension 2')
-    plt.savefig(f'{model.NAME}')
+    plt.savefig(f'{model.NAME}+plus')
 
     model.net.train()
 
