@@ -441,17 +441,13 @@ class Acr(ContinualModel):
                 novel_loss += PSC(features=torch.cat([F.normalize(feas, p=2, dim=1, eps=1e-6).unsqueeze(1), 
                                                       F.normalize(feas_aug, p=2, dim=1, eps=1e-6).unsqueeze(1)], dim=1), labels=batch_y_combine)
 
-                # Compute proxy loss but detach 'feas' so encoder does not get gradients
-                with torch.no_grad():
-                    # we want to freeze encoder → treat feas as constant for this loss
-                    frozen_feas = feas.detach()
-    
-                weighted_loss = WeightedProxyContrastiveLoss(temperature=0.09, class_weights=self.class_weights_)
-                novel_loss += weighted_loss(frozen_feas, batch_y_combine, self.net.pcrLinear.L.weight)
+            # Compute proxy loss but detach 'feas' so encoder does not get gradients
+            with torch.no_grad():
+                # we want to freeze encoder → treat feas as constant for this loss
+                frozen_feas = feas.detach()
 
-            else:
-                weighted_loss = WeightedProxyContrastiveLoss(temperature=0.09, class_weights=self.class_weights_)
-                novel_loss += weighted_loss(feas, batch_y_combine, self.net.pcrLinear.L.weight)
+            weighted_loss = WeightedProxyContrastiveLoss(temperature=0.09, class_weights=self.class_weights_)
+            novel_loss += weighted_loss(frozen_feas, batch_y_combine, self.net.pcrLinear.L.weight)
             
         else:
             mem_x, mem_y = self.buffer.get_data(
@@ -478,18 +474,14 @@ class Acr(ContinualModel):
                 PSC = SupConLoss(temperature=0.09, contrast_mode='all')
                 novel_loss += PSC(features=torch.cat([F.normalize(combined_feas, p=2, dim=1, eps=1e-6).unsqueeze(1), 
                                                       F.normalize(combined_feas_aug, p=2, dim=1, eps=1e-6).unsqueeze(1)], dim=1), labels=combined_labels)
-            
-                # Compute proxy loss but detach 'feas' so encoder does not get gradients
-                with torch.no_grad():
-                    # we want to freeze encoder → treat feas as constant for this loss
-                    frozen_combined_feas = combined_feas.detach()
-                
-                weighted_loss = WeightedProxyContrastiveLoss(temperature=0.09, class_weights=self.class_weights_)
-                novel_loss += weighted_loss(frozen_combined_feas, combined_labels, self.net.pcrLinear.L.weight)
 
-            else:
-                weighted_loss = WeightedProxyContrastiveLoss(temperature=0.09, class_weights=self.class_weights_)
-                novel_loss += weighted_loss(combined_feas, combined_labels, self.net.pcrLinear.L.weight)
+            # Compute proxy loss but detach 'feas' so encoder does not get gradients
+            with torch.no_grad():
+                # we want to freeze encoder → treat feas as constant for this loss
+                frozen_combined_feas = combined_feas.detach()
+            
+            weighted_loss = WeightedProxyContrastiveLoss(temperature=0.09, class_weights=self.class_weights_)
+            novel_loss += weighted_loss(frozen_combined_feas, combined_labels, self.net.pcrLinear.L.weight)
 
         
         novel_loss.backward()
