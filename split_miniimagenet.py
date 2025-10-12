@@ -10,6 +10,7 @@ from models.utils.continual_model import ContinualModel
 from utils.args import *
 from utils.buffer import Buffer
 
+from utils.acr_transforms_aug import transforms_aug
 
 def get_parser() -> ArgumentParser:
     parser = ArgumentParser(description='Continual learning via'
@@ -36,6 +37,18 @@ class ErACE(ContinualModel):
 
     def observe(self, inputs, labels, not_aug_inputs, index_):
 
+        real_batch_size = inputs.shape[0]
+
+        inputs_aug = torch.stack([transforms_aug[self.args.dataset](inputs[idx].cpu())
+                                   for idx in range(inputs.size(0))])
+
+        inputs = inputs.to(self.device)
+        inputs_aug = inputs_aug.to(self.device)
+        labels = labels.to(self.device)
+        inputs = torch.cat((inputs, inputs_aug))
+        labels = torch.cat((labels, labels))
+        
+
         present = labels.unique()
         self.seen_so_far = torch.cat([self.seen_so_far, present]).unique()
 
@@ -57,6 +70,16 @@ class ErACE(ContinualModel):
             # sample from buffer
             buf_inputs, buf_labels = self.buffer.get_data(
                 self.args.minibatch_size, transform=self.transform)
+
+            buf_inputs_aug = torch.stack([transforms_aug[self.args.dataset](buf_inputs[idx].cpu())
+                                       for idx in range(buf_inputs.size(0))])
+            buf_inputs = buf_inputs.to(self.device)
+            buf_inputs_aug = buf_inputs_aug.to(self.device)
+            buf_labels = buf_labels.to(self.device)
+            buf_inputs = torch.cat((buf_inputs, buf_inputs_aug))
+            buf_labels = torch.cat((buf_labels, buf_labels))
+
+            
             loss_re = self.loss(self.net(buf_inputs), buf_labels)
 
         loss += loss_re
@@ -64,7 +87,7 @@ class ErACE(ContinualModel):
         loss.backward()
         self.opt.step()
 
-        self.buffer.add_data(examples=not_aug_inputs,
-                             labels=labels)
+        self.buffer.add_data(examples=not_aug_inputs[:real_batch_size],
+                             labels=labels[:real_batch_size])
 
         return loss.item()
