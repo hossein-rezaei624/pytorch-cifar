@@ -56,10 +56,12 @@ class Cgr(ContinualModel):
             mem_x_combine = mem_x
             mem_y_combine = mem_y
 
-            combined_inputs = torch.cat([mem_x_combine, batch_x_combine])
-            combined_labels = torch.cat((mem_y_combine, batch_y_combine))
+            cur_logits = self.net(batch_x_combine)
+            mem_logits = self.net(mem_x_combine)
 
-            combined_logits = self.net(combined_inputs)
+            combined_logits = torch.cat([mem_logits, cur_logits])
+            combined_labels = torch.cat((mem_y_combine, batch_y_combine))
+            
             novel_loss = self.loss(combined_logits, combined_labels)
         
         novel_loss.backward()
