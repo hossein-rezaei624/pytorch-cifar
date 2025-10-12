@@ -1,73 +1,70 @@
+# Copyright 2022-present, Lorenzo Bonicelli, Pietro Buzzega, Matteo Boschini, Angelo Porrello, Simone Calderara.
+# All rights reserved.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
 import torch
-from utils.buffer import Buffer
-from utils.args import *
+from datasets import get_dataset
+
 from models.utils.continual_model import ContinualModel
+from utils.args import *
+from utils.buffer import Buffer
 
 
 def get_parser() -> ArgumentParser:
-    parser = ArgumentParser(description='CGR: Confidence-Guided Reply for Buffer-Based Continual Learning')
+    parser = ArgumentParser(description='Continual learning via'
+                                        ' Experience Replay.')
     add_management_args(parser)
     add_experiment_args(parser)
     add_rehearsal_args(parser)
-    
     return parser
 
-    
-class Cgr(ContinualModel):
-    NAME = 'cgr'
+
+class ErACE(ContinualModel):
+    NAME = 'er_ace'
     COMPATIBILITY = ['class-il', 'task-il']
 
     def __init__(self, backbone, loss, args, transform):
-        super(Cgr, self).__init__(backbone, loss, args, transform)
+        super(ErACE, self).__init__(backbone, loss, args, transform)
         self.buffer = Buffer(self.args.buffer_size, self.device)
+        self.seen_so_far = torch.tensor([]).long().to(self.device)
+        self.num_classes = get_dataset(args).N_TASKS * get_dataset(args).N_CLASSES_PER_TASK
         self.task = 0
-        self.epoch = 0
-    
-    def begin_task(self, dataset, train_loader):
-        self.epoch = 0
+
+    def end_task(self, dataset):
         self.task += 1
-    
-    def end_epoch(self, dataset, train_loader):
-        self.epoch += 1            
 
     def observe(self, inputs, labels, not_aug_inputs, index_):
-        
-        real_batch_size = inputs.shape[0]
-        
-        # batch update
-        batch_x, batch_y = inputs, labels
-        batch_x = batch_x.to(self.device)
-        batch_y = batch_y.to(self.device)
-        batch_x_combine = batch_x
-        batch_y_combine = batch_y
-            
-        self.opt.zero_grad()    
-        
-        if self.buffer.is_empty():
-            logits = self.net(batch_x_combine)
-            novel_loss = self.loss(logits, batch_y_combine)
-            
-        else:
-            mem_x, mem_y = self.buffer.get_data(
+
+        present = labels.unique()
+        self.seen_so_far = torch.cat([self.seen_so_far, present]).unique()
+
+        logits = self.net(inputs)
+        mask = torch.zeros_like(logits)
+        mask[:, present] = 1
+
+        self.opt.zero_grad()
+        if self.seen_so_far.max() < (self.num_classes - 1):
+            mask[:, self.seen_so_far.max():] = 1
+
+        if self.task > 0:
+            logits = logits.masked_fill(mask == 0, torch.finfo(logits.dtype).min)
+
+        loss = self.loss(logits, labels)
+        loss_re = torch.tensor(0.)
+
+        if self.task > 0:
+            # sample from buffer
+            buf_inputs, buf_labels = self.buffer.get_data(
                 self.args.minibatch_size, transform=self.transform)
-        
-            mem_x = mem_x.to(self.device)
-            mem_y = mem_y.to(self.device)
-            mem_x_combine = mem_x
-            mem_y_combine = mem_y
+            loss_re = self.loss(self.net(buf_inputs), buf_labels)
 
-            cur_logits = self.net(batch_x_combine)
-            mem_logits = self.net(mem_x_combine)
+        loss += loss_re
 
-            combined_logits = torch.cat([mem_logits, cur_logits])
-            combined_labels = torch.cat((mem_y_combine, batch_y_combine))
-            
-            novel_loss = self.loss(combined_logits, combined_labels)
-        
-        novel_loss.backward()
+        loss.backward()
         self.opt.step()
 
-        self.buffer.add_data(examples=not_aug_inputs[:real_batch_size],
-                             labels=labels[:real_batch_size])
-        
-        return novel_loss.item()
+        self.buffer.add_data(examples=not_aug_inputs,
+                             labels=labels)
+
+        return loss.item()
