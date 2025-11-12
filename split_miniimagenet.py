@@ -6,7 +6,7 @@ from models.utils.continual_model import ContinualModel
 import torch.nn as nn
 
 
-class WeightedProxyContrastiveLoss(nn.Module):
+class WeightedSoftMaxCrossEntropy(nn.Module):
     def __init__(self, temperature=1.0, class_weights=None, label_freq_flag=False):
         """
         Args:
@@ -14,7 +14,7 @@ class WeightedProxyContrastiveLoss(nn.Module):
             class_weights (dict or torch.Tensor, optional): Mapping from class index to weight.
                 (If None, all classes are assumed to have weight 1.)
         """
-        super(WeightedProxyContrastiveLoss, self).__init__()
+        super(WeightedSoftMaxCrossEntropy, self).__init__()
         self.temperature = temperature
         self.class_weights = class_weights
         self.label_freq_flag = label_freq_flag
@@ -105,27 +105,38 @@ class Cgr(ContinualModel):
         self.buffer = Buffer(self.args.buffer_size, self.device)
         self.task = 0
         self.epoch = 0
+        self.n_sample_per_task = None
+        self.n_classes_ = None
+        self.unique_classes = None
         self.class_weights_ = {}
 
     def begin_train(self, dataset):
         self.n_sample_per_task = dataset.get_examples_number()//dataset.N_TASKS
+        self.n_classes_ = dataset.N_CLASSES_PER_TASK * dataset.N_TASKS
     
     def begin_task(self, dataset, train_loader):
         self.epoch = 0
         self.task += 1
-
-        ##self.class_weights_ = {i: 1.0 for i in range(self.task * dataset.N_CLASSES_PER_TASK)}
-
-        self.class_weights_ = {i: (1.0 if i >= ((self.task - 1)*dataset.N_CLASSES_PER_TASK) 
-                                   else (1.0/(self.task - 1))**self.args.Power_alpha * (1.0/(self.task - (i // dataset.N_CLASSES_PER_TASK)))**self.args.Power_beta * ((1.0/(self.task - 1)) * (self.args.buffer_size/self.n_sample_per_task))**self.args.Power_gamma) 
-                               for i in range(self.task * dataset.N_CLASSES_PER_TASK)}
+        self.unique_classes = set()
+        for _, labels, _, _ in train_loader:
+            self.unique_classes.update(labels.numpy())
+            if len(self.unique_classes)==dataset.N_CLASSES_PER_TASK:
+                break
     
     def end_epoch(self, dataset, train_loader):
-        self.epoch += 1            
+        self.epoch += 1
 
     def observe(self, inputs, labels, not_aug_inputs, index_):
         
         real_batch_size = inputs.shape[0]
+
+        if self.task > 1:
+            buf_freq = torch.bincount(self.buffer.labels[:self.buffer.num_seen_examples], minlength=self.n_classes_).float().to(self.device)  # Shape: (C,)
+        
+        self.class_weights_ = {i: (1.0 if i >= ((self.task - 1)*len(self.unique_classes)) 
+                                   else (1.0/(self.task - 1))**self.args.Power_alpha * (1.0/(self.task - (i // len(self.unique_classes))))**self.args.Power_beta * 
+                                   (buf_freq[i].item()/(buf_freq[list(self.unique_classes)].mean().item() + (self.n_sample_per_task/len(self.unique_classes))))**self.args.Power_gamma) 
+                               for i in range(self.task * len(self.unique_classes))}
         
         # batch update
         batch_x, batch_y = inputs, labels
@@ -139,7 +150,7 @@ class Cgr(ContinualModel):
         if self.buffer.is_empty():
             feas = self.net(batch_x_combine, 'features')
 
-            weighted_loss = WeightedProxyContrastiveLoss(temperature=1.0, class_weights=self.class_weights_)
+            weighted_loss = WeightedSoftMaxCrossEntropy(temperature=1.0, class_weights=self.class_weights_)
             novel_loss = weighted_loss(feas, batch_y_combine, self.net.linear.weight)
             
         else:
@@ -156,7 +167,7 @@ class Cgr(ContinualModel):
 
             combined_feas = self.net(combined_inputs, 'features')
             
-            weighted_loss = WeightedProxyContrastiveLoss(temperature=1.0, class_weights=self.class_weights_)
+            weighted_loss = WeightedSoftMaxCrossEntropy(temperature=1.0, class_weights=self.class_weights_)
             novel_loss = weighted_loss(combined_feas, combined_labels, self.net.linear.weight)
         
         
