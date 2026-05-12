@@ -1,17 +1,18 @@
 """
 Modified cgr.py with diagnostic logging for the rebuttal experiments.
 
-When --cgr_diag_log is set:
-  * During task 1 ONLY, CGR's existing eval-mode forward pass on not_aug_inputs
-    runs for ALL epochs of the task (instead of just the first E).
-  * Per-sample target confidence, margin, correctness, and CE loss are recorded
-    at every epoch of task 1 from that same eval-mode pass.
-  * At the end of task 1, a single CSV file is written to
-    <cgr_diag_dir>/cgr_diag_seed<SEED>.csv  with one row per training sample.
+When --cgr_diag_log is set, this version:
+  * During task 1 ONLY, runs CGR's existing eval-mode forward pass on
+    not_aug_inputs for ALL epochs of the task (instead of just the first E).
+  * Records, from that same eval-mode pass: per-sample target confidence,
+    margin (target prob - max other prob), correctness (argmax == label),
+    and per-sample cross-entropy loss.
+  * After the last epoch of task 1, saves all of the above plus
+    CGR's confidence trajectory to disk as cgr_diag_logs/cgr_diag_seed<S>.pt
+    (one file per run).
 
-Run separately for each seed (--seed 0, --seed 1, ...). Each run produces one CSV.
-You compute the cross-seed Spearman correlation, the variance-vs-forgetting
-correlation, and the diagnostic table by hand from the CSVs.
+Run separately for each seed (--seed 0, --seed 1, ...). Each run produces
+one .pt file. Combine across seeds by hand.
 
 When --cgr_diag_log is NOT set, behaviour is identical to your original cgr.py.
 
@@ -38,9 +39,9 @@ def get_parser() -> ArgumentParser:
                         help='Epoch for selecting samples')
     # === DIAG: new CLI args ===
     parser.add_argument('--cgr_diag_log', action='store_true',
-                        help='If set, record per-sample diagnostics during task 1 (from CGR\'s eval forward pass) and save to CSV.')
+                        help='If set, record per-sample diagnostics during task 1 (from CGR\'s eval forward pass) and save to disk.')
     parser.add_argument('--cgr_diag_dir', type=str, default='cgr_diag_logs',
-                        help='Directory to save the per-seed diagnostic CSV.')
+                        help='Directory to save per-seed diagnostic logs.')
     # === END DIAG ===
     return parser
 
@@ -132,7 +133,7 @@ class Cgr(ContinualModel):
         # === DIAG: per-sample diagnostic tensors (allocated in begin_task for task 1 only) ===
         self.diag_margin = None       # (n_epochs, n_sample_per_task)
         self.diag_correct = None      # (n_epochs, n_sample_per_task) bool
-        self.diag_loss = None         # (n_epochs, n_sample_per_task) per-sample CE loss
+        self.diag_loss = None         # (n_epochs, n_sample_per_task) per-sample CE
         self.diag_labels = None       # (n_sample_per_task,) global class id
         # === END DIAG ===
 
@@ -166,71 +167,30 @@ class Cgr(ContinualModel):
         # === END DIAG ===
 
     def _save_diag(self):
-        """Compute per-sample summary statistics for task 1 and write them to a CSV."""
+        """Dump task-1 diagnostics to disk at the end of task 1's last epoch."""
         if not self._diag_active():
             return
-
         save_dir = getattr(self.args, 'cgr_diag_dir', 'cgr_diag_logs')
         os.makedirs(save_dir, exist_ok=True)
         seed = getattr(self.args, 'seed', 'unknown')
-        save_path = os.path.join(save_dir, f'cgr_diag_seed{seed}.csv')
-
-        E = self.args.E
-        n_e = self.args.n_epochs
-        n_s = self.n_sample_per_task
-
-        # ----- Derived per-sample statistics -----
-        conf = self.confidence_by_sample  # (n_e, n_s); all epochs filled in diag mode
-        # CGR's selection signal: variance over the first E epochs
-        variance = conf[:E].var(dim=0).numpy()
-        # For "low confidence" selection rule (use first E epochs to match CGR's window)
-        mean_conf_E = conf[:E].mean(dim=0).numpy()
-        # For "high loss" selection rule (use first E epochs to match CGR's window)
-        mean_loss_E = self.diag_loss[:E].mean(dim=0).numpy()
-
-        # Forgetting events (Toneva et al.): count of correct -> incorrect transitions
-        correct = self.diag_correct.bool()
-        transitions = correct[:-1] & ~correct[1:]   # (n_e - 1, n_s)
-        forgetting_count = transitions.sum(dim=0).numpy()
-
-        # Reporting metrics for the diagnostic table:
-        # - late_margin = mean margin over the last 5 epochs (more stable than just final epoch)
-        last_k = min(5, n_e)
-        late_margin = self.diag_margin[-last_k:].mean(dim=0).numpy()
-        # - mean_conf_all = mean target confidence over all epochs
-        mean_conf_all = conf.mean(dim=0).numpy()
-
-        labels = self.diag_labels.numpy()
-
-        # ----- Write CSV -----
-        with open(save_path, 'w') as f:
-            # Metadata as comment lines (pandas / Excel both handle these fine)
-            f.write("# CGR task-1 diagnostics\n")
-            f.write(f"# seed={seed}\n")
-            f.write(f"# E={E}\n")
-            f.write(f"# n_epochs={n_e}\n")
-            f.write(f"# n_sample_per_task={n_s}\n")
-            f.write(f"# buffer_size={self.args.buffer_size}\n")
-            f.write(f"# late_margin = mean over last {last_k} epochs\n")
-            f.write("#\n")
-            f.write("# Columns:\n")
-            f.write("#   sample_id        - index 0..n_samples-1\n")
-            f.write("#   label            - global class id\n")
-            f.write("#   variance         - Var of target confidence over first E epochs (CGR signal)\n")
-            f.write("#   mean_conf_E      - Mean target confidence over first E epochs (for low-conf rule)\n")
-            f.write("#   mean_loss_E      - Mean CE loss over first E epochs (for high-loss rule)\n")
-            f.write("#   forgetting_count - # correct->incorrect transitions over all epochs (Toneva)\n")
-            f.write(f"#   late_margin      - Mean margin (target_prob - max_other) over last {last_k} epochs\n")
-            f.write("#   mean_conf_all    - Mean target confidence over all epochs\n")
-            f.write("#\n")
-            # Column header + data
-            f.write("sample_id,label,variance,mean_conf_E,mean_loss_E,forgetting_count,late_margin,mean_conf_all\n")
-            for i in range(n_s):
-                f.write(f"{i},{labels[i]},{variance[i]:.6f},{mean_conf_E[i]:.6f},"
-                        f"{mean_loss_E[i]:.6f},{forgetting_count[i]},"
-                        f"{late_margin[i]:.6f},{mean_conf_all[i]:.6f}\n")
-
-        print(f"[CGR-Diag] Saved task-1 diagnostics CSV to {save_path}")
+        save_path = os.path.join(save_dir, f'cgr_diag_seed{seed}.pt')
+        torch.save({
+            'seed': seed,
+            'E': self.args.E,
+            'n_epochs': self.args.n_epochs,
+            'n_sample_per_task': self.n_sample_per_task,
+            'buffer_size': self.args.buffer_size,
+            # CGR's eval-mode target confidence. With --cgr_diag_log this is
+            # filled for ALL epochs of task 1; use [:E] for CGR's variance.
+            'cgr_confidence_by_sample': self.confidence_by_sample.clone(),
+            # Diagnostics computed from the same eval-mode forward pass on not_aug_inputs
+            'diag_margin': self.diag_margin.clone(),
+            'diag_correct': self.diag_correct.clone(),
+            'diag_loss': self.diag_loss.clone(),
+            'diag_labels': self.diag_labels.clone(),
+            'class_mapping': dict(self.mapping),
+        }, save_path)
+        print(f"[CGR-Diag] Saved task-1 diagnostics to {save_path}")
 
     def end_epoch(self, dataset, train_loader):
 
