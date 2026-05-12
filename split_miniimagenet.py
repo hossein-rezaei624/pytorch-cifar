@@ -1,22 +1,14 @@
 """
-Modified cgr.py with diagnostic logging for the rebuttal experiments.
+Modified version of cgr.py with diagnostic logging for the rebuttal experiments:
+  (a.2) variance vs forgetting-event count Spearman correlation
+  (b.1) cross-seed Spearman correlation of variance vectors
+  (b.2) diagnostic table comparing CGR vs random/high-loss/low-confidence selection
 
-When --cgr_diag_log is set, this version:
-  * During task 1 ONLY, runs CGR's existing eval-mode forward pass on
-    not_aug_inputs for ALL epochs of the task (instead of just the first E).
-  * Records, from that same eval-mode pass: per-sample target confidence,
-    margin (target prob - max other prob), correctness (argmax == label),
-    and per-sample cross-entropy loss.
-  * After the last epoch of task 1, saves all of the above plus
-    CGR's confidence trajectory to disk as cgr_diag_logs/cgr_diag_seed<S>.pt
-    (one file per run).
+Changes from the original cgr.py are marked with `# === DIAG: ... ===` blocks.
+When --cgr_diag_log is not passed, behavior is identical to the original.
 
-Run separately for each seed (--seed 0, --seed 1, ...). Each run produces
-one .pt file. Combine across seeds by hand.
-
-When --cgr_diag_log is NOT set, behaviour is identical to your original cgr.py.
-
-All additions are marked with `# === DIAG: ... === / === END DIAG ===` blocks.
+Diagnostic logging only runs during task 1, which is all that's needed for the
+three rebuttal analyses. The actual training continues normally across all tasks.
 """
 
 import os
@@ -37,16 +29,17 @@ def get_parser() -> ArgumentParser:
     add_rehearsal_args(parser)
     parser.add_argument('--E', type=int, default=4,
                         help='Epoch for selecting samples')
-    # === DIAG: new CLI args ===
+    # === DIAG: new CLI args (no-op when flag is absent) ===
     parser.add_argument('--cgr_diag_log', action='store_true',
-                        help='If set, record per-sample diagnostics during task 1 (from CGR\'s eval forward pass) and save to disk.')
+                        help='If set, record per-sample diagnostics during task 1 and save to disk.')
     parser.add_argument('--cgr_diag_dir', type=str, default='cgr_diag_logs',
-                        help='Directory to save per-seed diagnostic logs.')
+                        help='Directory to save diagnostic logs.')
     # === END DIAG ===
     return parser
 
 
 def distribute_samples(probabilities, M):
+    # ... unchanged from original ...
     total_probability = sum(probabilities.values())
     normalized_probabilities = {k: v / total_probability for k, v in probabilities.items()}
     samples = {k: round(v * M) for k, v in normalized_probabilities.items()}
@@ -64,6 +57,7 @@ def distribute_samples(probabilities, M):
 
 
 def distribute_excess(lst, check_bound):
+    # ... unchanged from original ...
     total_excess = sum(val - check_bound for val in lst if val > check_bound)
     recipients = [i for i, val in enumerate(lst) if val < check_bound]
     num_recipients = len(recipients)
@@ -80,6 +74,7 @@ def distribute_excess(lst, check_bound):
 
 
 def adjust_values_integer_include_all(a, b):
+    # ... unchanged from original ...
     excess = {}
     shortage = {}
     total_excess = 0
@@ -130,16 +125,13 @@ class Cgr(ContinualModel):
         self.class_portion = []
         self.dist_task_prev = None
         self.dist_class_prev = None
-        # === DIAG: per-sample diagnostic tensors (allocated in begin_task for task 1 only) ===
-        self.diag_margin = None       # (n_epochs, n_sample_per_task)
+        # === DIAG: per-sample diagnostic tensors (allocated in begin_task) ===
+        self.diag_target_conf = None  # (n_epochs, n_sample_per_task) train-mode target prob
+        self.diag_margin = None       # (n_epochs, n_sample_per_task) train-mode margin
         self.diag_correct = None      # (n_epochs, n_sample_per_task) bool
-        self.diag_loss = None         # (n_epochs, n_sample_per_task) per-sample CE
+        self.diag_loss = None         # (n_epochs, n_sample_per_task) per-sample CE loss
         self.diag_labels = None       # (n_sample_per_task,) global class id
         # === END DIAG ===
-
-    def _diag_active(self):
-        """True iff diagnostic logging is enabled AND we're in task 1."""
-        return getattr(self.args, 'cgr_diag_log', False) and self.task == 1
 
     def begin_train(self, dataset):
         self.n_sample_per_task = dataset.get_examples_number() // dataset.N_TASKS
@@ -156,23 +148,59 @@ class Cgr(ContinualModel):
         self.reverse_mapping = {index: value for value, index in self.mapping.items()}
         self.confidence_by_sample = torch.zeros((self.args.n_epochs, self.n_sample_per_task))
 
-        # === DIAG: allocate task-1 diagnostic tensors ===
-        if self._diag_active():
+        # === DIAG: allocate diagnostic tensors (task 1 only) ===
+        if getattr(self.args, 'cgr_diag_log', False) and self.task == 1:
             n_e = self.args.n_epochs
             n_s = self.n_sample_per_task
+            self.diag_target_conf = torch.zeros((n_e, n_s))
             self.diag_margin = torch.zeros((n_e, n_s))
             self.diag_correct = torch.zeros((n_e, n_s), dtype=torch.bool)
             self.diag_loss = torch.zeros((n_e, n_s))
             self.diag_labels = torch.full((n_s,), -1, dtype=torch.long)
         # === END DIAG ===
 
+    def _record_diag(self, logits, labels, indices):
+        """Record per-sample train-mode diagnostics for task 1.
+        No-op when diagnostic logging is disabled or task > 1.
+        Called from observe() right after the SGD forward pass."""
+        if not getattr(self.args, 'cgr_diag_log', False):
+            return
+        if self.task != 1:
+            return
+        if self.epoch >= self.args.n_epochs:
+            return
+        with torch.no_grad():
+            probs = F.softmax(logits.detach(), dim=1)
+            # Target probability
+            target_prob = probs.gather(1, labels.unsqueeze(1)).squeeze(1)
+            # Margin: target prob minus max non-target prob
+            probs_other = probs.clone()
+            probs_other.scatter_(1, labels.unsqueeze(1), float('-inf'))
+            max_other = probs_other.max(dim=1)[0]
+            margin = target_prob - max_other
+            # Correctness
+            pred = logits.argmax(dim=1)
+            correct = (pred == labels)
+            # Per-sample cross-entropy loss
+            per_sample_loss = F.cross_entropy(logits.detach(), labels, reduction='none')
+
+            idx_cpu = indices.detach().cpu().long()
+            self.diag_target_conf[self.epoch, idx_cpu] = target_prob.cpu()
+            self.diag_margin[self.epoch, idx_cpu] = margin.cpu()
+            self.diag_correct[self.epoch, idx_cpu] = correct.cpu()
+            self.diag_loss[self.epoch, idx_cpu] = per_sample_loss.cpu()
+            # Labels (re-written each epoch; idempotent)
+            self.diag_labels[idx_cpu] = labels.detach().cpu()
+
     def _save_diag(self):
-        """Dump task-1 diagnostics to disk at the end of task 1's last epoch."""
-        if not self._diag_active():
+        """Dump diagnostic tensors to disk at the end of task 1."""
+        if not getattr(self.args, 'cgr_diag_log', False):
+            return
+        if self.task != 1:
             return
         save_dir = getattr(self.args, 'cgr_diag_dir', 'cgr_diag_logs')
         os.makedirs(save_dir, exist_ok=True)
-        seed = getattr(self.args, 'seed', 'unknown')
+        seed = getattr(self.args, 'seed', -1)
         save_path = os.path.join(save_dir, f'cgr_diag_seed{seed}.pt')
         torch.save({
             'seed': seed,
@@ -180,10 +208,10 @@ class Cgr(ContinualModel):
             'n_epochs': self.args.n_epochs,
             'n_sample_per_task': self.n_sample_per_task,
             'buffer_size': self.args.buffer_size,
-            # CGR's eval-mode target confidence. With --cgr_diag_log this is
-            # filled for ALL epochs of task 1; use [:E] for CGR's variance.
+            # eval-mode confidence used by CGR itself for variance (first E epochs filled)
             'cgr_confidence_by_sample': self.confidence_by_sample.clone(),
-            # Diagnostics computed from the same eval-mode forward pass on not_aug_inputs
+            # train-mode diagnostics across all epochs
+            'diag_target_conf': self.diag_target_conf.clone(),
             'diag_margin': self.diag_margin.clone(),
             'diag_correct': self.diag_correct.clone(),
             'diag_loss': self.diag_loss.clone(),
@@ -327,58 +355,29 @@ class Cgr(ContinualModel):
 
         self.opt.zero_grad()
 
-        # === DIAG: decide whether to run the eval forward pass on this step ===
-        # Original CGR: only during the first E epochs (for variance computation).
-        # With diag logging: for ALL epochs of task 1, so we get target confidence,
-        # margin, correctness, and per-sample loss from the SAME eval-mode pass at
-        # every epoch (needed for forgetting events and the diagnostic table).
-        run_eval_pass = self.epoch < self.args.E
-        if self._diag_active() and self.epoch < self.args.n_epochs:
-            run_eval_pass = True
-        # === END DIAG ===
-
-        if run_eval_pass:
+        # Existing CGR eval-mode confidence recording during first E epochs (unchanged)
+        if self.epoch < self.args.E:
             targets = torch.tensor([self.mapping[val.item()] for val in labels]).to(self.device)
             confidence_batch = []
             self.net.eval()
             with torch.no_grad():
                 cgr_logits = self.net(not_aug_inputs)
                 soft_ = nn.functional.softmax(cgr_logits, dim=1)
-                # Existing: per-sample target confidence into self.confidence_by_sample
                 for i in range(targets.shape[0]):
                     confidence_batch.append(soft_[i, labels[i]].item())
                 conf_tensor = torch.tensor(confidence_batch)
                 self.confidence_by_sample[self.epoch, index_] = conf_tensor
-
-                # === DIAG: record margin / correctness / per-sample loss from same eval pass ===
-                if self._diag_active():
-                    labels_dev = labels.to(self.device).long()
-                    target_prob = soft_.gather(1, labels_dev.unsqueeze(1)).squeeze(1)
-                    soft_other = soft_.clone()
-                    soft_other.scatter_(1, labels_dev.unsqueeze(1), float('-inf'))
-                    max_other = soft_other.max(dim=1)[0]
-                    margin = (target_prob - max_other).cpu()
-
-                    pred = cgr_logits.argmax(dim=1)
-                    correct = (pred == labels_dev).cpu()
-
-                    per_sample_loss = F.cross_entropy(cgr_logits, labels_dev, reduction='none').cpu()
-
-                    if torch.is_tensor(index_):
-                        idx_cpu = index_.detach().cpu().long()
-                    else:
-                        idx_cpu = torch.as_tensor(index_, dtype=torch.long)
-                    self.diag_margin[self.epoch, idx_cpu] = margin
-                    self.diag_correct[self.epoch, idx_cpu] = correct
-                    self.diag_loss[self.epoch, idx_cpu] = per_sample_loss
-                    self.diag_labels[idx_cpu] = labels.detach().cpu().long()
-                # === END DIAG ===
             self.net.train()
 
         # SGD forward + backward (unchanged)
         if self.buffer.is_empty():
             logits = self.net(batch_x_combine)
             novel_loss = self.loss(logits, batch_y_combine)
+            # === DIAG: record train-mode diagnostics for task 1 from this forward pass ===
+            #   logits has shape (batch, num_global_classes); batch_y_combine has global labels
+            #   For task 1 the buffer is empty, so this branch always executes.
+            self._record_diag(logits, batch_y_combine, index_)
+            # === END DIAG ===
         else:
             mem_x, mem_y = self.buffer.get_data(
                 self.args.minibatch_size, transform=self.transform)
@@ -390,6 +389,10 @@ class Cgr(ContinualModel):
             combined_labels = torch.cat((mem_y_combine, batch_y_combine))
             combined_logits = self.net(combined_inputs)
             novel_loss = self.loss(combined_logits, combined_labels)
+            # === DIAG: not reached during task 1 (buffer is empty all of task 1) ===
+            #   If we ever want diagnostics for later tasks, slice combined_logits
+            #   to the current-task portion and call self._record_diag(...).
+            # === END DIAG ===
 
         novel_loss.backward()
         self.opt.step()
