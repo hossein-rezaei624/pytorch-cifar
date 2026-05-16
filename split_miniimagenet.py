@@ -3,8 +3,9 @@
 These two files produce the numbers/table for the Reviewer-1 Concern-1 rebuttal:
 
 - **(b.1) Cross-seed Spearman ρ** of per-sample variance vectors → §5.3 sub-point (b.1) and the rebuttal as `\bar\rho = X.XX ± Y.YY`.
-- **(a.2) Spearman ρ between variance and forgetting events** → §5.3 sub-point (a.2) as `\rho = Z.ZZ ± W.WW` (mean ± std over 5 seeds).
 - **(b.2) Diagnostic table** comparing CGR vs Random / High-loss / High-confidence / Low-confidence → Table `tab:diagnostic` (mean ± std over 5 seeds).
+
+Note: an earlier draft included a Spearman correlation between confidence variance and forgetting events (a.2). On real CGR runs this correlation came out *negative* (≈ −0.30) because early-high-variance samples are unstable early but become stable later, while Toneva's forgetting events count instability over the full trajectory. Rather than try to explain a negative correlation, we drop the (a.2) analysis from the paper and let the forgetting-events column in the (b.2) diagnostic table do the work — there, CGR's *low* forgetting count compared to Random / High-loss / Low-confidence is itself the positive finding. The (a.2) Spearman is no longer computed by `analyze_cgr_diag.py`.
 
 ## Files
 
@@ -62,7 +63,7 @@ python analyze_cgr_diag.py \
 
 Match `--E` to the value of `E` you used in the run for CIFAR-100 at buffer 1000 (per your paper's Table 1: `E = 4` for that cell).
 
-Sample output (your numbers will differ):
+Sample output (your numbers will differ; these are illustrative):
 
 ```
 Loaded 5 seed logs from cgr_diag_logs
@@ -77,23 +78,15 @@ Per-pair ρ values:
   ...
   Paper insertion: \bar\rho = 0.71 \pm 0.04
 
-=== (a.2) Variance vs forgetting events (ALL seeds) ===
-Per-seed ρ values:
-  seed 0: ρ = 0.6541  (p = 1.2e-300)  ***
-  seed 1: ρ = 0.6602  ...
-  ...
-Mean ρ ± std over 5 seeds: 0.6580 ± 0.0080
-  Paper insertion: \rho = 0.66 \pm 0.01
-
 === (b.2) Diagnostic table (averaged over 5 seeds) ===
 Per-class budget K = 100  (10 classes seen in task 1)
 
 Rule                    Margin (mean±std)   Forget (mean±std)   MeanConf (mean±std)
-Random              0.7821 ± 0.0019       0.42 ± 0.04       0.4521 ± 0.0035
-High loss           0.1234 ± ...          5.62 ± ...        0.0421 ± ...
-High confidence     0.9512 ± ...          0.18 ± ...        0.9803 ± ...
-Low confidence      0.0851 ± ...          7.13 ± ...        0.0287 ± ...
-CGR (variance)      0.4012 ± ...          2.87 ± ...        0.3812 ± ...
+Random              -0.0168 ± 0.0095     3.99 ± 0.20      0.3015 ± 0.0056
+High loss           -0.3543 ± 0.0097     4.93 ± 0.22      0.0972 ± 0.0093
+High confidence      0.3685 ± 0.0188     2.54 ± 0.27      0.5622 ± 0.0127
+Low confidence      -0.3673 ± 0.0081     4.97 ± 0.20      0.0719 ± 0.0033
+CGR (variance)       0.1840 ± 0.0172     3.07 ± 0.24      0.4433 ± 0.0082
 
 --- LaTeX (paste into Table tab:diagnostic) ---
 \begin{tabular}{lccc}
@@ -105,9 +98,9 @@ CGR (variance)      0.4012 ± ...          2.87 ± ...        0.3812 ± ...
 
 For each selection rule, three columns:
 
-- **Mean margin** — averaged over the **last 5 epochs** of task-1 training (configurable via `--last_k_for_margin`). Reflects whether the selected samples are *still* near the boundary at the end of training.
-- **Mean forgetting events** — over **all 50 epochs** (Toneva et al.'s definition; counting correct→incorrect transitions across the full trajectory).
-- **Mean target confidence** — over the **first $E$ epochs** (matches Figure 3 sub-figure b.1 and CGR's selection window).
+- **Mean margin** — averaged over the **first $E$ epochs** of task-1 training. Matches CGR's selection window and Figure 3 sub-figure (b.1). End-of-training margin would be uninformative because the model has converged and margins are large for nearly all samples.
+- **Mean forgetting events** — over **all training epochs** (Toneva et al.'s definition; needs the full trajectory).
+- **Mean target confidence** — over the **first $E$ epochs** (matches Figure 3 b.1 and CGR's selection window).
 
 The mean ± std is computed across the 5 training seeds.
 
