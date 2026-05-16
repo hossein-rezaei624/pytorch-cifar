@@ -4,7 +4,7 @@ These two files produce the numbers/table for the Reviewer-1 Concern-1 rebuttal:
 
 - **(b.1) Cross-seed Spearman ρ** of per-sample variance vectors → §5.3 sub-point (b.1) and the rebuttal as `\bar\rho = X.XX ± Y.YY`.
 - **(a.2) Spearman ρ between variance and forgetting events** → §5.3 sub-point (a.2) as `\rho = Z.ZZ ± W.WW` (mean ± std over 5 seeds).
-- **(b.2) Diagnostic table** comparing CGR vs Random / High-loss / Low-confidence → Table `tab:diagnostic` (mean ± std over 5 seeds).
+- **(b.2) Diagnostic table** comparing CGR vs Random / High-loss / High-confidence / Low-confidence → Table `tab:diagnostic` (mean ± std over 5 seeds).
 
 ## Files
 
@@ -91,6 +91,7 @@ Per-class budget K = 100  (10 classes seen in task 1)
 Rule                    Margin (mean±std)   Forget (mean±std)   MeanConf (mean±std)
 Random              0.7821 ± 0.0019       0.42 ± 0.04       0.4521 ± 0.0035
 High loss           0.1234 ± ...          5.62 ± ...        0.0421 ± ...
+High confidence     0.9512 ± ...          0.18 ± ...        0.9803 ± ...
 Low confidence      0.0851 ± ...          7.13 ± ...        0.0287 ± ...
 CGR (variance)      0.4012 ± ...          2.87 ± ...        0.3812 ± ...
 
