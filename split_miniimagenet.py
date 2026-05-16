@@ -120,15 +120,16 @@ def diagnostic_table_one_seed(log, E, buffer_size, last_k_for_margin, random_see
 
     rng = np.random.default_rng(random_seed)
     rules = {
-        'Random':         np.concatenate([
-                              rng.choice(np.where(labels == c)[0],
-                                         size=min(k_per_class, (labels == c).sum()),
-                                         replace=False)
-                              for c in unique_classes
-                          ]),
-        'High loss':      top_k_per_class(mean_loss_E, descending=True),
-        'Low confidence': top_k_per_class(mean_conf_E, descending=False),
-        'CGR (variance)': top_k_per_class(variance, descending=True),
+        'Random':          np.concatenate([
+                               rng.choice(np.where(labels == c)[0],
+                                          size=min(k_per_class, (labels == c).sum()),
+                                          replace=False)
+                               for c in unique_classes
+                           ]),
+        'High loss':       top_k_per_class(mean_loss_E, descending=True),
+        'High confidence': top_k_per_class(mean_conf_E, descending=True),
+        'Low confidence':  top_k_per_class(mean_conf_E, descending=False),
+        'CGR (variance)':  top_k_per_class(variance, descending=True),
     }
 
     row_dict = {}
