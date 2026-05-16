@@ -1,275 +1,150 @@
-"""
-Analysis script for CGR diagnostic logs produced by cgr_with_diag.py
-(when run with --cgr_diag_log).
+# CGR diagnostic experiments — usage
 
-Computes ACROSS ALL SEEDS:
-  (b.1) Cross-seed Spearman rank correlation of per-sample variance vectors
-        --> mean ± std over the 10 pairs of seeds.
-  (a.2) Variance vs forgetting-event Spearman correlation
-        --> computed separately for EACH seed; reported as mean ± std over seeds.
-  (b.2) Diagnostic table comparing CGR vs random / high-loss / low-confidence
-        --> each cell computed separately for EACH seed; reported as mean ± std.
+These two files produce the numbers/table for the Reviewer-1 Concern-1 rebuttal:
 
-Usage:
-    python analyze_cgr_diag.py --diag_dir cgr_diag_logs --E 4 --buffer_size 1000
-"""
+- **(b.1) Cross-seed Spearman ρ** of per-sample variance vectors → §5.3 sub-point (b.1) and the rebuttal as `\bar\rho = X.XX ± Y.YY`.
+- **(a.2) Spearman ρ between variance and forgetting events** → §5.3 sub-point (a.2) as `\rho = Z.ZZ ± W.WW` (mean ± std over 5 seeds).
+- **(b.2) Diagnostic table** comparing CGR vs Random / High-loss / Low-confidence → Table `tab:diagnostic` (mean ± std over 5 seeds).
 
-import argparse
-import os
-from pathlib import Path
+## Files
 
-import numpy as np
+- `cgr_with_diag.py` — drop-in replacement for `models/cgr.py`. Adds a `--cgr_diag_log` flag; when set, dumps per-sample diagnostics from task 1 to disk. When the flag is off, behaviour is identical to your original.
+- `analyze_cgr_diag.py` — standalone analysis script. Loads the per-seed `.pt` files and prints all three results (mean ± std for a.2 and b.2, all 10 seed pairs for b.1), plus a LaTeX-ready diagnostic table.
+
+## How the logging works
+
+With `--cgr_diag_log`, during **task 1 only**:
+
+1. The same eval-mode forward pass that CGR already does on `not_aug_inputs` (lines 339–353 of your original `cgr.py`) is run for **every epoch of task 1**, not just the first $E$. CGR's selection still only uses the first $E$ rows of `self.confidence_by_sample`, so its behaviour is unchanged.
+2. From that eval-mode pass, per-sample target confidence, margin, correctness, and cross-entropy loss are recorded at every epoch.
+3. After the last epoch of task 1, everything is saved to `cgr_diag_logs/cgr_diag_seed<S>.pt`.
+
+For task 2 onward the diagnostic code is a no-op; CGR continues training normally. All diagnostics come from CGR's eval-mode forward pass on `not_aug_inputs` — not from the train-mode SGD pass.
+
+## Running the experiments
+
+### 1. Install the patched `cgr.py`
+
+```bash
+cp models/cgr.py models/cgr.py.bak
+cp cgr_with_diag.py models/cgr.py
+```
+
+### 2. Run task-1 diagnostics across 5 seeds
+
+For Split CIFAR-100 with buffer 1000 (matches your main-experiments cell):
+
+```bash
+for SEED in 0 1 2 3 4; do
+  python utils/main.py \
+      --model cgr \
+      --dataset seq-cifar100 \
+      --buffer_size 1000 \
+      --load_best_args \
+      --seed $SEED \
+      --cgr_diag_log \
+      --cgr_diag_dir cgr_diag_logs
+done
+```
+
+Each run saves `cgr_diag_seed<S>.pt` to `cgr_diag_logs/`.
+
+**You only need the first task's data**, so you can interrupt each run with Ctrl-C as soon as it prints `[CGR-Diag] Saved task-1 diagnostics to ...` (that line appears at the end of task 1's last epoch, before task 2 starts). That saves substantial GPU time.
+
+### 3. Analyze
+
+```bash
+python analyze_cgr_diag.py \
+    --diag_dir cgr_diag_logs \
+    --E 4 \
+    --buffer_size 1000
+```
+
+Match `--E` to the value of `E` you used in the run for CIFAR-100 at buffer 1000 (per your paper's Table 1: `E = 4` for that cell).
+
+Sample output (your numbers will differ):
+
+```
+Loaded 5 seed logs from cgr_diag_logs
+  seed=0  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+  seed=1  ...
+
+=== (b.1) Cross-seed Spearman correlation of variance vectors ===
+Number of seeds: 5  (10 pairs)
+Mean ρ ± std: 0.7142 ± 0.0421
+Per-pair ρ values:
+  (seed 0, seed 1): ρ = 0.7203
+  ...
+  Paper insertion: \bar\rho = 0.71 \pm 0.04
+
+=== (a.2) Variance vs forgetting events (ALL seeds) ===
+Per-seed ρ values:
+  seed 0: ρ = 0.6541  (p = 1.2e-300)  ***
+  seed 1: ρ = 0.6602  ...
+  ...
+Mean ρ ± std over 5 seeds: 0.6580 ± 0.0080
+  Paper insertion: \rho = 0.66 \pm 0.01
+
+=== (b.2) Diagnostic table (averaged over 5 seeds) ===
+Per-class budget K = 100  (10 classes seen in task 1)
+
+Rule                    Margin (mean±std)   Forget (mean±std)   MeanConf (mean±std)
+Random              0.7821 ± 0.0019       0.42 ± 0.04       0.4521 ± 0.0035
+High loss           0.1234 ± ...          5.62 ± ...        0.0421 ± ...
+Low confidence      0.0851 ± ...          7.13 ± ...        0.0287 ± ...
+CGR (variance)      0.4012 ± ...          2.87 ± ...        0.3812 ± ...
+
+--- LaTeX (paste into Table tab:diagnostic) ---
+\begin{tabular}{lccc}
+...
+\end{tabular}
+```
+
+## What gets reported in each row
+
+For each selection rule, three columns:
+
+- **Mean margin** — averaged over the **last 5 epochs** of task-1 training (configurable via `--last_k_for_margin`). Reflects whether the selected samples are *still* near the boundary at the end of training.
+- **Mean forgetting events** — over **all 50 epochs** (Toneva et al.'s definition; counting correct→incorrect transitions across the full trajectory).
+- **Mean target confidence** — over the **first $E$ epochs** (matches Figure 3 sub-figure b.1 and CGR's selection window).
+
+The mean ± std is computed across the 5 training seeds.
+
+## Sanity checks
+
+After the first seed runs, verify:
+
+```python
 import torch
-from scipy.stats import spearmanr
+d = torch.load('cgr_diag_logs/cgr_diag_seed0.pt')
+print({k: (v.shape, v.dtype) if torch.is_tensor(v) else v for k, v in d.items()})
+print('cgr_conf range:', d['cgr_confidence_by_sample'].min().item(),
+      d['cgr_confidence_by_sample'].max().item())
+print('margin range:', d['diag_margin'].min().item(),
+      d['diag_margin'].max().item())
+print('epoch-0 acc:', d['diag_correct'][0].float().mean().item())
+print('last-epoch acc:', d['diag_correct'][-1].float().mean().item())
+```
 
+Expected:
+- `cgr_confidence_by_sample` and `diag_target_conf` in `[0, 1]`.
+- `diag_margin` in `[-1, 1]`.
+- epoch-0 correctness ≈ 0.10 (chance for 10-class task 1 on CIFAR-100).
+- last-epoch correctness > 0.9 (model has converged on task 1).
+- `n_sample_per_task = 5000` for Split CIFAR-100 (10 classes × 500 samples).
+- `cgr_confidence_by_sample` has all 50 rows filled (not just the first 4) when `--cgr_diag_log` is set.
 
-# ----------------------------- I/O -----------------------------
+If anything looks off, paste the sanity-check output and the first few rows of `cgr_confidence_by_sample[:5, :10]` and I'll debug.
 
-def load_seed_logs(diag_dir):
-    paths = sorted(Path(diag_dir).glob('cgr_diag_seed*.pt'))
-    if not paths:
-        raise FileNotFoundError(f"No 'cgr_diag_seed*.pt' files found in {diag_dir}")
-    return [torch.load(p, map_location='cpu') for p in paths]
+## Restoring the original `cgr.py`
 
+```bash
+cp models/cgr.py.bak models/cgr.py
+```
 
-# ------------------------- Metrics ---------------------------
+## Caveats
 
-def variance_from_eval_confidence(log, E):
-    """CGR's actual variance signal: variance of eval-mode confidence over first E epochs."""
-    conf = log['cgr_confidence_by_sample']
-    return conf[:E].var(dim=0).numpy()
-
-
-def forgetting_events(correct):
-    """Toneva-style forgetting events: # of correct -> incorrect transitions over training."""
-    correct = correct.bool()
-    transitions = correct[:-1] & ~correct[1:]
-    return transitions.sum(dim=0).numpy()
-
-
-# --------------------- (b.1) Cross-seed -----------------------
-
-def cross_seed_spearman(logs, E):
-    variances = [variance_from_eval_confidence(log, E) for log in logs]
-    lens = {v.shape[0] for v in variances}
-    if len(lens) != 1:
-        raise ValueError(f"Variance vectors differ across seeds: {lens}")
-
-    rhos = []
-    pairs = []
-    n = len(variances)
-    for i in range(n):
-        for j in range(i + 1, n):
-            r, _ = spearmanr(variances[i], variances[j])
-            rhos.append(r)
-            pairs.append((logs[i]['seed'], logs[j]['seed']))
-    return float(np.mean(rhos)), float(np.std(rhos)), rhos, pairs
-
-
-# ---------------- (a.2) Variance vs forgetting (all seeds) ----------------
-
-def variance_vs_forgetting_per_seed(logs, E):
-    """Compute Spearman ρ between variance and forgetting events for EACH seed."""
-    results = []
-    for log in logs:
-        variance = variance_from_eval_confidence(log, E)
-        forgetting = forgetting_events(log['diag_correct'])
-        r, p = spearmanr(variance, forgetting)
-        results.append({'seed': log['seed'], 'rho': float(r), 'p': float(p)})
-    rhos = [r['rho'] for r in results]
-    return results, float(np.mean(rhos)), float(np.std(rhos))
-
-
-# ---------------- (b.2) Diagnostic table (all seeds) ----------------------
-
-def diagnostic_table_one_seed(log, E, buffer_size, last_k_for_margin, random_seed):
-    n_epochs = log['diag_target_conf'].shape[0] if 'diag_target_conf' in log else None
-    # Note: cgr_with_diag.py saves cgr_confidence_by_sample as the eval-mode target conf,
-    # filled for ALL task-1 epochs when --cgr_diag_log is set. Use it for both
-    # CGR's variance (first E rows) and the per-epoch confidence trajectory.
-    target_conf_all = log['cgr_confidence_by_sample']  # (n_epochs, n_samples)
-    n_epochs = target_conf_all.shape[0]
-    labels = log['diag_labels'].numpy()
-
-    # Per-sample selection scores (computed over first E epochs, matching CGR's window
-    # and Figure 3 sub-figure b.1)
-    variance = variance_from_eval_confidence(log, E)
-    mean_conf_E = target_conf_all[:E].mean(dim=0).numpy()
-    mean_loss_E = log['diag_loss'][:E].mean(dim=0).numpy()
-
-    # Per-sample reporting metrics. Mean target confidence is computed over the
-    # same first-E-epoch window as the selection / as Figure 3 (b.1).
-    margin_late = log['diag_margin'][-last_k_for_margin:].mean(dim=0).numpy()
-    forgetting = forgetting_events(log['diag_correct'])
-    mean_conf_report = mean_conf_E  # = target_conf_all[:E].mean(dim=0).numpy()
-
-    # Per-class top-K (K = buffer_size // num_classes seen in task 1)
-    unique_classes = np.unique(labels[labels >= 0])
-    num_classes = len(unique_classes)
-    k_per_class = buffer_size // num_classes
-
-    def top_k_per_class(score, descending=True):
-        out = []
-        for c in unique_classes:
-            idx = np.where(labels == c)[0]
-            order = np.argsort(score[idx])
-            if descending:
-                order = order[::-1]
-            out.append(idx[order[:k_per_class]])
-        return np.concatenate(out)
-
-    rng = np.random.default_rng(random_seed)
-    rules = {
-        'Random':         np.concatenate([
-                              rng.choice(np.where(labels == c)[0],
-                                         size=min(k_per_class, (labels == c).sum()),
-                                         replace=False)
-                              for c in unique_classes
-                          ]),
-        'High loss':      top_k_per_class(mean_loss_E, descending=True),
-        'Low confidence': top_k_per_class(mean_conf_E, descending=False),
-        'CGR (variance)': top_k_per_class(variance, descending=True),
-    }
-
-    row_dict = {}
-    for name, idx in rules.items():
-        row_dict[name] = {
-            'mean_margin': float(margin_late[idx].mean()),
-            'mean_forgetting': float(forgetting[idx].mean()),
-            'mean_target_conf': float(mean_conf_report[idx].mean()),
-        }
-    return row_dict, k_per_class, num_classes
-
-
-def diagnostic_table_all_seeds(logs, E, buffer_size, last_k_for_margin):
-    """Compute the diagnostic table per seed, then aggregate to mean ± std."""
-    per_seed_rows = []
-    k_per_class, num_classes = None, None
-    for log in logs:
-        # Use the seed itself as the random_seed for the Random rule, so the
-        # randomness is reproducible and seed-specific.
-        row_dict, k, nc = diagnostic_table_one_seed(
-            log, E, buffer_size,
-            last_k_for_margin=last_k_for_margin,
-            random_seed=int(log['seed']) if str(log['seed']).isdigit() else 0
-        )
-        per_seed_rows.append(row_dict)
-        k_per_class, num_classes = k, nc
-
-    # Aggregate across seeds
-    rule_names = list(per_seed_rows[0].keys())
-    agg = {}
-    for name in rule_names:
-        agg[name] = {}
-        for metric in ['mean_margin', 'mean_forgetting', 'mean_target_conf']:
-            vals = [seed_row[name][metric] for seed_row in per_seed_rows]
-            agg[name][metric + '_mean'] = float(np.mean(vals))
-            agg[name][metric + '_std']  = float(np.std(vals))
-            agg[name][metric + '_per_seed'] = [float(v) for v in vals]
-    return agg, per_seed_rows, k_per_class, num_classes
-
-
-# ------------------------- Reporting -------------------------
-
-def print_b1(mean_rho, std_rho, all_rhos, pairs, n_seeds):
-    n_pairs = len(all_rhos)
-    print(f"\n=== (b.1) Cross-seed Spearman correlation of variance vectors ===")
-    print(f"Number of seeds: {n_seeds}  ({n_pairs} pairs)")
-    print(f"Mean ρ ± std: {mean_rho:.4f} ± {std_rho:.4f}")
-    print(f"Per-pair ρ values:")
-    for (s1, s2), r in zip(pairs, all_rhos):
-        print(f"  (seed {s1}, seed {s2}): ρ = {r:.4f}")
-    print(f"\n  Paper insertion: \\bar\\rho = {mean_rho:.2f} \\pm {std_rho:.2f}")
-
-
-def print_a2(results, mean_rho, std_rho):
-    print(f"\n=== (a.2) Variance vs forgetting events (ALL seeds) ===")
-    print(f"Per-seed ρ values:")
-    for r in results:
-        sig = '***' if r['p'] < 1e-50 else ('**' if r['p'] < 1e-10 else '')
-        print(f"  seed {r['seed']}: ρ = {r['rho']:.4f}  (p = {r['p']:.3e})  {sig}")
-    print(f"\nMean ρ ± std over {len(results)} seeds: {mean_rho:.4f} ± {std_rho:.4f}")
-    print(f"\n  Paper insertion: \\rho = {mean_rho:.2f} \\pm {std_rho:.2f}")
-
-
-def print_b2(agg, per_seed_rows, k_per_class, num_classes, n_seeds):
-    print(f"\n=== (b.2) Diagnostic table (averaged over {n_seeds} seeds) ===")
-    print(f"Per-class budget K = {k_per_class}  ({num_classes} classes seen in task 1)\n")
-
-    rule_names = list(agg.keys())
-    header = f"{'Rule':<18} {'Margin (mean±std)':>22} {'Forget (mean±std)':>22} {'MeanConf (mean±std)':>22}"
-    print(header)
-    print('-' * len(header))
-    for name in rule_names:
-        d = agg[name]
-        print(f"{name:<18} "
-              f"{d['mean_margin_mean']:>7.4f} ± {d['mean_margin_std']:.4f}    "
-              f"{d['mean_forgetting_mean']:>7.3f} ± {d['mean_forgetting_std']:.3f}    "
-              f"{d['mean_target_conf_mean']:>7.4f} ± {d['mean_target_conf_std']:.4f}")
-
-    print("\nPer-seed breakdown:")
-    for name in rule_names:
-        print(f"  {name}:")
-        d = agg[name]
-        for metric_pretty, metric_key in [('margin', 'mean_margin_per_seed'),
-                                          ('forget', 'mean_forgetting_per_seed'),
-                                          ('conf',   'mean_target_conf_per_seed')]:
-            vals = d[metric_key]
-            print(f"    {metric_pretty}: {[f'{v:.4f}' for v in vals]}")
-
-    # LaTeX table
-    print("\n--- LaTeX (paste into Table tab:diagnostic) ---")
-    print(r"\begin{tabular}{lccc}")
-    print(r"\toprule")
-    print(r"Selection rule & Mean margin $\downarrow$ & Forgetting events $\uparrow$ & Mean target conf. \\")
-    print(r"\midrule")
-    for name in rule_names:
-        d = agg[name]
-        print(f"{name} & "
-              f"${d['mean_margin_mean']:.3f} \\pm {d['mean_margin_std']:.3f}$ & "
-              f"${d['mean_forgetting_mean']:.2f} \\pm {d['mean_forgetting_std']:.2f}$ & "
-              f"${d['mean_target_conf_mean']:.3f} \\pm {d['mean_target_conf_std']:.3f}$ \\\\")
-    print(r"\bottomrule")
-    print(r"\end{tabular}")
-
-
-# ---------------------------- Main ----------------------------
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--diag_dir', type=str, required=True,
-                        help='Directory containing cgr_diag_seed*.pt files.')
-    parser.add_argument('--E', type=int, default=4,
-                        help='CGR variance window (should match what was used in training).')
-    parser.add_argument('--buffer_size', type=int, default=1000,
-                        help='Buffer size used in the run; controls per-class top-K.')
-    parser.add_argument('--last_k_for_margin', type=int, default=5,
-                        help='Average margin over the last K training epochs for the report column.')
-    args = parser.parse_args()
-
-    logs = load_seed_logs(args.diag_dir)
-    print(f"Loaded {len(logs)} seed logs from {args.diag_dir}")
-    for log in logs:
-        print(f"  seed={log['seed']}  E={log['E']}  n_epochs={log['n_epochs']}  "
-              f"n_samples={log['n_sample_per_task']}  buffer_size={log['buffer_size']}")
-
-    # (b.1) cross-seed
-    if len(logs) >= 2:
-        mean_rho, std_rho, all_rhos, pairs = cross_seed_spearman(logs, args.E)
-        print_b1(mean_rho, std_rho, all_rhos, pairs, len(logs))
-    else:
-        print("\n(b.1) Cross-seed correlation skipped: need >= 2 seeds.")
-
-    # (a.2) variance vs forgetting -- across all seeds
-    a2_results, a2_mean, a2_std = variance_vs_forgetting_per_seed(logs, args.E)
-    print_a2(a2_results, a2_mean, a2_std)
-
-    # (b.2) diagnostic table -- averaged across all seeds
-    agg, per_seed_rows, k_per_class, num_classes = diagnostic_table_all_seeds(
-        logs, args.E, args.buffer_size, last_k_for_margin=args.last_k_for_margin
-    )
-    print_b2(agg, per_seed_rows, k_per_class, num_classes, len(logs))
-
-
-if __name__ == '__main__':
-    main()
+- All diagnostics come from CGR's existing eval-mode forward pass on `not_aug_inputs`, so variance, margin, correctness, and loss are all on the same footing. There is **no inconsistency** between the variance signal and the other diagnostics — all are computed from the same forward-pass logits.
+- The extra eval-mode forward passes during epochs $E+1$ through $50$ are the only extra compute introduced. For Split CIFAR-100 task 1 with batch 32, that's roughly 7K extra forward passes per seed (~70 seconds on RTX 8000), so 5 seeds add maybe 6 minutes total — negligible.
+- The "Random" selection rule in (b.2) is reproducibly seeded from the log's own seed value, so each run's "Random" comparison uses different random samples (which is what you want — averaging the same random selection 5 times would give zero variance and be misleading).
+- For (a.2) the mean ± std is over per-seed Spearman ρ values, not over per-sample correlations. Each seed gives one ρ, and we report mean and std of those 5 ρ values.
