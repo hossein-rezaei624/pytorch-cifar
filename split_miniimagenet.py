@@ -1,756 +1,302 @@
 # -*-coding:utf8-*-
 
+import copy
+import torch
 import os
 import numpy as np
-import torchvision.transforms
-from torchvision import datasets
-from torch.utils.data import Subset
 from torch.utils.data import DataLoader
-import copy
-from PIL import Image
+from torch.utils.data import Subset
+import torchvision
 
-from dataset.single_task_dataset import MergeDataset, SimpleDataset
-
-
-class SplitMiniImageNet(object):
-    def __init__(self, data_path, batch_size):
-        self.data_path = data_path
-        self.batch_size = batch_size
-        # process data to PIL image, load both train and eval dataset
-        self.train_data = []
-        train_sps = []
-        train_labs = []
-        
-        train_sps = np.load(os.path.join(self.data_path, '%s_x.npy' % ('train')))
-        train_labs = np.load(os.path.join(self.data_path, '%s_y.npy' % ('train')))
-        
-        for i in range(train_sps.shape[0]):
-            np_img = train_sps[i, :]
-            img = Image.fromarray(np_img)
-            lab = int(train_labs[i])
-            self.train_data.append([img, lab])
-        del train_sps
-        del train_labs
-        self.eval_data = []
-        eval_sps = []
-        eval_labs = []
-
-        eval_sps = np.load(os.path.join(self.data_path, '%s_x.npy' % ('test')))
-        eval_labs = np.load(os.path.join(self.data_path, '%s_y.npy' % ('test')))
-        
-        for i in range(eval_sps.shape[0]):
-            np_img = eval_sps[i, :]
-            img = Image.fromarray(np_img)
-            lab = int(eval_labs[i])
-            self.eval_data.append([img, lab])
-
-        # make transforms
-        self.transform_train = torchvision.transforms.Compose(
-            [torchvision.transforms.Resize(32),
-             torchvision.transforms.RandomCrop(32, padding=4),
-             torchvision.transforms.RandomHorizontalFlip(),
-             torchvision.transforms.ToTensor(),
-             torchvision.transforms.Normalize((0.47313006, 0.44905752, 0.40378186), (0.27292014, 0.26559181, 0.27953038))]
-        )
-        self.transform_test = torchvision.transforms.Compose(
-            [torchvision.transforms.Resize(32),
-             torchvision.transforms.ToTensor(),
-             torchvision.transforms.Normalize((0.47313006, 0.44905752, 0.40378186), (0.27292014, 0.26559181, 0.27953038))]
-        )
-        self.to_tensor = torchvision.transforms.ToTensor()
-
-        self.task_dic = {}
-        self.task_dic = self.make_task_dic()
-        self.max_iter = len(self.task_dic)
-        self.cur_iter = 0
-
-        # make data loaders
-        self.train_loaders = []
-        self.slt_loaders = []
-        self.test_loaders = []
-        for i in range(self.max_iter):
-            train_loader, slt_loader, test_loader = self.make_dataset(task_id=i)
-            self.train_loaders.append(train_loader)
-            self.slt_loaders.append(slt_loader)
-            self.test_loaders.append(test_loader)
-
-    def make_dataset(self, task_id):
-        # make both train dataset and test dataset
-        class_set = set(self.task_dic[task_id])
-        task_train_data = []
-        for di in self.train_data:
-            sp, lab = di
-            if lab in class_set:
-                task_train_data.append(di)
-        task_train_dataset = MergeDataset(
-            data=task_train_data,
-            transforms=self.transform_train
-        )
-        train_loader = DataLoader(
-            task_train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=False)
-        task_slt_dataset = SimpleDataset(
-            data=task_train_data,
-            transforms=self.to_tensor
-        )
-        slt_loader = DataLoader(
-            task_slt_dataset, batch_size=len(task_train_data), shuffle=False, drop_last=False)
-        task_test_data = []
-        for di in self.eval_data:
-            sp, lab = di
-            if lab in class_set:
-                task_test_data.append(di)
-        task_test_dataset = SimpleDataset(
-            data=task_test_data,
-            transforms=self.transform_test
-        )
-        test_loader = DataLoader(
-            task_test_dataset, batch_size=100, shuffle=False, drop_last=False)
-        return train_loader, slt_loader, test_loader
-
-    def make_task_dic(self):
-        tasks = 5
-        cls_per_task = 20
-        cur_class = 0
-        for i in range(tasks):
-            self.task_dic[i] = []
-            for j in range(cls_per_task):
-                self.task_dic[i].append(cur_class)
-                cur_class += 1
-        return self.task_dic
-
-    def next_task(self):
-        if self.cur_iter >= self.max_iter:
-            raise Exception('Number of tasks exceeded!')
-        else:
-            self.cur_iter += 1
-            return self.train_loaders[self.cur_iter - 1], self.slt_loaders[self.cur_iter - 1],\
-                self.test_loaders[self.cur_iter - 1]
-
-    def get_transforms(self):
-        return self.transform_train
-
-    def get_task_dic(self):
-        return self.task_dic
-
-    def get_eval_transforms(self):
-        return self.transform_test
+from continual_learning import coreset_buffer
+import utils
+from dataset import single_task_dataset
 
 
+def mask_classes(dataset, output: torch.Tensor, k: int) -> None:
 
-class SplitTinyImageNet(object):
-    def __init__(self, data_path, batch_size):
-        self.data_path = data_path
-        self.batch_size = batch_size
-        # process data to PIL image, load both train and eval dataset
-        self.train_data = []
-        train_sps = []
-        train_labs = []
-        for i in range(20):
-            sp = np.load(
-                os.path.join(self.data_path, 'processed/x_train_%02d.npy' % (i + 1)))
-            train_sps.append(sp)
-            lab = np.load(
-                os.path.join(self.data_path, 'processed/y_train_%02d.npy' % (i + 1)))
-            train_labs.append(lab)
-        train_sps = np.concatenate(train_sps, axis=0)
-        train_labs = np.concatenate(train_labs, axis=0)
-        for i in range(train_sps.shape[0]):
-            np_img = train_sps[i, :]
-            img = Image.fromarray(np.uint8(255 * np_img))
-            lab = int(train_labs[i])
-            self.train_data.append([img, lab])
-        del train_sps
-        del train_labs
-        self.eval_data = []
-        eval_sps = []
-        eval_labs = []
-        for i in range(20):
-            sp = np.load(
-                os.path.join(self.data_path, 'processed/x_val_%02d.npy' % (i + 1)))
-            eval_sps.append(sp)
-            lab = np.load(
-                os.path.join(self.data_path, 'processed/y_val_%02d.npy' % (i + 1)))
-            eval_labs.append(lab)
-        eval_sps = np.concatenate(eval_sps, axis=0)
-        eval_labs = np.concatenate(eval_labs, axis=0)
-        for i in range(eval_sps.shape[0]):
-            np_img = eval_sps[i, :]
-            img = Image.fromarray(np.uint8(255 * np_img))
-            lab = int(eval_labs[i])
-            self.eval_data.append([img, lab])
-
-        # make transforms
-        self.transform_train = torchvision.transforms.Compose(
-            [torchvision.transforms.Resize(32),
-             torchvision.transforms.RandomCrop(32, padding=4),
-             torchvision.transforms.RandomHorizontalFlip(),
-             torchvision.transforms.ToTensor(),
-             torchvision.transforms.Normalize((0.4802, 0.4480, 0.3975), (0.2770, 0.2691, 0.2821))]
-        )
-        self.transform_test = torchvision.transforms.Compose(
-            [torchvision.transforms.Resize(32),
-             torchvision.transforms.ToTensor(),
-             torchvision.transforms.Normalize((0.4802, 0.4480, 0.3975), (0.2770, 0.2691, 0.2821))]
-        )
-        self.to_tensor = torchvision.transforms.ToTensor()
-
-        self.task_dic = {}
-        self.task_dic = self.make_task_dic()
-        self.max_iter = len(self.task_dic)
-        self.cur_iter = 0
-
-        # make data loaders
-        self.train_loaders = []
-        self.slt_loaders = []
-        self.test_loaders = []
-        for i in range(self.max_iter):
-            train_loader, slt_loader, test_loader = self.make_dataset(task_id=i)
-            self.train_loaders.append(train_loader)
-            self.slt_loaders.append(slt_loader)
-            self.test_loaders.append(test_loader)
-
-    def make_dataset(self, task_id):
-        # make both train dataset and test dataset
-        class_set = set(self.task_dic[task_id])
-        task_train_data = []
-        for di in self.train_data:
-            sp, lab = di
-            if lab in class_set:
-                task_train_data.append(di)
-        task_train_dataset = MergeDataset(
-            data=task_train_data,
-            transforms=self.transform_train
-        )
-        train_loader = DataLoader(
-            task_train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=False)
-        task_slt_dataset = SimpleDataset(
-            data=task_train_data,
-            transforms=self.to_tensor
-        )
-        slt_loader = DataLoader(
-            task_slt_dataset, batch_size=len(task_train_data), shuffle=False, drop_last=False)
-        task_test_data = []
-        for di in self.eval_data:
-            sp, lab = di
-            if lab in class_set:
-                task_test_data.append(di)
-        task_test_dataset = SimpleDataset(
-            data=task_test_data,
-            transforms=self.transform_test
-        )
-        test_loader = DataLoader(
-            task_test_dataset, batch_size=100, shuffle=False, drop_last=False)
-        return train_loader, slt_loader, test_loader
-
-    def make_task_dic(self):
-        tasks = 10
-        cls_per_task = 20
-        cur_class = 0
-        for i in range(tasks):
-            self.task_dic[i] = []
-            for j in range(cls_per_task):
-                self.task_dic[i].append(cur_class)
-                cur_class += 1
-        return self.task_dic
-
-    def next_task(self):
-        if self.cur_iter >= self.max_iter:
-            raise Exception('Number of tasks exceeded!')
-        else:
-            self.cur_iter += 1
-            return self.train_loaders[self.cur_iter - 1], self.slt_loaders[self.cur_iter - 1],\
-                self.test_loaders[self.cur_iter - 1]
-
-    def get_transforms(self):
-        return self.transform_train
-
-    def get_task_dic(self):
-        return self.task_dic
-
-    def get_eval_transforms(self):
-        return self.transform_test
+    if dataset == "splitcifar100":
+        N_CLASSES_PER_TASK = 10
+        N_TASKS = 10
+    elif dataset == "splitminiimagenet":
+        N_CLASSES_PER_TASK = 20
+        N_TASKS = 5
+    elif dataset == "splittinyimagenet":
+        N_CLASSES_PER_TASK = 20
+        N_TASKS = 10
+    
+    output[:, 0:k * N_CLASSES_PER_TASK] = -float('inf')
+    output[:, (k + 1) * N_CLASSES_PER_TASK:
+               N_TASKS * N_CLASSES_PER_TASK] = -float('inf')
 
 
-class SplitCifar100(object):
-    def __init__(self, limit_per_task, data_path=''):
-        self.current_pos = 0
-        self.transform_train = torchvision.transforms.Compose([
-            torchvision.transforms.RandomCrop(32, padding=4),
-            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
-        ])
-        self.transform_test = torchvision.transforms.Compose(
-            [torchvision.transforms.ToTensor(),
-             torchvision.transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))]
-        )
+def backward_transfer(results):
+    n_tasks = len(results)
+    li = []
+    for i in range(n_tasks - 1):
+        li.append(results[-1][i] - results[i][i])
 
-        self.to_tensor = torchvision.transforms.ToTensor()
-        self.data_path = '../data/CIFAR100/'
-        if data_path != '':
-            self.data_path = data_path
-        self.train_dataset = torchvision.datasets.CIFAR100(
-            self.data_path, train=True, transform=self.transform_train, download=True)
-        self.train_dataset_wo_augment = torchvision.datasets.CIFAR100(
-            self.data_path, train=True, transform=self.to_tensor, download=False)
-        self.test_dataset = torchvision.datasets.CIFAR100(
-            self.data_path, train=False, transform=self.transform_test, download=False)
-
-        self.Y_train = np.array(self.train_dataset.targets)
-        self.Y_test = np.array(self.test_dataset.targets)
-
-        self.task_dic = {}
-        self.task_dic = self.make_task_dic()
-        self.max_iter = len(self.task_dic)
-        self.cur_iter = 0
-
-        self.limit_per_task = limit_per_task
-
-        self.inds = []
-        self.full_inds = []
-        rs = np.random.RandomState(0)
-        for i in range(len(self.task_dic)):
-            cur_inds = []
-            for ci in self.task_dic[i]:
-                inds = np.where(self.Y_train == ci)[0]
-                cur_inds.append(inds)
-            ind = np.concatenate(cur_inds, axis=0)
-            self.full_inds.append(ind)
-            sub_ind = rs.choice(ind, limit_per_task, replace=False)
-            self.inds.append(sub_ind)
-
-        self.all_inds = np.hstack(self.inds)
-
-    def next_task(self):
-        if self.cur_iter >= self.max_iter:
-            raise Exception('Number of tasks exceeded!')
-        else:
-            # Retrieve train data
-            train_ind = self.inds[self.cur_iter]
-            full_train_id = self.full_inds[self.cur_iter]
-            # Retrieve test data
-            test_ind = []
-            for cls in self.task_dic[self.cur_iter]:
-                cls_ind = np.where(self.Y_test == cls)[0]
-                test_ind.append(cls_ind)
-            test_ind = np.concatenate(test_ind, axis=0)
-            self.cur_iter += 1
-            return train_ind, full_train_id, test_ind
-
-    def make_task_dic(self):
-        tasks = 10
-        cls_per_task = 10
-        cur_class = 0
-        for i in range(tasks):
-            self.task_dic[i] = []
-            for j in range(cls_per_task):
-                self.task_dic[i].append(cur_class)
-                cur_class += 1
-        return self.task_dic
-
-    def get_transforms(self):
-        return self.transform_train
-
-    def get_task_dic(self):
-        return self.task_dic
-
-    def get_eval_transforms(self):
-        return self.transform_test
+    return np.mean(li)
 
 
-class SplitCifar(object):
-    def __init__(self, limit_per_task=None, aug_type='greedy', data_path=''):
-        self.current_pos = 0
-        if limit_per_task is None:
-            limit_per_task = 1000
-        if aug_type == 'greedy':
-            self.transform_train = torchvision.transforms.Compose([
-                torchvision.transforms.RandomCrop(32, padding=4),
-                torchvision.transforms.RandomHorizontalFlip(),
-                torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-            ])
-            self.transform_test = torchvision.transforms.Compose(
-                [torchvision.transforms.ToTensor(),
-                 torchvision.transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
+class ContinualRunner(object):
+    def __init__(self, local_path, model_params, transforms, train_params, selection_params, use_cuda,
+                 task_dic, buffer_size, seed, replay_mode='full', selection_transforms=None,
+                 extra_data_mode=None, buffer_type='coreset'):
+        # make parameters
+        self.local_path = local_path
+        if not os.path.exists(self.local_path):
+            os.makedirs(self.local_path)
+        self.model_params = model_params
+        self.transforms = transforms
+        self.selection_params = selection_params
+        self.seed = seed
+        self.use_cuda = use_cuda
+        self.train_params = train_params
+        self.task_dic = task_dic
+        self.buffer_size = buffer_size
+        self.replay_mode = replay_mode
+        self.extra_data_mode = extra_data_mode
+        self.buffer_type = buffer_type
+        # build model
+        self.model = utils.build_model(model_params=model_params)
+        # build buffer:
+        if self.buffer_type == 'coreset':
+            self.buffer = coreset_buffer.CoresetBuffer(
+                local_path=os.path.join(self.local_path, 'buffer'),
+                model_params=self.model_params,
+                transforms=self.transforms,
+                selection_params=self.selection_params,
+                use_cuda=self.use_cuda,
+                buffer_size=buffer_size,
+                task_dic=self.task_dic,
+                seed=self.seed,
+                selection_transforms=selection_transforms,
+                extra_data_mode=self.extra_data_mode
             )
-        elif aug_type == 'der':
-            self.transform_train = torchvision.transforms.Compose([
-                torchvision.transforms.RandomCrop(32, padding=4),
-                torchvision.transforms.RandomHorizontalFlip(),
-                torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2615))
-            ])
-            self.transform_test = torchvision.transforms.Compose(
-                [torchvision.transforms.ToTensor(),
-                 torchvision.transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2615))]
+        elif self.buffer_type == 'uniform':
+            self.buffer = coreset_buffer.UniformBuffer(
+                local_path=os.path.join(self.local_path, 'buffer'),
+                transforms=self.transforms,
+                buffer_size=self.buffer_size,
+                use_cuda=self.use_cuda,
+                seed=self.seed
             )
         else:
-            raise ValueError('Invalid runner type')
-        self.to_tensor = torchvision.transforms.ToTensor()
-        self.data_path = '../data/CIFAR10/'
-        if len(data_path) > 0:
-            self.data_path = data_path
+            raise ValueError('Invalid buffer type')
+        self.to_pil = torchvision.transforms.ToPILImage()
+        self.seen_tasks = 0
+        self.results = []
+        self.results_task_hossein = []
+        self.mask_results = []
+        self.task_cnts = []
 
-        self.train_dataset = datasets.CIFAR10(
-            self.data_path, train=True, transform=self.transform_train, download=True)
-        self.train_dataset_wo_augment = datasets.CIFAR10(
-            self.data_path, train=True, transform=self.to_tensor, download=False)
-        self.test_dataset = datasets.CIFAR10(
-            self.data_path, train=False, transform=self.transform_test, download=False)
-
-        self.Y_train = np.array(self.train_dataset.targets)
-        self.Y_test = np.array(self.test_dataset.targets)
-
-        self.sets_0 = [0, 2, 4, 6, 8]
-        self.sets_1 = [1, 3, 5, 7, 9]
-        self.max_iter = len(self.sets_0)
-        self.cur_iter = 0
-        self.limit_per_task = limit_per_task
-
-        self.inds = []
-        self.full_inds = []
-        rs = np.random.RandomState(seed=0)
-        for i in range(5):
-            ind = np.where(np.logical_or(self.Y_train == self.sets_0[i], self.Y_train == self.sets_1[i]))[0]
-            self.full_inds.append(ind)
-            ind = rs.choice(ind, self.limit_per_task, replace=False)
-            self.inds.append(ind)
-        self.all_inds = np.hstack(self.inds)
-
-    def next_task(self):
-        if self.cur_iter >= self.max_iter:
-            raise Exception('Number of tasks exceeded!')
+    def train_single_task(self, dataset_name_hossein, train_loader, eval_loaders, verbose=True, do_evaluation=True):
+        self.model.train()
+        if self.train_params['use_cuda']:
+            self.model.cuda()
+        # make loss function
+        loss_fn = torch.nn.CrossEntropyLoss()
+        # make optimizer
+        if self.train_params['opt_type'] == 'adam':
+            opt = torch.optim.Adam(lr=self.train_params['lr'], params=self.model.parameters())
         else:
-            # Retrieve train data
-            train_ind = self.inds[self.cur_iter]
-            full_train_ind = self.full_inds[self.cur_iter]
-            # Retrieve test data
-            test_ind = np.where(
-                np.logical_or(self.Y_test == self.sets_0[self.cur_iter], self.Y_test == self.sets_1[self.cur_iter]))[0]
-            self.cur_iter += 1
-            return train_ind, full_train_ind, test_ind
-
-    def get_transforms(self):
-        return self.transform_train
-
-    def get_task_dic(self):
-        task_dic = {}
-        for i in range(len(self.sets_0)):
-            task_dic[i] = [self.sets_0[i], self.sets_1[i]]
-        return task_dic
-
-    def get_eval_transforms(self):
-        return self.transform_test
-
-
-class SplitMNIST(object):
-    def __init__(self, imbalanced=True):
-        self.current_pos = 0
-        if imbalanced:
-            limit_per_task = 200
+            opt = torch.optim.SGD(lr=self.train_params['lr'], params=self.model.parameters())
+        # make hyper parameters
+        alpha = torch.tensor(self.train_params['alpha'], dtype=torch.float32, requires_grad=False)
+        if self.train_params['use_cuda']:
+            alpha = alpha.cuda()
+        if 'beta' in self.train_params:
+            beta = torch.tensor(self.train_params['beta'], dtype=torch.float32, requires_grad=False)
+            if self.train_params['use_cuda']:
+                beta = beta.cuda()
+            kd_loss_fn = torch.nn.MSELoss()
         else:
-            limit_per_task = 1000
-        self.transform_train = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.1307,), (0.3081,))
-        ])
-        self.transform_test = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.1307,), (0.3081,))
-        ])
-        self.to_tensor = torchvision.transforms.ToTensor()
+            beta = 0
+            kd_loss_fn = None
+        for i in range(self.train_params['epochs']):
+            step = 0
+            for data in train_loader:
+                aug_sp, lab = data
+                if self.use_cuda:
+                    aug_sp = aug_sp.cuda()
+                    lab = lab.cuda()
+                if not self.buffer.is_empty():
+                    loss = loss_fn(self.model(aug_sp), lab)
+                    total_pre_loss = []
+                    total_kd_loss = []
+                    if self.replay_mode == 'full':
+                        for buffer_data in self.buffer.get_data():
+                            if len(buffer_data) == 3:
+                                b_sp, b_lab, b_logit = buffer_data
+                            else:
+                                b_sp, b_lab = buffer_data
+                                b_logit = None
+                            if self.train_params['use_cuda']:
+                                b_sp = b_sp.cuda()
+                                b_lab = b_lab.cuda()
+                                if b_logit is not None:
+                                    b_logit = b_logit.cuda()
+                            b_out = self.model(b_sp)
+                            pre_loss = loss_fn(b_out, b_lab)
+                            total_pre_loss.append(pre_loss.item())
+                            if kd_loss_fn is not None:
+                                kd_loss = kd_loss_fn(b_out, b_logit)
+                                total_kd_loss.append(kd_loss.item())
+                            else:
+                                kd_loss = 0
+                                total_kd_loss.append(0)
+                            loss = loss + alpha * pre_loss + beta * kd_loss
+                        ##if verbose and step % 100 == 0:
+                        ##    print('loss at step ', step, 'is:', loss.item())
+                        ##    print('previous loss at step ', step, 'is:', np.mean(total_pre_loss), len(total_pre_loss))
+                        ##    if kd_loss_fn is not None:
+                        ##        print('kd loss is:', np.mean(total_kd_loss), len(total_kd_loss))
+                    else:
+                        buffer_data = self.buffer.get_sub_data(size=self.train_params['mem_batch_size'])
+                        if len(buffer_data) == 3:
+                            b_sp, b_lab, b_logit = buffer_data
+                        else:
+                            b_sp, b_lab = buffer_data
+                            b_logit = None
+                        if self.train_params['use_cuda']:
+                            b_sp = b_sp.cuda()
+                            b_lab = b_lab.cuda()
+                            if b_logit is not None:
+                                b_logit = b_logit.cuda()
+                        b_out = self.model(b_sp)
+                        pre_loss = loss_fn(b_out, b_lab)
+                        if kd_loss_fn is not None:
+                            kd_loss = kd_loss_fn(b_out, b_logit)
+                        else:
+                            kd_loss = 0
+                        loss = loss + alpha * pre_loss + beta * kd_loss
+                        ##if verbose and step % 100 == 0:
+                        ##    print('loss at step ', step, 'is:', loss.item())
+                        ##    print('previous loss at step ', step, 'is:', pre_loss.item())
+                        ##    if kd_loss_fn is not None:
+                        ##        print('kd loss is:', kd_loss.item())
+                else:
+                    out_logits = self.model(aug_sp)
+                    loss = loss_fn(out_logits, lab)
+                    ##if verbose and step % 100 == 0:
+                    ##    print('loss at step ', step, 'is:', loss.item())
+                opt.zero_grad()
+                loss.backward()
+                opt.step()
+                step += 1
+            ##print('finish training epoch:', i)
+            if do_evaluation and i % 10 == 0:
+                accs, losses, accs_task_hossein = self.evaluate_model(dataset_name_hossein, eval_loaders=eval_loaders, on_cuda=self.use_cuda)
+                ##print('\taccuracy on test is:', np.mean(accs), accs, losses)
+                ##if len(accs) > 1:
+                ##    print('\tprevious tasks accuracy is:', np.mean(accs[:-1]))
+        if self.train_params['use_cuda']:
+            self.model.cpu()
+        del alpha
+        accs, losses, accs_task_hossein = self.evaluate_model(dataset_name_hossein, eval_loaders=eval_loaders, on_cuda=False)
+        ##print('\tlosses on testset is:', losses)
+        self.results.append(accs)
+        self.results_task_hossein.append(accs_task_hossein)
+        print("\nTask", self.seen_tasks + 1, ":  Class ACC:", np.mean(accs), "     Task ACC:", np.mean(accs_task_hossein), "\n")
+        if self.seen_tasks > 8:
+            print("Class BWT:", backward_transfer(self.results), "     Task BWT:", backward_transfer(self.results_task_hossein), "\n")
+            print("fullclasss", self.results, "\n")
+            print("fulltask", self.results_task_hossein)
+        return accs
 
-        self.train_dataset = datasets.MNIST(
-            '../data/MNIST/', train=True, transform=self.transform_train, download=True)
-        self.train_dataset_wo_augment = datasets.MNIST(
-            '../data/MNIST/', train=True, transform=self.to_tensor, download=False)
-        self.test_dataset = datasets.MNIST(
-            '../data/MNIST/', train=False, transform=self.transform_test, download=False)
+    def evaluate_model(self, dataset_name_hossein, eval_loaders, on_cuda=False):
+        status = self.model.training
+        self.model.eval()
+        accs = []
+        accs_task_hossein = []
+        eval_loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
+        losses = []
+        with torch.no_grad():
+            for i in range(self.seen_tasks + 1):
+                loss = 0
+                correct = 0
+                correct_task_hossein = 0
+                for data, target in eval_loaders[i]:
+                    if on_cuda:
+                        data, target = data.cuda(), target.cuda()
+                    output = self.model(data)
+                    loss += eval_loss_fn(output, target).cpu().item()
+                    pred = output.argmax(dim=1, keepdim=True)
+                    correct += pred.eq(target.view_as(pred)).sum().item()
 
-        self.Y_train = np.array(self.train_dataset.targets)
-        self.Y_test = np.array(self.test_dataset.targets)
+                    mask_classes(dataset_name_hossein, output, i)
+                    pred_task_hossein = output.argmax(dim=1, keepdim=True)
+                    correct_task_hossein += pred_task_hossein.eq(target.view_as(pred_task_hossein)).sum().item()
+                
+                avg_acc = 100. * correct / len(eval_loaders[i].dataset)
+                avg_acc_task_hossein = 100. * correct_task_hossein / len(eval_loaders[i].dataset)
+                avg_loss = loss / len(eval_loaders[i].dataset)
+                accs.append(avg_acc)
+                accs_task_hossein.append(avg_acc_task_hossein)
+                losses.append(avg_loss)
+        self.model.train(status)
+        return accs, losses, accs_task_hossein
 
-        self.sets_0 = [0, 2, 4, 6, 8]
-        self.sets_1 = [1, 3, 5, 7, 9]
-        self.max_iter = len(self.sets_0)
-        self.cur_iter = 0
-        self.limit_per_task = limit_per_task
-
-        self.inds = []
-        self.full_inds = []
-        rs = np.random.RandomState(seed=0)
-        for i in range(5):
-            if i == 4 and imbalanced:
-                limit_per_task = 2000
-            ind = np.where(np.logical_or(self.Y_train == self.sets_0[i], self.Y_train == self.sets_1[i]))[0]
-            self.full_inds.append(ind)
-            ind = rs.choice(ind, limit_per_task, replace=False)
-            self.inds.append(ind)
-        self.all_inds = np.hstack(self.inds)
-
-    def next_task(self):
-        if self.cur_iter >= self.max_iter:
-            raise Exception('Number of tasks exceeded!')
-        else:
-            # Retrieve train data
-            train_ind = self.inds[self.cur_iter]
-            full_train_ind = self.full_inds[self.cur_iter]
-            # Retrieve test data
-            test_ind = np.where(
-                np.logical_or(self.Y_test == self.sets_0[self.cur_iter], self.Y_test == self.sets_1[self.cur_iter]))[0]
-            self.cur_iter += 1
-            return train_ind, full_train_ind, test_ind
-
-    def get_transforms(self):
-        return self.transform_train
-
-    def get_task_dic(self):
-        task_dic = {}
-        for i in range(len(self.sets_0)):
-            task_dic[i] = [self.sets_0[i], self.sets_1[i]]
-        return task_dic
-
-    def get_eval_transforms(self):
-        return self.transform_test
-
-
-class PermutedMnistGenerator(object):
-    def __init__(self, limit_per_task=1000, max_iter=10):
-        self.transform_train = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.1307,), (0.3081,))
-        ])
-        self.transform_test = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.1307,), (0.3081,))
-        ])
-        self.X_train_batch = []
-        self.y_train_batch = []
-        self.current_pos = 0
-        self.cur_iter = 0
-        self.to_tensor = torchvision.transforms.ToTensor()
-
-        train_dataset = datasets.MNIST(
-            '../data/MNIST/', train=True, transform=self.transform_train, download=True)
-        train_dataset_wo_augment = datasets.MNIST(
-            '../data/MNIST/', train=True, transform=self.to_tensor, download=False)
-        test_dataset = datasets.MNIST(
-            '../data/MNIST/', train=False, transform=self.transform_test, download=True)
-
-        train_loader = DataLoader(train_dataset, batch_size=len(train_dataset), shuffle=False)
-        train_loader_wo_aug = DataLoader(train_dataset, batch_size=len(train_dataset_wo_augment), shuffle=False)
-        test_loader = DataLoader(test_dataset, batch_size=len(test_dataset))
-
-        self.X_train, self.Y_train = next(iter(train_loader))
-        self.X_train, self.Y_train = self.X_train.numpy()[:limit_per_task].reshape(-1, 28 * 28), self.Y_train.numpy()[
-                                                                                                 :limit_per_task]
-        self.X_train_wo_aug, self.Y_train_wo_aug = next(iter(train_loader_wo_aug))
-        self.X_train_wo_aug = self.X_train_wo_aug.numpy().reshape(-1, 28 * 28)
-        self.Y_train_wo_aug = self.Y_train_wo_aug.numpy()
-        self.X_train_wo_aug_sub = self.X_train_wo_aug[:limit_per_task]
-        self.Y_train_wo_aug_sub = self.Y_train_wo_aug[:limit_per_task]
-        self.X_test, self.Y_test = next(iter(test_loader))
-        self.X_test, self.Y_test = self.X_test.numpy().reshape(-1, 28 * 28), self.Y_test.numpy()
-
-        self.max_iter = max_iter
-        self.permutations = []
-
-        self.rs = np.random.RandomState(0)
-
-        for i in range(max_iter):
-            perm_inds = list(range(self.X_train.shape[1]))
-            self.rs.shuffle(perm_inds)
-            self.permutations.append(perm_inds)
-            self.X_train_batch.append(self.X_train[:, perm_inds])
-            self.y_train_batch.append(self.Y_train)
-
-        self.X_train_batch = np.vstack(self.X_train_batch)
-        self.y_train_batch = np.hstack(self.y_train_batch)
-
-    def next_task(self):
-        if self.cur_iter >= self.max_iter:
-            raise Exception('Number of tasks exceeded!')
-        else:
-            perm_inds = self.permutations[self.cur_iter]
-
-            next_x_train = copy.deepcopy(self.X_train)
-            next_x_train = next_x_train[:, perm_inds]
-            next_y_train = self.Y_train
-
-            next_x_train_wo_aug = copy.deepcopy(self.X_train_wo_aug)
-            next_x_train_wo_aug = next_x_train_wo_aug[:, perm_inds]
-            next_x_train_wo_aug = next_x_train_wo_aug.reshape(-1, 1, 28, 28)
-            next_y_train_wo_aug = self.Y_train_wo_aug
-            next_x_train_wo_aug_sub = copy.deepcopy(self.X_train_wo_aug_sub)
-            next_x_train_wo_aug_sub = next_x_train_wo_aug_sub[:, perm_inds]
-            next_x_train_wo_aug_sub = next_x_train_wo_aug_sub.reshape(-1, 1, 28, 28)
-            next_y_train_wo_aug_sub = self.Y_train_wo_aug_sub
-
-            next_x_test = copy.deepcopy(self.X_test)
-            next_x_test = next_x_test[:, perm_inds]
-            next_y_test = self.Y_test
-
-            self.cur_iter += 1
-            return next_x_train, next_y_train, next_x_test, next_y_test, \
-                [next_x_train_wo_aug, next_y_train_wo_aug, next_x_train_wo_aug_sub, next_y_train_wo_aug_sub]
-
-    def get_transforms(self):
-        return self.transform_train
-
-    def get_task_dic(self):
-        task_dic = {}
-        for i in range(self.max_iter):
-            task_dic[i] = list(range(10))
-        return task_dic
-
-    def get_eval_transforms(self):
-        return self.transform_test
-
-
-def get_custom_loader(dataset, inds, batch_size, shuffle=True):
-    data_loader = DataLoader(
-        Subset(dataset, inds),
-        batch_size=batch_size,
-        shuffle=shuffle,
-        num_workers=0,
-        pin_memory=True
-    )
-    return data_loader
-
-
-def merge_custom_loader(trainset_no_aug, transforms, batch_size, shuffle=True):
-    data = []
-    to_pil = torchvision.transforms.ToPILImage()
-    for di in trainset_no_aug:
-        sp, lab = di
-        data.append([to_pil(sp), lab])
-    dataset = MergeDataset(
-        data=data,
-        transforms=transforms
-    )
-    data_loader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        drop_last=False,
-        shuffle=shuffle
-    )
-    return data_loader
-
-
-def get_dataset(opts):
-    train_loaders = []
-    train_sub_loaders_wo_aug = []
-    test_loaders = []
-    if opts.dataset == 'splitminiimagenet':
-        generator = SplitMiniImageNet(
-            data_path=opts.data_path,
-            batch_size=opts.batch_size
-        )
-        transforms = generator.get_transforms()
-        eval_transforms = generator.get_eval_transforms()
-        for i in range(generator.max_iter):
-            task_train_loader, task_slt_loader, task_test_loader = generator.next_task()
-            train_loaders.append(task_train_loader)
-            test_loaders.append(task_test_loader)
-        model_params = {
-            'model_type': 'resnet',
-            'num_class': 100,
-            'num_blocks': [2, 2, 2, 2],
-            'use_bn': bool(opts.use_bn),
-            'setting': opts.setting
-        }
-        task_dic = generator.get_task_dic()    
-    elif opts.dataset == 'splittinyimagenet':
-        generator = SplitTinyImageNet(
-            data_path=opts.data_path,
-            batch_size=opts.batch_size
-        )
-        transforms = generator.get_transforms()
-        eval_transforms = generator.get_eval_transforms()
-        for i in range(generator.max_iter):
-            task_train_loader, task_slt_loader, task_test_loader = generator.next_task()
-            train_loaders.append(task_train_loader)
-            test_loaders.append(task_test_loader)
-        model_params = {
-            'model_type': 'resnet',
-            'num_class': 200,
-            'num_blocks': [2, 2, 2, 2],
-            'use_bn': bool(opts.use_bn),
-            'setting': opts.setting
-        }
-        task_dic = generator.get_task_dic()
-    elif opts.dataset == 'splitcifar':
-        generator = SplitCifar(
-            limit_per_task=None if opts.limit_per_task < 0 else opts.limit_per_task,
-            aug_type=opts.aug_type,
-            data_path=opts.data_path
-        )
-        transforms = generator.get_transforms()
-        eval_transforms = generator.get_eval_transforms()
-        for i in range(generator.max_iter):
-            train_inds, full_train_inds, test_inds = generator.next_task()
-            train_sub_loaders_wo_aug.append(
-                get_custom_loader(
-                    generator.train_dataset_wo_augment, train_inds, batch_size=len(train_inds), shuffle=False)
+    def update_buffer(self, full_train_loader, sub_loader, next_loader=None):
+        # make current x and y
+        x, y = next(iter(full_train_loader))
+        full_cur_x = x.numpy()
+        full_cur_y = y.numpy()
+        cur_x, cur_y = next(iter(sub_loader))
+        self.task_cnts.append(cur_x.shape[0])
+        if 'beta' in self.train_params:
+            temp_data = []
+            for i in range(cur_x.shape[0]):
+                sp = self.to_pil(cur_x[i, :])
+                lab = int(cur_y[i])
+                temp_data.append([sp, lab])
+            temp_dataset = single_task_dataset.SimpleDataset(
+                data=temp_data,
+                transforms=self.transforms
             )
-            test_loaders.append(get_custom_loader(generator.test_dataset, test_inds, batch_size=opts.batch_size))
-            if opts.runner_type == 'coreset':
-                train_loaders.append(
-                    get_custom_loader(generator.train_dataset, train_inds, batch_size=opts.batch_size)
-                )
-            else:
-                raise ValueError('Invalid runner type')
-        model_params = {
-            'model_type': 'resnet',
-            'num_class': 10,
-            'num_blocks': [2, 2, 2, 2],
-            'use_bn': bool(opts.use_bn),
-            'setting': opts.setting
-        }
-        task_dic = generator.get_task_dic()
-    elif opts.dataset == 'splitcifar100':
-        generator = SplitCifar100(limit_per_task=opts.limit_per_task)
-        transforms = generator.get_transforms()
-        eval_transforms = generator.get_eval_transforms()
-        for i in range(generator.max_iter):
-            train_inds, full_train_inds, test_inds = generator.next_task()
-            train_sub_loaders_wo_aug.append(
-                get_custom_loader(
-                    generator.train_dataset_wo_augment, train_inds, batch_size=len(train_inds), shuffle=False)
+            temp_loader = DataLoader(
+                temp_dataset, batch_size=self.train_params['batch_size'], drop_last=False, shuffle=False)
+            cur_id2logit = utils.compute_id2logit(
+                data_loader=temp_loader,
+                ref_model=copy.deepcopy(self.model),
+                aug_iters=1,
+                use_cuda=True
             )
-            test_loaders.append(get_custom_loader(generator.test_dataset, test_inds, batch_size=opts.batch_size))
-            if opts.runner_type == 'coreset':
-                train_loaders.append(
-                    get_custom_loader(generator.train_dataset, train_inds, batch_size=opts.batch_size)
-                )
-            else:
-                raise ValueError('Invalid runner type')
-        model_params = {
-            'model_type': 'resnet',
-            'num_class': 100,
-            'num_blocks': [2, 2, 2, 2],
-            'use_bn': bool(opts.use_bn),
-            'setting': opts.setting
-        }
-        task_dic = generator.get_task_dic()
-    elif opts.dataset == 'splitmnist':
-        generator = SplitMNIST(imbalanced=False)
-        for i in range(generator.max_iter):
-            train_inds, full_train_inds, test_inds = generator.next_task()
-            train_loaders.append(get_custom_loader(generator.train_dataset, train_inds, batch_size=opts.batch_size))
-            train_sub_loaders_wo_aug.append(
-                get_custom_loader(
-                    generator.train_dataset_wo_augment, train_inds, batch_size=len(train_inds), shuffle=False)
+        else:
+            cur_id2logit = None
+        if self.extra_data_mode is not None and 'next_task' in self.extra_data_mode and next_loader is not None:
+            next_x, next_y = next(iter(next_loader))
+            next_x = next_x.numpy()
+            next_y = next_y.numpy()
+        else:
+            next_x = None
+            next_y = None
+        cur_x = cur_x.numpy()
+        cur_y = cur_y.numpy()
+        if isinstance(self.buffer, coreset_buffer.CoresetBuffer):
+            self.buffer.update_buffer(
+                task_cnts=self.task_cnts,
+                task_id=self.seen_tasks,
+                cur_x=cur_x,
+                cur_y=cur_y,
+                full_cur_x=full_cur_x,
+                full_cur_y=full_cur_y,
+                cur_id2logit=cur_id2logit,
+                next_x=next_x,
+                next_y=next_y
             )
-            test_loaders.append(get_custom_loader(generator.test_dataset, test_inds, batch_size=opts.batch_size))
-        model_params = {
-            'model_type': 'cnn',
-            'num_class': 10
-        }
-        transforms = generator.get_transforms()
-        eval_transforms = generator.get_eval_transforms()
-        task_dic = generator.get_task_dic()
-    else:
-        raise ValueError('Invalid dataset')
-    return model_params, transforms, eval_transforms, task_dic, train_loaders, train_sub_loaders_wo_aug, test_loaders
+        elif isinstance(self.buffer, coreset_buffer.UniformBuffer):
+            self.buffer.update_buffer(
+                task_cnts=self.task_cnts,
+                task_id=self.seen_tasks,
+                cur_x=cur_x,
+                cur_y=cur_y
+            )
+        else:
+            raise ValueError('Invalid buffer type')
+
+    def next_task(self, dump_buffer=False):
+        if dump_buffer:
+            self.buffer.dump_data(task_id=self.seen_tasks)
+        self.seen_tasks += 1
