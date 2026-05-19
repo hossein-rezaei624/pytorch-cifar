@@ -1,302 +1,91 @@
-# -*-coding:utf8-*-
+"""
+Helper for injecting symmetric label noise into CL benchmarks.
 
-import copy
-import torch
-import os
+Used for the Concern-2 robustness experiment in the CGR rebuttal.
+
+Convention: 'within-task' symmetric noise — each corrupted label is replaced
+by a uniformly random *incorrect* class from the *same task*. This keeps the
+corruption consistent with the CIL task structure (the model never sees a
+sample whose label is outside the current task's class set).
+
+If your CL benchmark has tasks with contiguous class ranges (Split CIFAR-100,
+Split Tiny-ImageNet, etc.), within-task noise is the standard interpretation.
+
+Usage (called once when constructing the training dataset for the run):
+
+    from utils.noisy_labels import inject_symmetric_label_noise
+    inject_symmetric_label_noise(
+        train_dataset,
+        noise_rate=args.label_noise,
+        n_classes_total=100,            # CIFAR-100
+        n_classes_per_task=10,          # 10 tasks of 10 classes
+        within_task=True,
+        seed=args.seed,
+    )
+"""
 import numpy as np
-from torch.utils.data import DataLoader
-from torch.utils.data import Subset
-import torchvision
-
-from continual_learning import coreset_buffer
-import utils
-from dataset import single_task_dataset
 
 
-def mask_classes(dataset, output: torch.Tensor, k: int) -> None:
+def inject_symmetric_label_noise(
+    dataset,
+    noise_rate: float,
+    n_classes_total: int,
+    n_classes_per_task: int = None,
+    within_task: bool = True,
+    seed: int = 0,
+    verbose: bool = True,
+):
+    """Replace each label in `dataset.targets` with a random incorrect class
+    with probability `noise_rate`. Modifies `dataset.targets` in place.
 
-    if dataset == "splitcifar100":
-        N_CLASSES_PER_TASK = 10
-        N_TASKS = 10
-    elif dataset == "splitminiimagenet":
-        N_CLASSES_PER_TASK = 20
-        N_TASKS = 5
-    elif dataset == "splittinyimagenet":
-        N_CLASSES_PER_TASK = 20
-        N_TASKS = 10
-    
-    output[:, 0:k * N_CLASSES_PER_TASK] = -float('inf')
-    output[:, (k + 1) * N_CLASSES_PER_TASK:
-               N_TASKS * N_CLASSES_PER_TASK] = -float('inf')
+    Args:
+        dataset:            object with a `.targets` attribute (list or np.ndarray)
+        noise_rate:         float in [0, 1]
+        n_classes_total:    total number of classes in the underlying dataset
+        n_classes_per_task: classes per task (required if within_task=True)
+        within_task:        if True, replacement label is drawn from same task only
+        seed:               RNG seed for reproducibility (use args.seed)
+        verbose:            print a summary line
+    """
+    if noise_rate is None or noise_rate <= 0:
+        return  # no-op
 
+    rng = np.random.RandomState(seed)
+    targets = np.asarray(dataset.targets, dtype=np.int64).copy()
+    n = len(targets)
 
-def backward_transfer(results):
-    n_tasks = len(results)
-    li = []
-    for i in range(n_tasks - 1):
-        li.append(results[-1][i] - results[i][i])
+    corrupt_mask = rng.rand(n) < noise_rate
+    n_corrupt = int(corrupt_mask.sum())
+    if n_corrupt == 0:
+        return
 
-    return np.mean(li)
+    if within_task:
+        assert n_classes_per_task is not None, \
+            "Need n_classes_per_task for within-task noise."
+        for i in np.where(corrupt_mask)[0]:
+            orig = int(targets[i])
+            task = orig // n_classes_per_task
+            cls_lo = task * n_classes_per_task
+            cls_hi = cls_lo + n_classes_per_task
+            # Sample a class in this task != orig
+            new_label = orig
+            while new_label == orig:
+                new_label = rng.randint(cls_lo, cls_hi)
+            targets[i] = new_label
+    else:
+        for i in np.where(corrupt_mask)[0]:
+            orig = int(targets[i])
+            new_label = orig
+            while new_label == orig:
+                new_label = rng.randint(0, n_classes_total)
+            targets[i] = new_label
 
+    # Write back, preserving the original container type
+    if isinstance(dataset.targets, list):
+        dataset.targets = targets.tolist()
+    else:
+        dataset.targets = targets
 
-class ContinualRunner(object):
-    def __init__(self, local_path, model_params, transforms, train_params, selection_params, use_cuda,
-                 task_dic, buffer_size, seed, replay_mode='full', selection_transforms=None,
-                 extra_data_mode=None, buffer_type='coreset'):
-        # make parameters
-        self.local_path = local_path
-        if not os.path.exists(self.local_path):
-            os.makedirs(self.local_path)
-        self.model_params = model_params
-        self.transforms = transforms
-        self.selection_params = selection_params
-        self.seed = seed
-        self.use_cuda = use_cuda
-        self.train_params = train_params
-        self.task_dic = task_dic
-        self.buffer_size = buffer_size
-        self.replay_mode = replay_mode
-        self.extra_data_mode = extra_data_mode
-        self.buffer_type = buffer_type
-        # build model
-        self.model = utils.build_model(model_params=model_params)
-        # build buffer:
-        if self.buffer_type == 'coreset':
-            self.buffer = coreset_buffer.CoresetBuffer(
-                local_path=os.path.join(self.local_path, 'buffer'),
-                model_params=self.model_params,
-                transforms=self.transforms,
-                selection_params=self.selection_params,
-                use_cuda=self.use_cuda,
-                buffer_size=buffer_size,
-                task_dic=self.task_dic,
-                seed=self.seed,
-                selection_transforms=selection_transforms,
-                extra_data_mode=self.extra_data_mode
-            )
-        elif self.buffer_type == 'uniform':
-            self.buffer = coreset_buffer.UniformBuffer(
-                local_path=os.path.join(self.local_path, 'buffer'),
-                transforms=self.transforms,
-                buffer_size=self.buffer_size,
-                use_cuda=self.use_cuda,
-                seed=self.seed
-            )
-        else:
-            raise ValueError('Invalid buffer type')
-        self.to_pil = torchvision.transforms.ToPILImage()
-        self.seen_tasks = 0
-        self.results = []
-        self.results_task_hossein = []
-        self.mask_results = []
-        self.task_cnts = []
-
-    def train_single_task(self, dataset_name_hossein, train_loader, eval_loaders, verbose=True, do_evaluation=True):
-        self.model.train()
-        if self.train_params['use_cuda']:
-            self.model.cuda()
-        # make loss function
-        loss_fn = torch.nn.CrossEntropyLoss()
-        # make optimizer
-        if self.train_params['opt_type'] == 'adam':
-            opt = torch.optim.Adam(lr=self.train_params['lr'], params=self.model.parameters())
-        else:
-            opt = torch.optim.SGD(lr=self.train_params['lr'], params=self.model.parameters())
-        # make hyper parameters
-        alpha = torch.tensor(self.train_params['alpha'], dtype=torch.float32, requires_grad=False)
-        if self.train_params['use_cuda']:
-            alpha = alpha.cuda()
-        if 'beta' in self.train_params:
-            beta = torch.tensor(self.train_params['beta'], dtype=torch.float32, requires_grad=False)
-            if self.train_params['use_cuda']:
-                beta = beta.cuda()
-            kd_loss_fn = torch.nn.MSELoss()
-        else:
-            beta = 0
-            kd_loss_fn = None
-        for i in range(self.train_params['epochs']):
-            step = 0
-            for data in train_loader:
-                aug_sp, lab = data
-                if self.use_cuda:
-                    aug_sp = aug_sp.cuda()
-                    lab = lab.cuda()
-                if not self.buffer.is_empty():
-                    loss = loss_fn(self.model(aug_sp), lab)
-                    total_pre_loss = []
-                    total_kd_loss = []
-                    if self.replay_mode == 'full':
-                        for buffer_data in self.buffer.get_data():
-                            if len(buffer_data) == 3:
-                                b_sp, b_lab, b_logit = buffer_data
-                            else:
-                                b_sp, b_lab = buffer_data
-                                b_logit = None
-                            if self.train_params['use_cuda']:
-                                b_sp = b_sp.cuda()
-                                b_lab = b_lab.cuda()
-                                if b_logit is not None:
-                                    b_logit = b_logit.cuda()
-                            b_out = self.model(b_sp)
-                            pre_loss = loss_fn(b_out, b_lab)
-                            total_pre_loss.append(pre_loss.item())
-                            if kd_loss_fn is not None:
-                                kd_loss = kd_loss_fn(b_out, b_logit)
-                                total_kd_loss.append(kd_loss.item())
-                            else:
-                                kd_loss = 0
-                                total_kd_loss.append(0)
-                            loss = loss + alpha * pre_loss + beta * kd_loss
-                        ##if verbose and step % 100 == 0:
-                        ##    print('loss at step ', step, 'is:', loss.item())
-                        ##    print('previous loss at step ', step, 'is:', np.mean(total_pre_loss), len(total_pre_loss))
-                        ##    if kd_loss_fn is not None:
-                        ##        print('kd loss is:', np.mean(total_kd_loss), len(total_kd_loss))
-                    else:
-                        buffer_data = self.buffer.get_sub_data(size=self.train_params['mem_batch_size'])
-                        if len(buffer_data) == 3:
-                            b_sp, b_lab, b_logit = buffer_data
-                        else:
-                            b_sp, b_lab = buffer_data
-                            b_logit = None
-                        if self.train_params['use_cuda']:
-                            b_sp = b_sp.cuda()
-                            b_lab = b_lab.cuda()
-                            if b_logit is not None:
-                                b_logit = b_logit.cuda()
-                        b_out = self.model(b_sp)
-                        pre_loss = loss_fn(b_out, b_lab)
-                        if kd_loss_fn is not None:
-                            kd_loss = kd_loss_fn(b_out, b_logit)
-                        else:
-                            kd_loss = 0
-                        loss = loss + alpha * pre_loss + beta * kd_loss
-                        ##if verbose and step % 100 == 0:
-                        ##    print('loss at step ', step, 'is:', loss.item())
-                        ##    print('previous loss at step ', step, 'is:', pre_loss.item())
-                        ##    if kd_loss_fn is not None:
-                        ##        print('kd loss is:', kd_loss.item())
-                else:
-                    out_logits = self.model(aug_sp)
-                    loss = loss_fn(out_logits, lab)
-                    ##if verbose and step % 100 == 0:
-                    ##    print('loss at step ', step, 'is:', loss.item())
-                opt.zero_grad()
-                loss.backward()
-                opt.step()
-                step += 1
-            ##print('finish training epoch:', i)
-            if do_evaluation and i % 10 == 0:
-                accs, losses, accs_task_hossein = self.evaluate_model(dataset_name_hossein, eval_loaders=eval_loaders, on_cuda=self.use_cuda)
-                ##print('\taccuracy on test is:', np.mean(accs), accs, losses)
-                ##if len(accs) > 1:
-                ##    print('\tprevious tasks accuracy is:', np.mean(accs[:-1]))
-        if self.train_params['use_cuda']:
-            self.model.cpu()
-        del alpha
-        accs, losses, accs_task_hossein = self.evaluate_model(dataset_name_hossein, eval_loaders=eval_loaders, on_cuda=False)
-        ##print('\tlosses on testset is:', losses)
-        self.results.append(accs)
-        self.results_task_hossein.append(accs_task_hossein)
-        print("\nTask", self.seen_tasks + 1, ":  Class ACC:", np.mean(accs), "     Task ACC:", np.mean(accs_task_hossein), "\n")
-        if self.seen_tasks > 8:
-            print("Class BWT:", backward_transfer(self.results), "     Task BWT:", backward_transfer(self.results_task_hossein), "\n")
-            print("fullclasss", self.results, "\n")
-            print("fulltask", self.results_task_hossein)
-        return accs
-
-    def evaluate_model(self, dataset_name_hossein, eval_loaders, on_cuda=False):
-        status = self.model.training
-        self.model.eval()
-        accs = []
-        accs_task_hossein = []
-        eval_loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
-        losses = []
-        with torch.no_grad():
-            for i in range(self.seen_tasks + 1):
-                loss = 0
-                correct = 0
-                correct_task_hossein = 0
-                for data, target in eval_loaders[i]:
-                    if on_cuda:
-                        data, target = data.cuda(), target.cuda()
-                    output = self.model(data)
-                    loss += eval_loss_fn(output, target).cpu().item()
-                    pred = output.argmax(dim=1, keepdim=True)
-                    correct += pred.eq(target.view_as(pred)).sum().item()
-
-                    mask_classes(dataset_name_hossein, output, i)
-                    pred_task_hossein = output.argmax(dim=1, keepdim=True)
-                    correct_task_hossein += pred_task_hossein.eq(target.view_as(pred_task_hossein)).sum().item()
-                
-                avg_acc = 100. * correct / len(eval_loaders[i].dataset)
-                avg_acc_task_hossein = 100. * correct_task_hossein / len(eval_loaders[i].dataset)
-                avg_loss = loss / len(eval_loaders[i].dataset)
-                accs.append(avg_acc)
-                accs_task_hossein.append(avg_acc_task_hossein)
-                losses.append(avg_loss)
-        self.model.train(status)
-        return accs, losses, accs_task_hossein
-
-    def update_buffer(self, full_train_loader, sub_loader, next_loader=None):
-        # make current x and y
-        x, y = next(iter(full_train_loader))
-        full_cur_x = x.numpy()
-        full_cur_y = y.numpy()
-        cur_x, cur_y = next(iter(sub_loader))
-        self.task_cnts.append(cur_x.shape[0])
-        if 'beta' in self.train_params:
-            temp_data = []
-            for i in range(cur_x.shape[0]):
-                sp = self.to_pil(cur_x[i, :])
-                lab = int(cur_y[i])
-                temp_data.append([sp, lab])
-            temp_dataset = single_task_dataset.SimpleDataset(
-                data=temp_data,
-                transforms=self.transforms
-            )
-            temp_loader = DataLoader(
-                temp_dataset, batch_size=self.train_params['batch_size'], drop_last=False, shuffle=False)
-            cur_id2logit = utils.compute_id2logit(
-                data_loader=temp_loader,
-                ref_model=copy.deepcopy(self.model),
-                aug_iters=1,
-                use_cuda=True
-            )
-        else:
-            cur_id2logit = None
-        if self.extra_data_mode is not None and 'next_task' in self.extra_data_mode and next_loader is not None:
-            next_x, next_y = next(iter(next_loader))
-            next_x = next_x.numpy()
-            next_y = next_y.numpy()
-        else:
-            next_x = None
-            next_y = None
-        cur_x = cur_x.numpy()
-        cur_y = cur_y.numpy()
-        if isinstance(self.buffer, coreset_buffer.CoresetBuffer):
-            self.buffer.update_buffer(
-                task_cnts=self.task_cnts,
-                task_id=self.seen_tasks,
-                cur_x=cur_x,
-                cur_y=cur_y,
-                full_cur_x=full_cur_x,
-                full_cur_y=full_cur_y,
-                cur_id2logit=cur_id2logit,
-                next_x=next_x,
-                next_y=next_y
-            )
-        elif isinstance(self.buffer, coreset_buffer.UniformBuffer):
-            self.buffer.update_buffer(
-                task_cnts=self.task_cnts,
-                task_id=self.seen_tasks,
-                cur_x=cur_x,
-                cur_y=cur_y
-            )
-        else:
-            raise ValueError('Invalid buffer type')
-
-    def next_task(self, dump_buffer=False):
-        if dump_buffer:
-            self.buffer.dump_data(task_id=self.seen_tasks)
-        self.seen_tasks += 1
+    if verbose:
+        print(f"[noise] Corrupted {n_corrupt}/{n} labels "
+              f"(rate={noise_rate}, within_task={within_task}, seed={seed})")
