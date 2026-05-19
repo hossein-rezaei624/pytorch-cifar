@@ -1,6 +1,24 @@
+#!/bin/bash
+# Run CSReL-CL-Prv on Split CIFAR-100 under symmetric label noise.
+#
+# Usage:
+#   bash scripts/run_cifar100_prv_noise.sh <noise_rate> <seed>
+# Example:
+#   bash scripts/run_cifar100_prv_noise.sh 0.1 0
+#
+# Sweep the full grid:
+#   for ETA in 0.1 0.2; do
+#       for SEED in 0 1 2; do
+#           bash scripts/run_cifar100_prv_noise.sh $ETA $SEED
+#       done
+#   done
+
 export CUBLAS_WORKSPACE_CONFIG=:4096:8
 
-local_path='./results/split_cifar100/test0'  # set your output path
+noise_rate=${1:-0.0}
+seed=${2:-0}
+
+local_path="./results/split_cifar100/noise_eta${noise_rate}_seed${seed}"
 dataset='splitcifar100'
 setting='der'
 data_path=''
@@ -13,7 +31,6 @@ batch_size=32
 mem_batch_size=32
 use_cuda=1
 opt_type='sgd'
-seed=0
 slt_wo_aug=0
 holdout_set='sub'
 replay_mode='sub'
@@ -61,4 +78,5 @@ python3 -u offline_continual_learning.py --local_path=$local_path \
 	--cur_train_lr=$cur_train_lr \
 	--buffer_type=$buffer_type \
 	--ref_sample_per_task=$ref_sample_per_task \
-	--aug_type=$aug_type
+	--aug_type=$aug_type \
+	--label_noise=$noise_rate
