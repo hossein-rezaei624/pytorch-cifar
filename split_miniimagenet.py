@@ -155,6 +155,8 @@ if __name__ == '__main__':
     parser.add_argument('--buffer_type', type=str, default='coreset')
     parser.add_argument('--ref_sample_per_task', type=int, default=-1)
     parser.add_argument('--seed', type=int)
+    parser.add_argument('--label_noise', type=float, default=0.0,
+                        help='Symmetric label-noise rate in [0,1] (rebuttal experiment). 0 = no noise.')
     args = parser.parse_args()
 
     utils.set_random_seed(seed=args.seed)
@@ -189,4 +191,5 @@ if __name__ == '__main__':
     print('buffer type\t\t', args.buffer_type)
     print('ref sample per task\t\t', args.ref_sample_per_task)
     print('seed\t\t', args.seed)
+    print('label noise\t\t', args.label_noise)
     main(opts=args)
