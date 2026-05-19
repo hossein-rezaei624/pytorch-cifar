@@ -272,7 +272,7 @@ class SplitTinyImageNet(object):
 
 
 class SplitCifar100(object):
-    def __init__(self, limit_per_task, data_path=''):
+    def __init__(self, limit_per_task, data_path='', label_noise=0.0, seed=0):
         self.current_pos = 0
         self.transform_train = torchvision.transforms.Compose([
             torchvision.transforms.RandomCrop(32, padding=4),
@@ -298,6 +298,25 @@ class SplitCifar100(object):
 
         self.Y_train = np.array(self.train_dataset.targets)
         self.Y_test = np.array(self.test_dataset.targets)
+
+        # === LABEL NOISE INJECTION (rebuttal experiment) ===
+        # Applied AFTER Y_train is snapshotted, so task-filtering below still uses
+        # the CLEAN labels (samples remain assigned to their original task), but
+        # training and buffer-selection see the NOISY labels.
+        if label_noise is not None and label_noise > 0:
+            from dataset.noisy_labels import inject_symmetric_label_noise
+            inject_symmetric_label_noise(
+                self.train_dataset,
+                noise_rate=label_noise,
+                n_classes_total=100,
+                n_classes_per_task=10,
+                within_task=True,
+                seed=seed,
+            )
+            # Mirror the same noisy labels to the no-augmentation dataset so
+            # both the training loop and the buffer-selection see identical labels.
+            self.train_dataset_wo_augment.targets = list(self.train_dataset.targets)
+        # === END LABEL NOISE INJECTION ===
 
         self.task_dic = {}
         self.task_dic = self.make_task_dic()
@@ -710,7 +729,11 @@ def get_dataset(opts):
         }
         task_dic = generator.get_task_dic()
     elif opts.dataset == 'splitcifar100':
-        generator = SplitCifar100(limit_per_task=opts.limit_per_task)
+        generator = SplitCifar100(
+            limit_per_task=opts.limit_per_task,
+            label_noise=getattr(opts, 'label_noise', 0.0),
+            seed=opts.seed,
+        )
         transforms = generator.get_transforms()
         eval_transforms = generator.get_eval_transforms()
         for i in range(generator.max_iter):
