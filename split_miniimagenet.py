@@ -1,27 +1,31 @@
 """
-Helper for injecting symmetric label noise into CL benchmarks.
+Helper for injecting symmetric label noise into CL benchmarks (CSReL-CL-Prv).
 
-Used for the Concern-2 robustness experiment in the CGR rebuttal.
+Used for the Concern-2 label-noise robustness experiment in the CGR rebuttal.
 
 Convention: 'within-task' symmetric noise — each corrupted label is replaced
 by a uniformly random *incorrect* class from the *same task*. This keeps the
-corruption consistent with the CIL task structure (the model never sees a
-sample whose label is outside the current task's class set).
+corruption consistent with the CIL task structure: the model never sees a
+sample whose label is outside the current task's class set.
 
-If your CL benchmark has tasks with contiguous class ranges (Split CIFAR-100,
-Split Tiny-ImageNet, etc.), within-task noise is the standard interpretation.
+For Split CIFAR-100 with contiguous class ranges per task (task 0 = classes
+0-9, task 1 = 10-19, ...), within-task noise means: a sample originally
+labeled with class 5 (task 0) can be relabeled as any other class in {0..9}.
 
-Usage (called once when constructing the training dataset for the run):
+Usage in dataset/idataset.py, inside SplitCifar100.__init__,
+right after `self.Y_train = np.array(self.train_dataset.targets)`:
 
-    from utils.noisy_labels import inject_symmetric_label_noise
+    from dataset.noisy_labels import inject_symmetric_label_noise
     inject_symmetric_label_noise(
-        train_dataset,
-        noise_rate=args.label_noise,
-        n_classes_total=100,            # CIFAR-100
-        n_classes_per_task=10,          # 10 tasks of 10 classes
+        self.train_dataset,
+        noise_rate=label_noise,
+        n_classes_total=100,
+        n_classes_per_task=10,
         within_task=True,
-        seed=args.seed,
+        seed=seed,
     )
+    # Copy the same noisy labels to the no-augmentation dataset
+    self.train_dataset_wo_augment.targets = list(self.train_dataset.targets)
 """
 import numpy as np
 
@@ -41,14 +45,14 @@ def inject_symmetric_label_noise(
     Args:
         dataset:            object with a `.targets` attribute (list or np.ndarray)
         noise_rate:         float in [0, 1]
-        n_classes_total:    total number of classes in the underlying dataset
+        n_classes_total:    total number of classes
         n_classes_per_task: classes per task (required if within_task=True)
         within_task:        if True, replacement label is drawn from same task only
         seed:               RNG seed for reproducibility (use args.seed)
         verbose:            print a summary line
     """
     if noise_rate is None or noise_rate <= 0:
-        return  # no-op
+        return
 
     rng = np.random.RandomState(seed)
     targets = np.asarray(dataset.targets, dtype=np.int64).copy()
@@ -67,7 +71,6 @@ def inject_symmetric_label_noise(
             task = orig // n_classes_per_task
             cls_lo = task * n_classes_per_task
             cls_hi = cls_lo + n_classes_per_task
-            # Sample a class in this task != orig
             new_label = orig
             while new_label == orig:
                 new_label = rng.randint(cls_lo, cls_hi)
@@ -80,7 +83,7 @@ def inject_symmetric_label_noise(
                 new_label = rng.randint(0, n_classes_total)
             targets[i] = new_label
 
-    # Write back, preserving the original container type
+    # Write back, preserving original container type
     if isinstance(dataset.targets, list):
         dataset.targets = targets.tolist()
     else:
