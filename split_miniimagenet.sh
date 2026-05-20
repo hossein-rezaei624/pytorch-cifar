@@ -1,82 +1,19 @@
-#!/bin/bash
-# Run CSReL-CL-Prv on Split CIFAR-100 under symmetric label noise.
-#
-# Usage:
-#   bash scripts/run_cifar100_prv_noise.sh <noise_rate> <seed>
-# Example:
-#   bash scripts/run_cifar100_prv_noise.sh 0.1 0
-#
-# Sweep the full grid:
-#   for ETA in 0.1 0.2; do
-#       for SEED in 0 1 2; do
-#           bash scripts/run_cifar100_prv_noise.sh $ETA $SEED
-#       done
-#   done
-
-export CUBLAS_WORKSPACE_CONFIG=:4096:8
-
-noise_rate=${1:-0.0}
-seed=${2:-0}
-
-local_path="./results/split_cifar100/noise_eta${noise_rate}_seed${seed}"
-dataset='splitcifar100'
-setting='der'
-data_path=''
-buffer_size=1000
-alpha=4.0
-beta=0.0
-lr=2e-2
-epochs=50
-batch_size=32
-mem_batch_size=32
-use_cuda=1
-opt_type='sgd'
-slt_wo_aug=0
-holdout_set='sub'
-replay_mode='sub'
-use_bn=1
-limit_per_task=5000
-runner_type='coreset'
-update_mode='coreset'
-extra_data=''
-ref_train_epoch=10
-selection_steps=40
-cur_train_steps=7
-buffer_type='coreset'
-aug_type='der'
-ref_train_lr=3e-3
-cur_train_lr=5e-3
-ref_sample_per_task=200
-
-
-python3 -u offline_continual_learning.py --local_path=$local_path \
-	--dataset=$dataset \
-	--setting=$setting \
-	--data_path=$data_path \
-	--buffer_size=$buffer_size \
-	--alpha=$alpha \
-	--beta=$beta \
-	--lr=$lr \
-	--epochs=$epochs \
-	--batch_size=$batch_size \
-	--mem_batch_size=$mem_batch_size \
-	--use_cuda=$use_cuda \
-	--opt_type=$opt_type \
-	--seed=$seed \
-	--slt_wo_aug=$slt_wo_aug \
-	--holdout_set=$holdout_set \
-	--replay_mode=$replay_mode \
-	--use_bn=$use_bn \
-	--limit_per_task=$limit_per_task \
-	--runner_type=$runner_type \
-	--update_mode=$update_mode \
-	--extra_data=$extra_data \
-	--ref_train_epoch=$ref_train_epoch \
-	--selection_steps=$selection_steps \
-	--cur_train_steps=$cur_train_steps \
-	--ref_train_lr=$ref_train_lr \
-	--cur_train_lr=$cur_train_lr \
-	--buffer_type=$buffer_type \
-	--ref_sample_per_task=$ref_sample_per_task \
-	--aug_type=$aug_type \
-	--label_noise=$noise_rate
+certifi==2026.4.22
+charset-normalizer==3.4.7
+filelock==3.16.1
+fsspec==2025.3.0
+hf-xet==1.5.0
+huggingface_hub==0.36.2
+idna==3.15
+numpy==1.24.3
+packaging==26.2
+pillow==10.4.0
+pkg_resources==0.0.0
+PyYAML==6.0.3
+requests==2.32.4
+timm==0.6.12
+torch==1.8.1+cu102
+torchvision==0.9.1+cu102
+tqdm==4.67.3
+typing_extensions==4.13.2
+urllib3==2.2.3
