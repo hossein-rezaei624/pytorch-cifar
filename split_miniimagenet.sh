@@ -1,10 +1,8 @@
 absl-py==2.3.1
 annotated-types==0.7.0
-appdirs==1.4.4
-certifi==2026.4.22
+certifi==2026.5.20
 charset-normalizer==3.4.7
 click==8.1.8
-docker-pycreds==0.4.0
 eval_type_backport==0.3.1
 flatbuffers==2.0.7
 frozendict==2.4.7
@@ -25,8 +23,7 @@ packaging==26.2
 Pillow==9.3.0
 pkg_resources==0.0.0
 platformdirs==4.3.6
-protobuf==4.25.9
-psutil==7.2.2
+protobuf==5.29.6
 pydantic==2.10.6
 pydantic_core==2.27.2
 PyWavelets==1.4.1
