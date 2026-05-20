@@ -7,7 +7,7 @@ huggingface_hub==0.36.2
 idna==3.15
 numpy==1.24.3
 packaging==26.2
-pillow==10.4.0
+Pillow==9.3.0
 pkg_resources==0.0.0
 PyYAML==6.0.3
 requests==2.32.4
