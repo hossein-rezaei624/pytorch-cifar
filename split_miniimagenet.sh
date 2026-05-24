@@ -1,4 +1,4 @@
-certifi==2026.5.20
+certifi==2026.4.22
 charset-normalizer==3.4.7
 filelock==3.16.1
 fsspec==2025.3.0
