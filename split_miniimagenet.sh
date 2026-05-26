@@ -19,8 +19,8 @@ from dataset import single_task_dataset
 def mask_classes(dataset, output: torch.Tensor, k: int) -> None:
 
     if dataset == "splitcifar100":
-        N_CLASSES_PER_TASK = 2
-        N_TASKS = 50
+        N_CLASSES_PER_TASK = 10
+        N_TASKS = 10
     elif dataset == "splitminiimagenet":
         N_CLASSES_PER_TASK = 20
         N_TASKS = 5
@@ -207,7 +207,7 @@ class ContinualRunner(object):
         self.results_task_hossein_augmented.append(accs_task_hossein_augmented)
         print("\nTask", self.seen_tasks + 1, ":  Class ACC (i.i.d.):", np.mean(accs), "              Task ACC (i.i.d.):", np.mean(accs_task_hossein), "\n")
         print("          Class ACC (OOD):", np.mean(accs_augmented), "         Task ACC (OOD):", np.mean(accs_task_hossein_augmented), "\n")
-        if self.seen_tasks > 48:
+        if self.seen_tasks > 8:
             print("Class (i.i.d.) BWT:", backward_transfer(self.results), "              Task (i.i.d.) BWT:", backward_transfer(self.results_task_hossein), "\n")
             print("Class (OOD) BWT:", backward_transfer(self.results_augmented), "       Task (OOD) BWT:", backward_transfer(self.results_task_hossein_augmented), "\n")
             print("fullclasss (i.i.d.)", self.results, "\n")
