@@ -24,3 +24,4 @@ torchvision==0.9.1+cu102
 tqdm==4.67.3
 typing_extensions==4.13.2
 urllib3==2.2.3
+Wand==0.6.13
