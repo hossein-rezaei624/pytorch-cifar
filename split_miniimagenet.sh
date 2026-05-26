@@ -9,6 +9,7 @@ imageio==2.35.1
 lazy_loader==0.4
 networkx==3.1
 numpy==1.24.3
+opencv-python==4.13.0.92
 packaging==26.2
 Pillow==9.3.0
 pkg_resources==0.0.0
