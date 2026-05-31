@@ -1,15 +1,48 @@
-def off_diagonal(x):
-    # Flattened view of the off-diagonal elements of a square matrix.
-    n, m = x.shape
-    assert n == m
-    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+# Copyright 2020-present, Pietro Buzzega, Matteo Boschini, Angelo Porrello, Davide Abati, Simone Calderara.
+# All rights reserved.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+import torch
+from utils.buffer import Buffer
+from utils.args import *
+from models.utils.continual_model import ContinualModel
 
-def factorization_loss(f_a, f_b):
-    # Barlow-Twins-style cross-correlation between two views' representations.
-    f_a_norm = (f_a - f_a.mean(0)) / (f_a.std(0) + 1e-6)
-    f_b_norm = (f_b - f_b.mean(0)) / (f_b.std(0) + 1e-6)
-    c = torch.mm(f_a_norm.T, f_b_norm) / f_a_norm.size(0)
 
-    on_diag = torch.diagonal(c).add_(-1).pow_(2).mean()
-    off_diag = off_diagonal(c).pow_(2).mean()
-    return on_diag + 0.005 * off_diag
+def get_parser() -> ArgumentParser:
+    parser = ArgumentParser(description='Continual learning via'
+                                        ' Experience Replay.')
+    add_management_args(parser)
+    add_experiment_args(parser)
+    add_rehearsal_args(parser)
+    return parser
+
+
+class Er(ContinualModel):
+    NAME = 'er'
+    COMPATIBILITY = ['class-il', 'domain-il', 'task-il', 'general-continual']
+
+    def __init__(self, backbone, loss, args, transform):
+        super(Er, self).__init__(backbone, loss, args, transform)
+        self.buffer = Buffer(self.args.buffer_size, self.device)
+        ##self.transform = None
+
+    def observe(self, inputs, labels, not_aug_inputs, index_):
+
+        real_batch_size = inputs.shape[0]
+        
+        self.opt.zero_grad()
+        if not self.buffer.is_empty():
+            buf_inputs, buf_labels = self.buffer.get_data(
+                self.args.minibatch_size, transform=self.transform)
+            inputs = torch.cat((inputs, buf_inputs))
+            labels = torch.cat((labels, buf_labels))
+
+        outputs = self.net(inputs)
+        loss = self.loss(outputs, labels)
+        loss.backward()
+        self.opt.step()
+
+        self.buffer.add_data(examples=inputs[:real_batch_size],
+                             labels=labels[:real_batch_size])
+
+        return loss.item()
