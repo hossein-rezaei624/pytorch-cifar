@@ -1,47 +1,48 @@
-absl-py==2.3.1
-annotated-types==0.7.0
-appdirs==1.4.4
-certifi==2026.4.22
-charset-normalizer==3.4.7
-click==8.1.8
-docker-pycreds==0.4.0
-eval_type_backport==0.3.1
-flatbuffers==2.0.7
-frozendict==2.4.7
-gitdb==4.0.12
-GitPython==3.1.50
-higher==0.2.1
-idna==3.15
-imageio==2.35.1
-jax==0.2.19
-jaxlib==0.1.70+cuda102
-lazy_loader==0.4
-networkx==3.1
-neural-tangents==0.3.8
-numpy==1.24.3
-opencv-python==4.13.0.92
-opt_einsum==3.4.0
-packaging==26.2
-Pillow==9.3.0
-pkg_resources==0.0.0
-platformdirs==4.3.6
-protobuf==4.25.9
-psutil==7.2.2
-pydantic==2.10.6
-pydantic_core==2.27.2
-PyWavelets==1.4.1
-PyYAML==6.0.3
-requests==2.32.4
-scikit-image==0.21.0
-scipy==1.10.1
-sentry-sdk==2.60.0
-setproctitle==1.3.3
-six==1.16.0
-smmap==5.0.3
-tifffile==2023.7.10
-torch==1.8.1+cu102
-torchvision==0.9.1+cu102
-typing_extensions==4.13.2
-urllib3==2.2.3
-Wand==0.6.13
-wandb==0.23.0
+# Copyright 2020-present, Pietro Buzzega, Matteo Boschini, Angelo Porrello, Davide Abati, Simone Calderara.
+# All rights reserved.
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+import torch
+from utils.buffer import Buffer
+from utils.args import *
+from models.utils.continual_model import ContinualModel
+
+
+def get_parser() -> ArgumentParser:
+    parser = ArgumentParser(description='Continual learning via'
+                                        ' Experience Replay.')
+    add_management_args(parser)
+    add_experiment_args(parser)
+    add_rehearsal_args(parser)
+    return parser
+
+
+class Er(ContinualModel):
+    NAME = 'er'
+    COMPATIBILITY = ['class-il', 'domain-il', 'task-il', 'general-continual']
+
+    def __init__(self, backbone, loss, args, transform):
+        super(Er, self).__init__(backbone, loss, args, transform)
+        self.buffer = Buffer(self.args.buffer_size, self.device)
+        ##self.transform = None
+
+    def observe(self, inputs, labels, not_aug_inputs, index_):
+
+        real_batch_size = inputs.shape[0]
+        
+        self.opt.zero_grad()
+        if not self.buffer.is_empty():
+            buf_inputs, buf_labels = self.buffer.get_data(
+                self.args.minibatch_size, transform=self.transform)
+            inputs = torch.cat((inputs, buf_inputs))
+            labels = torch.cat((labels, buf_labels))
+
+        outputs = self.net(inputs)
+        loss = self.loss(outputs, labels)
+        loss.backward()
+        self.opt.step()
+
+        self.buffer.add_data(examples=inputs[:real_batch_size],
+                             labels=labels[:real_batch_size])
+
+        return loss.item()
