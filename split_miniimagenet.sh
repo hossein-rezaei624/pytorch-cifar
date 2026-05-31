@@ -34,7 +34,7 @@ PyYAML==6.0.3
 requests==2.32.4
 scikit-image==0.21.0
 scipy==1.10.1
-sentry-sdk==2.61.0
+sentry-sdk==2.60.0
 setproctitle==1.3.3
 six==1.16.0
 smmap==5.0.3
