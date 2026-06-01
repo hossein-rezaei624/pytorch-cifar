@@ -12,12 +12,16 @@
 # This assigns group ids to both current-task and replay (buffer) samples
 # without modifying the buffer to store task labels.
 #
-# Online GroupDRO update (Sagawa et al., 2020):
-#   - maintain a weight q_g over groups (tasks)
+# Online GroupDRO update (Sagawa et al., 2020), implemented in log-space:
+#   - maintain log_q_g over groups (tasks), initialized to 0 (uniform-after-softmax)
 #   - per step, compute mean loss L_g for each group PRESENT in the batch on the
 #     combined current + replay batch
-#   - multiplicative weight update: q_g <- q_g * exp(eta * L_g), then renormalize
-#   - backprop the q-weighted sum of present-group losses
+#   - log-additive update on present groups only: log_q_g <- log_q_g + eta * L_g
+#     (mathematically equivalent to q_g <- q_g * exp(eta * L_g) but numerically
+#     stable over long runs and free of global-renormalization drift on future
+#     groups). Future, not-yet-observed groups are not touched.
+#   - backprop the q-weighted sum of present-group losses, where q over present
+#     groups is recovered as softmax(log_q[present_groups]).
 #
 # Everything else matches plain ER: reservoir buffer, standard softmax CE,
 # dot-product logits. No adaptive reweighting and no correctness-guided buffer.
@@ -68,8 +72,17 @@ class Ergroupdrotask(ContinualModel):
         # Total classes from the backbone classifier; q has one weight per task.
         self.total_classes = int(self.net.num_classes)
         self.n_tasks = self.total_classes // self.n_classes_per_task
-        # Uniform initial group (task) weights.
-        self.q = torch.ones(self.n_tasks, device=self.device) / self.n_tasks
+        # Per-task log-weights for GroupDRO's q-player. Initialized to zero
+        # (equivalent to uniform when passed through softmax). We keep weights
+        # in log-space and update them additively (log_q += eta * loss), which is
+        # numerically stable over long runs (the multiplicative q *= exp(eta * L)
+        # form can over/underflow when losses are persistently high). We also
+        # never globally renormalize log_q across all tasks; the q-player weights
+        # used at each step come from a softmax over ONLY the groups present in
+        # the current batch, so future (not-yet-observed) tasks have no influence
+        # and their log-weights remain at their initial value (0) until those
+        # tasks first appear.
+        self.log_q = torch.zeros(self.n_tasks, device=self.device)
 
     def observe(self, inputs, labels, not_aug_inputs, index_):
 
@@ -103,17 +116,20 @@ class Ergroupdrotask(ContinualModel):
         group_losses = torch.stack([per_sample_loss[group_ids == g].mean()
                                     for g in present_groups])
 
-        # --- GroupDRO multiplicative weight update (no grad) ---
+        # --- GroupDRO log-additive weight update (no grad, present groups only) ---
+        # Equivalent to q[g] *= exp(eta * L_g) in probability space, but performed
+        # in log-space so it cannot over/underflow over long runs. We update ONLY
+        # the present groups; future (not-yet-observed) tasks are not touched.
         with torch.no_grad():
-            updated = self.q[present_groups] * torch.exp(
-                self.args.gdro_eta * group_losses.detach())
-            self.q[present_groups] = updated
-            self.q = self.q / self.q.sum()  # renormalize over all groups
+            self.log_q[present_groups] += self.args.gdro_eta * group_losses.detach()
 
-        # Robust (q-weighted) loss over present groups; renormalize over the
-        # present mass so the loss scale is stable when only some tasks appear.
-        w_present = self.q[present_groups]
-        w_present = w_present / (w_present.sum() + 1e-12)
+        # Robust (q-weighted) loss: softmax over the log-weights of present groups
+        # only. This is mathematically equivalent to taking the (renormalized)
+        # probability weights over present groups, but bypasses any global
+        # normalization, so the relative weight of a newly-arriving task starts
+        # exactly where its log_q entry sits (= 0 by default) rather than at a
+        # drifted value from earlier renormalizations.
+        w_present = torch.softmax(self.log_q[present_groups], dim=0)
         loss = (w_present * group_losses).sum()
 
         loss.backward()
