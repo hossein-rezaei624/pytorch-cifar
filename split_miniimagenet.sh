@@ -1,22 +1,47 @@
-
-\subsection*{\hrbb{From Gradient Imbalance to OOD Degradation: A Margin-Based View}}
-
-\hrbb{The gradient-imbalance analysis in \Cref{Unbalanced_GP} describes a CL-induced optimization mechanism that affects both i.i.d. and OOD performance, but does not by itself require an OOD assumption. In this section, we make the connection to OOD degradation explicit through a margin-based argument: gradient-induced \textit{margin compression} for past classes affects clean and corrupted inputs asymmetrically, and is therefore a natural mechanism for the disproportionately large OOD drops observed in \Cref{fig:ood_generalization} and \Cref{Tab:ACC_BWT}.}
-
-\hrbb{For a sample $(x, y)$ and classifier weights $\{w_c\}_{c \in C_{1:t}}$, define the classification margin as
-$$m(x) \;=\; w_y^\top f_\theta(x) \;-\; \max_{c \neq y}\, w_c^\top f_\theta(x).$$
-The prediction at $x$ equals $y$ whenever $m(x) > 0$, so i.i.d. 0-1 accuracy depends only on the \textit{sign} of $m(x)$.}
-
-\hrbb{For a label-preserving corruption $q$, as used in our OOD evaluation (\Cref{OOD_Generating}), we assume the induced feature shift is bounded by
-$$\bigl\lVert f_\theta(q(x)) - f_\theta(x) \bigr\rVert \;\leq\; L_\theta\, \delta,$$
-where $L_\theta$ captures the local sensitivity of the representation under $\theta$ and $\delta$ measures the corruption magnitude. Writing $\Delta = f_\theta(q(x)) - f_\theta(x)$ and letting $c^\star = \arg\max_{c \neq y} w_c^\top f_\theta(q(x))$, we have
-$$m(q(x)) \;=\; (w_y - w_{c^\star})^\top f_\theta(x) \;+\; (w_y - w_{c^\star})^\top \Delta \;\geq\; m(x) \;-\; \max_{c \neq y}\,\lVert w_y - w_c \rVert \cdot L_\theta\, \delta,$$
-using $(w_y - w_{c^\star})^\top f_\theta(x) \geq m(x)$ — which follows from $w_{c^\star}^\top f_\theta(x) \leq \max_{c \neq y} w_c^\top f_\theta(x)$ — and using Cauchy–Schwarz together with $\|w_y - w_{c^\star}\| \leq \max_{c \neq y} \|w_y - w_c\|$ on the second term. Therefore, a sufficient condition for the prediction to be preserved under $q$ is
-$$m(x) \;>\; \max_{c \neq y}\,\lVert w_y - w_c \rVert \cdot L_\theta\, \delta.$$}
-
-\hrbb{This condition makes the i.i.d./OOD asymmetry explicit. Preserving clean correctness at $x$ requires $m(x) > 0$; preserving correctness under label-preserving corruption requires $m(x)$ to be large enough to absorb the feature displacement induced by $q$. Two models with comparable i.i.d. 0-1 accuracy can therefore differ sharply in OOD accuracy if one has more compressed margins on the relevant samples.}
-
-\paragraph{\hrbb{Connection to \Cref{Unbalanced_GP}.}} \hrbb{The analysis of \Cref{Unbalanced_GP} explains why margin compression naturally arises for past classes in rehearsal-based CL. Past-class weights $w_{c_{\text{old}}}$ receive only sparse positive updates through the limited buffer, while they appear repeatedly as non-target classes during current-task training and accumulate the repulsive gradients identified in the "Gradient Polarity Across Tasks" paragraph. At the same time, the encoder is primarily driven by current-task data, producing the feature drift $\langle f_\theta(x_{\text{old}}), w_{c_{\text{old}}}\rangle \downarrow,\; \langle f_\theta(x_{\text{old}}), w_{c_{\text{new}}}\rangle \uparrow$. Over the task sequence, these two effects act jointly on the margin in Eq. 6 evaluated for past-class samples. As training proceeds beyond task $t_c$, the target term $w_y^\top f_\theta(x_{\text{old}})$ tends to decrease (following the feature drift above), while the maximum competing term $\max_{c \neq y} w_c^\top f_\theta(x_{\text{old}})$ tends to be driven up by new-class weights $c \in C_t$ that have been updated toward the evolving feature distribution. The net effect is that $m(x_{\text{old}})$ typically contracts as more tasks are observed. Under i.i.d. evaluation, this contraction becomes visible in 0-1 accuracy only once the margin crosses zero. Under OOD evaluation with label-preserving corruptions, however, even positive but small margins can fail condition (8), giving a disproportionately larger drop in OOD accuracy than in i.i.d. accuracy — consistent with the empirical pattern in \Cref{fig:ood_generalization} and \Cref{Tab:ACC_BWT}.}
-
-\paragraph{\hrbb{Implications for AA-RR.}} \hrbb{Reading condition (8) component-wise clarifies how each component of AA-RR (\Cref{Proposed_Method_}) contributes to OOD robustness in addition to mitigating standard forgetting. The adaptive reweighting mechanism (\Cref{Adaptive_Class-Aware_Reweighting}) directly counteracts the gradient imbalance that compresses old-class margins by modulating the effective gradients through $\alpha_c$ as discussed in \Cref{Adaptive_Class-Aware_Reweighting}. The augmentation pipeline (\Cref{sec:method:augmentation}) trains the encoder to be invariant to a family of label-preserving transformations. While these training-time transformations do not exactly match the test-time corruptions used in our OOD evaluation, augmentation with semantically preserving views is empirically known to produce representations that are more stable under unseen corruptions Khosla et al. (2020); Yao et al. (2022); in the language of condition (8), this corresponds to a smaller effective $L_\theta$ on the relevant input directions, which loosens the requirement on $m(x)$ for the prediction to be preserved. The correctness-guided buffer management (\Cref{Correctness-Guided}) retains consistently learned samples under class- and task-balance constraints; while this criterion does not target margins directly, it stabilizes the replay signal for each past class and prevents the buffer from being dominated by outliers or recently observed classes, both of which reduce the severity of the gradient imbalance analyzed in \Cref{Unbalanced_GP} and therefore indirectly help preserve past-class margins across the task sequence.}
-
+absl-py==2.3.1
+annotated-types==0.7.0
+appdirs==1.4.4
+certifi==2026.4.22
+charset-normalizer==3.4.9
+click==8.1.8
+docker-pycreds==0.4.0
+eval_type_backport==0.4.0
+flatbuffers==2.0.7
+frozendict==2.4.7
+gitdb==4.0.12
+GitPython==3.1.50
+higher==0.2.1
+idna==3.15
+imageio==2.35.1
+jax==0.2.19
+jaxlib==0.1.70+cuda102
+lazy_loader==0.4
+networkx==3.1
+neural-tangents==0.3.8
+numpy==1.24.3
+opencv-python==4.13.0.92
+opt_einsum==3.4.0
+packaging==26.2
+Pillow==9.3.0
+pkg_resources==0.0.0
+platformdirs==4.3.6
+protobuf==4.25.9
+psutil==7.2.2
+pydantic==2.10.6
+pydantic_core==2.27.2
+PyWavelets==1.4.1
+PyYAML==6.0.3
+requests==2.32.4
+scikit-image==0.21.0
+scipy==1.10.1
+sentry-sdk==2.60.0
+setproctitle==1.3.3
+six==1.16.0
+smmap==5.0.3
+tifffile==2023.7.10
+torch==1.8.1+cu102
+torchvision==0.9.1+cu102
+typing_extensions==4.13.2
+urllib3==2.2.3
+Wand==0.6.13
+wandb==0.23.0
