@@ -2,10 +2,10 @@ absl-py==2.3.1
 annotated-types==0.7.0
 appdirs==1.4.4
 certifi==2026.4.22
-charset-normalizer==3.4.9
+charset-normalizer==3.4.7
 click==8.1.8
 docker-pycreds==0.4.0
-eval_type_backport==0.4.0
+eval_type_backport==0.3.1
 flatbuffers==2.0.7
 frozendict==2.4.7
 gitdb==4.0.12
