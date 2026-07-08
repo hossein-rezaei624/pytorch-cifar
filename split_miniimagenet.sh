@@ -1,13 +1,16 @@
 absl-py==2.3.1
 annotated-types==0.7.0
 appdirs==1.4.4
+beautifulsoup4==4.15.0
 certifi==2026.4.22
 charset-normalizer==3.4.7
 click==8.1.8
 docker-pycreds==0.4.0
 eval_type_backport==0.3.1
+filelock==3.16.1
 flatbuffers==2.0.7
 frozendict==2.4.7
+gdown==5.2.2
 gitdb==4.0.12
 GitPython==3.1.50
 higher==0.2.1
@@ -29,6 +32,7 @@ protobuf==4.25.9
 psutil==7.2.2
 pydantic==2.10.6
 pydantic_core==2.27.2
+PySocks==1.7.1
 PyWavelets==1.4.1
 PyYAML==6.0.3
 requests==2.32.4
@@ -38,9 +42,11 @@ sentry-sdk==2.60.0
 setproctitle==1.3.3
 six==1.16.0
 smmap==5.0.3
+soupsieve==2.7
 tifffile==2023.7.10
 torch==1.8.1+cu102
 torchvision==0.9.1+cu102
+tqdm==4.68.4
 typing_extensions==4.13.2
 urllib3==2.2.3
 Wand==0.6.13
