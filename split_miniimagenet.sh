@@ -1,20 +1,27 @@
-import torch
+import torch #Final Mimic of PCR
 from utils.buffer import Buffer
 from utils.args import *
 from models.utils.continual_model import ContinualModel
+from utils.acr_loss import SupConLoss
+from utils.acr_transforms_aug import transforms_aug
 
 import torch.nn as nn
 import numpy as np
+import matplotlib.pyplot as plt
+import torchvision
+
 import torch.nn.functional as F
+import math
 
 
 def get_parser() -> ArgumentParser:
-    parser = ArgumentParser(description='CGR: Confidence-Guided Reply for Buffer-Based Continual Learning')
+    parser = ArgumentParser(description='Continual learning via'
+                                        ' Class-Adaptive Sampling Policy.')
     add_management_args(parser)
     add_experiment_args(parser)
     add_rehearsal_args(parser)
     parser.add_argument('--E', type=int, default=5,
-                        help='Epoch for selecting samples')
+                        help='Epoch for strategies')
     
     return parser
 
@@ -121,12 +128,12 @@ def adjust_values_integer_include_all(a, b):
     return a
 
 
-class Cgr(ContinualModel):
-    NAME = 'cgr'
-    COMPATIBILITY = ['class-il', 'task-il']
+class Acr(ContinualModel):
+    NAME = 'acr'
+    COMPATIBILITY = ['class-il']
 
     def __init__(self, backbone, loss, args, transform):
-        super(Cgr, self).__init__(backbone, loss, args, transform)
+        super(Acr, self).__init__(backbone, loss, args, transform)
         self.buffer = Buffer(self.args.buffer_size, self.device)
         ##self.transform = None
         self.task = 0
@@ -341,8 +348,8 @@ class Cgr(ContinualModel):
             confidence_batch = []
             self.net.eval()
             with torch.no_grad():
-                cgr_logits = self.net(not_aug_inputs)
-                soft_ = nn.functional.softmax(cgr_logits, dim=1)
+                acr_logits, _ = self.net.pcrForward(not_aug_inputs)
+                soft_ = nn.functional.softmax(acr_logits, dim=1)
                 # Accumulate confidences
                 for i in range(targets.shape[0]):
                     confidence_batch.append(soft_[i,labels[i]].item())
@@ -354,7 +361,7 @@ class Cgr(ContinualModel):
     
         
         if self.buffer.is_empty():
-            logits = self.net(batch_x_combine)
+            logits, feas= self.net.pcrForward(batch_x_combine)
             novel_loss = self.loss(logits, batch_y_combine)
             
         else:
@@ -369,7 +376,7 @@ class Cgr(ContinualModel):
             combined_inputs = torch.cat([mem_x_combine, batch_x_combine])
             combined_labels = torch.cat((mem_y_combine, batch_y_combine))
 
-            combined_logits = self.net(combined_inputs)
+            combined_logits, combined_fea= self.net.pcrForward(combined_inputs)
             novel_loss = self.loss(combined_logits, combined_labels)
         
         novel_loss.backward()
