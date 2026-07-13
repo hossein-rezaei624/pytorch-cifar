@@ -1,8 +1,8 @@
 certifi==2026.4.22
-charset-normalizer==3.4.7
+charset-normalizer==3.4.9
 filelock==3.16.1
 fsspec==2025.3.0
-hf-xet==1.5.0
+hf-xet==1.5.1
 huggingface_hub==0.36.2
 idna==3.15
 numpy==1.24.3
@@ -14,6 +14,6 @@ requests==2.32.4
 timm==0.6.12
 torch==1.8.1+cu102
 torchvision==0.9.1+cu102
-tqdm==4.67.3
+tqdm==4.68.4
 typing_extensions==4.13.2
 urllib3==2.2.3
