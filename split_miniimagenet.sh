@@ -22,6 +22,7 @@ lazy_loader==0.4
 networkx==3.1
 neural-tangents==0.3.8
 numpy==1.24.3
+onedrivedownloader==1.1.3
 opencv-python==4.13.0.92
 opt_einsum==3.4.0
 packaging==26.2
