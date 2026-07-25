@@ -12,7 +12,7 @@ flatbuffers==2.0.7
 frozendict==2.4.7
 gdown==5.2.2
 gitdb==4.0.12
-GitPython==3.1.56
+GitPython==3.1.50
 higher==0.2.1
 idna==3.15
 imageio==2.35.1
@@ -46,7 +46,7 @@ soupsieve==2.7
 tifffile==2023.7.10
 torch==1.8.1+cu102
 torchvision==0.9.1+cu102
-tqdm==4.69.1
+tqdm==4.68.4
 typing_extensions==4.13.2
 urllib3==2.2.3
 Wand==0.6.13
