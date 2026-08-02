@@ -13,7 +13,7 @@ Loaded 5 seed logs from cgr_diag_logs
 Number of seeds: 5  (10 pairs)
 Mean ρ ± std: 0.4887 ± 0.0134
 Per-pair ρ values:
-  (seed 0, seed 1): ρ = 0.5023
+  (seed 0, seed 1): ρ = 0.5123
   (seed 0, seed 2): ρ = 0.4941
   (seed 0, seed 3): ρ = 0.4898
   (seed 0, seed 4): ρ = 0.4845
