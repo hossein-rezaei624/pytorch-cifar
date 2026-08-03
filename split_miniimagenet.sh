@@ -1,75 +1,269 @@
-Below are the final results:
+"""
+Analysis script for CGR diagnostic logs produced by cgr_with_diag.py
+(when run with --cgr_diag_log).
+
+Computes ACROSS ALL SEEDS:
+  (b.1) Cross-seed Spearman rank correlation of per-sample variance vectors
+        --> mean ± std over the 10 pairs of seeds.
+  (a.2) Variance vs forgetting-event Spearman correlation
+        --> computed separately for EACH seed; reported as mean ± std over seeds.
+  (b.2) Diagnostic table comparing CGR vs random / high-loss / low-confidence
+        --> each cell computed separately for EACH seed; reported as mean ± std.
+
+Usage:
+    python analyze_cgr_diag.py --diag_dir cgr_diag_logs --E 4 --buffer_size 1000
+"""
+
+import argparse
+import os
+from pathlib import Path
+
+import numpy as np
+import torch
+from scipy.stats import spearmanr
 
 
-```
-Loaded 5 seed logs from cgr_diag_logs
-  seed=0  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
-  seed=1  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
-  seed=2  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
-  seed=3  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
-  seed=4  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+# ----------------------------- I/O -----------------------------
 
-=== (b.1) Cross-seed Spearman correlation of variance vectors ===
-Number of seeds: 5  (10 pairs)
-Mean ρ ± std: 0.4887 ± 0.0134
-Per-pair ρ values:
-  (seed 0, seed 1): ρ = 0.5123
-  (seed 0, seed 2): ρ = 0.4941
-  (seed 0, seed 3): ρ = 0.4898
-  (seed 0, seed 4): ρ = 0.4845
-  (seed 1, seed 2): ρ = 0.4708
-  (seed 1, seed 3): ρ = 0.5049
-  (seed 1, seed 4): ρ = 0.5110
-  (seed 2, seed 3): ρ = 0.4786
-  (seed 2, seed 4): ρ = 0.4724
-  (seed 3, seed 4): ρ = 0.4785
+def load_seed_logs(diag_dir):
+    paths = sorted(Path(diag_dir).glob('cgr_diag_seed*.pt'))
+    if not paths:
+        raise FileNotFoundError(f"No 'cgr_diag_seed*.pt' files found in {diag_dir}")
+    return [torch.load(p, map_location='cpu') for p in paths]
 
-  Paper insertion: \bar\rho = 0.49 \pm 0.01
 
-=== (b.2) Diagnostic table (averaged over 5 seeds) ===
-Per-class budget K = 100  (10 classes seen in task 1)
+# ------------------------- Metrics ---------------------------
 
-Rule                    Margin (mean±std)      Forget (mean±std)    MeanConf (mean±std)
----------------------------------------------------------------------------------------
-Random             -0.0168 ± 0.0095      3.989 ± 0.198     0.3015 ± 0.0056
-High loss          -0.3543 ± 0.0097      4.929 ± 0.224     0.0972 ± 0.0093
-High confidence     0.3685 ± 0.0188      2.544 ± 0.274     0.5622 ± 0.0127
-Low confidence     -0.3673 ± 0.0081      4.966 ± 0.203     0.0719 ± 0.0033
-CGR (variance)      0.1840 ± 0.0172      3.067 ± 0.244     0.4433 ± 0.0082
+def variance_from_eval_confidence(log, E):
+    """CGR's actual variance signal: variance of eval-mode confidence over first E epochs."""
+    conf = log['cgr_confidence_by_sample']
+    return conf[:E].var(dim=0).numpy()
 
-Per-seed breakdown:
-  Random:
-    margin: ['-0.0121', '-0.0206', '-0.0062', '-0.0333', '-0.0115']
-    forget: ['3.6310', '3.9940', '3.9740', '4.1800', '4.1670']
-    conf: ['0.3092', '0.2974', '0.3065', '0.2941', '0.3004']
-  High loss:
-    margin: ['-0.3635', '-0.3587', '-0.3523', '-0.3607', '-0.3364']
-    forget: ['4.5160', '4.9340', '5.0960', '5.1570', '4.9440']
-    conf: ['0.0886', '0.0936', '0.0883', '0.1036', '0.1121']
-  High confidence:
-    margin: ['0.4005', '0.3567', '0.3755', '0.3639', '0.3457']
-    forget: ['2.0660', '2.7270', '2.4170', '2.6970', '2.8150']
-    conf: ['0.5851', '0.5544', '0.5643', '0.5590', '0.5480']
-  Low confidence:
-    margin: ['-0.3717', '-0.3713', '-0.3571', '-0.3780', '-0.3585']
-    forget: ['4.6010', '4.8870', '5.1160', '5.1240', '5.1010']
-    conf: ['0.0770', '0.0700', '0.0738', '0.0674', '0.0713']
-  CGR (variance):
-    margin: ['0.2125', '0.1787', '0.1936', '0.1649', '0.1703']
-    forget: ['2.6100', '3.1080', '3.0850', '3.2050', '3.3260']
-    conf: ['0.4575', '0.4392', '0.4471', '0.4355', '0.4372']
 
---- LaTeX (paste into Table tab:diagnostic) ---
-\begin{tabular}{lccc}
-\toprule
-Selection rule & Mean margin $\downarrow$ & Forgetting events $\uparrow$ & Mean target conf. \\
-\midrule
-Random & $-0.017 \pm 0.009$ & $3.99 \pm 0.20$ & $0.302 \pm 0.006$ \\
-High loss & $-0.354 \pm 0.010$ & $4.93 \pm 0.22$ & $0.097 \pm 0.009$ \\
-High confidence & $0.368 \pm 0.019$ & $2.54 \pm 0.27$ & $0.562 \pm 0.013$ \\
-Low confidence & $-0.367 \pm 0.008$ & $4.97 \pm 0.20$ & $0.072 \pm 0.003$ \\
-CGR (variance) & $0.184 \pm 0.017$ & $3.07 \pm 0.24$ & $0.443 \pm 0.008$ \\
-\bottomrule
-\end{tabular}
+def forgetting_events(correct):
+    """Toneva-style forgetting events: # of correct -> incorrect transitions over training."""
+    correct = correct.bool()
+    transitions = correct[:-1] & ~correct[1:]
+    return transitions.sum(dim=0).numpy()
 
-```
+
+# --------------------- (b.1) Cross-seed -----------------------
+
+def cross_seed_spearman(logs, E):
+    variances = [variance_from_eval_confidence(log, E) for log in logs]
+    lens = {v.shape[0] for v in variances}
+    if len(lens) != 1:
+        raise ValueError(f"Variance vectors differ across seeds: {lens}")
+
+    rhos = []
+    pairs = []
+    n = len(variances)
+    for i in range(n):
+        for j in range(i + 1, n):
+            r, _ = spearmanr(variances[i], variances[j])
+            rhos.append(r)
+            pairs.append((logs[i]['seed'], logs[j]['seed']))
+    return float(np.mean(rhos)), float(np.std(rhos)), rhos, pairs
+
+
+# ---------------- (a.2) Variance vs forgetting (all seeds) ----------------
+
+def variance_vs_forgetting_per_seed(logs, E):
+    """Compute Spearman ρ between variance and forgetting events for EACH seed."""
+    results = []
+    for log in logs:
+        variance = variance_from_eval_confidence(log, E)
+        forgetting = forgetting_events(log['diag_correct'])
+        r, p = spearmanr(variance, forgetting)
+        results.append({'seed': log['seed'], 'rho': float(r), 'p': float(p)})
+    rhos = [r['rho'] for r in results]
+    return results, float(np.mean(rhos)), float(np.std(rhos))
+
+
+# ---------------- (b.2) Diagnostic table (all seeds) ----------------------
+
+def diagnostic_table_one_seed(log, E, buffer_size, random_seed):
+    target_conf_all = log['cgr_confidence_by_sample']  # (n_epochs, n_samples)
+    n_epochs = target_conf_all.shape[0]
+    labels = log['diag_labels'].numpy()
+
+    # Per-sample selection scores (first E epochs, matching CGR's window and Figure 3 b.1)
+    variance = variance_from_eval_confidence(log, E)
+    mean_conf_E = target_conf_all[:E].mean(dim=0).numpy()
+    mean_loss_E = log['diag_loss'][:E].mean(dim=0).numpy()
+
+    # Per-sample reporting metrics.
+    #   margin: averaged over the FIRST E epochs (matches CGR's selection
+    #     window and Figure 3 b.1; consistent with mean target confidence).
+    #     End-of-training margin would be uninformative because the model has
+    #     converged and margins are large for almost all samples.
+    #   forgetting events: over ALL training epochs (Toneva's definition;
+    #     needs the full trajectory — first E would give at most E-1 transitions).
+    #   mean target confidence: over the FIRST E epochs (matches Figure 3 b.1
+    #     and CGR's selection window).
+    margin_first_E = log['diag_margin'][:E].mean(dim=0).numpy()
+    forgetting = forgetting_events(log['diag_correct'])
+    mean_conf_report = mean_conf_E  # = target_conf_all[:E].mean(dim=0).numpy()
+
+    # Per-class top-K (K = buffer_size // num_classes seen in task 1)
+    unique_classes = np.unique(labels[labels >= 0])
+    num_classes = len(unique_classes)
+    k_per_class = buffer_size // num_classes
+
+    def top_k_per_class(score, descending=True):
+        out = []
+        for c in unique_classes:
+            idx = np.where(labels == c)[0]
+            order = np.argsort(score[idx])
+            if descending:
+                order = order[::-1]
+            out.append(idx[order[:k_per_class]])
+        return np.concatenate(out)
+
+    rng = np.random.default_rng(random_seed)
+    rules = {
+        'Random':          np.concatenate([
+                               rng.choice(np.where(labels == c)[0],
+                                          size=min(k_per_class, (labels == c).sum()),
+                                          replace=False)
+                               for c in unique_classes
+                           ]),
+        'High loss':       top_k_per_class(mean_loss_E, descending=True),
+        'High confidence': top_k_per_class(mean_conf_E, descending=True),
+        'Low confidence':  top_k_per_class(mean_conf_E, descending=False),
+        'CGR (variance)':  top_k_per_class(variance, descending=True),
+    }
+
+    row_dict = {}
+    for name, idx in rules.items():
+        row_dict[name] = {
+            'mean_margin': float(margin_first_E[idx].mean()),
+            'mean_forgetting': float(forgetting[idx].mean()),
+            'mean_target_conf': float(mean_conf_report[idx].mean()),
+        }
+    return row_dict, k_per_class, num_classes
+
+
+def diagnostic_table_all_seeds(logs, E, buffer_size):
+    """Compute the diagnostic table per seed, then aggregate to mean ± std."""
+    per_seed_rows = []
+    k_per_class, num_classes = None, None
+    for log in logs:
+        row_dict, k, nc = diagnostic_table_one_seed(
+            log, E, buffer_size,
+            random_seed=int(log['seed']) if str(log['seed']).isdigit() else 0
+        )
+        per_seed_rows.append(row_dict)
+        k_per_class, num_classes = k, nc
+
+    # Aggregate across seeds
+    rule_names = list(per_seed_rows[0].keys())
+    agg = {}
+    for name in rule_names:
+        agg[name] = {}
+        for metric in ['mean_margin', 'mean_forgetting', 'mean_target_conf']:
+            vals = [seed_row[name][metric] for seed_row in per_seed_rows]
+            agg[name][metric + '_mean'] = float(np.mean(vals))
+            agg[name][metric + '_std']  = float(np.std(vals))
+            agg[name][metric + '_per_seed'] = [float(v) for v in vals]
+    return agg, per_seed_rows, k_per_class, num_classes
+
+
+# ------------------------- Reporting -------------------------
+
+def print_b1(mean_rho, std_rho, all_rhos, pairs, n_seeds):
+    n_pairs = len(all_rhos)
+    print(f"\n=== (b.1) Cross-seed Spearman correlation of variance vectors ===")
+    print(f"Number of seeds: {n_seeds}  ({n_pairs} pairs)")
+    print(f"Mean ρ ± std: {mean_rho:.4f} ± {std_rho:.4f}")
+    print(f"Per-pair ρ values:")
+    for (s1, s2), r in zip(pairs, all_rhos):
+        print(f"  (seed {s1}, seed {s2}): ρ = {r:.4f}")
+    print(f"\n  Paper insertion: \\bar\\rho = {mean_rho:.2f} \\pm {std_rho:.2f}")
+
+
+def print_a2(results, mean_rho, std_rho):
+    print(f"\n=== (a.2) Variance vs forgetting events (ALL seeds) ===")
+    print(f"Per-seed ρ values:")
+    for r in results:
+        sig = '***' if r['p'] < 1e-50 else ('**' if r['p'] < 1e-10 else '')
+        print(f"  seed {r['seed']}: ρ = {r['rho']:.4f}  (p = {r['p']:.3e})  {sig}")
+    print(f"\nMean ρ ± std over {len(results)} seeds: {mean_rho:.4f} ± {std_rho:.4f}")
+    print(f"\n  Paper insertion: \\rho = {mean_rho:.2f} \\pm {std_rho:.2f}")
+
+
+def print_b2(agg, per_seed_rows, k_per_class, num_classes, n_seeds):
+    print(f"\n=== (b.2) Diagnostic table (averaged over {n_seeds} seeds) ===")
+    print(f"Per-class budget K = {k_per_class}  ({num_classes} classes seen in task 1)\n")
+
+    rule_names = list(agg.keys())
+    header = f"{'Rule':<18} {'Margin (mean±std)':>22} {'Forget (mean±std)':>22} {'MeanConf (mean±std)':>22}"
+    print(header)
+    print('-' * len(header))
+    for name in rule_names:
+        d = agg[name]
+        print(f"{name:<18} "
+              f"{d['mean_margin_mean']:>7.4f} ± {d['mean_margin_std']:.4f}    "
+              f"{d['mean_forgetting_mean']:>7.3f} ± {d['mean_forgetting_std']:.3f}    "
+              f"{d['mean_target_conf_mean']:>7.4f} ± {d['mean_target_conf_std']:.4f}")
+
+    print("\nPer-seed breakdown:")
+    for name in rule_names:
+        print(f"  {name}:")
+        d = agg[name]
+        for metric_pretty, metric_key in [('margin', 'mean_margin_per_seed'),
+                                          ('forget', 'mean_forgetting_per_seed'),
+                                          ('conf',   'mean_target_conf_per_seed')]:
+            vals = d[metric_key]
+            print(f"    {metric_pretty}: {[f'{v:.4f}' for v in vals]}")
+
+    # LaTeX table
+    print("\n--- LaTeX (paste into Table tab:diagnostic) ---")
+    print(r"\begin{tabular}{lccc}")
+    print(r"\toprule")
+    print(r"Selection rule & Mean margin $\downarrow$ & Forgetting events $\uparrow$ & Mean target conf. \\")
+    print(r"\midrule")
+    for name in rule_names:
+        d = agg[name]
+        print(f"{name} & "
+              f"${d['mean_margin_mean']:.3f} \\pm {d['mean_margin_std']:.3f}$ & "
+              f"${d['mean_forgetting_mean']:.2f} \\pm {d['mean_forgetting_std']:.2f}$ & "
+              f"${d['mean_target_conf_mean']:.3f} \\pm {d['mean_target_conf_std']:.3f}$ \\\\")
+    print(r"\bottomrule")
+    print(r"\end{tabular}")
+
+
+# ---------------------------- Main ----------------------------
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--diag_dir', type=str, required=True,
+                        help='Directory containing cgr_diag_seed*.pt files.')
+    parser.add_argument('--E', type=int, default=4,
+                        help='CGR variance window (should match what was used in training).')
+    parser.add_argument('--buffer_size', type=int, default=1000,
+                        help='Buffer size used in the run; controls per-class top-K.')
+    args = parser.parse_args()
+
+    logs = load_seed_logs(args.diag_dir)
+    print(f"Loaded {len(logs)} seed logs from {args.diag_dir}")
+    for log in logs:
+        print(f"  seed={log['seed']}  E={log['E']}  n_epochs={log['n_epochs']}  "
+              f"n_samples={log['n_sample_per_task']}  buffer_size={log['buffer_size']}")
+
+    # (b.1) cross-seed
+    if len(logs) >= 2:
+        mean_rho, std_rho, all_rhos, pairs = cross_seed_spearman(logs, args.E)
+        print_b1(mean_rho, std_rho, all_rhos, pairs, len(logs))
+    else:
+        print("\n(b.1) Cross-seed correlation skipped: need >= 2 seeds.")
+
+    # (b.2) diagnostic table -- averaged across all seeds
+    agg, per_seed_rows, k_per_class, num_classes = diagnostic_table_all_seeds(
+        logs, args.E, args.buffer_size
+    )
+    print_b2(agg, per_seed_rows, k_per_class, num_classes, len(logs))
+
+
+if __name__ == '__main__':
+    main()
