@@ -9,9 +9,14 @@ Computes ACROSS ALL SEEDS:
         --> computed separately for EACH seed; reported as mean ± std over seeds.
   (b.2) Diagnostic table comparing CGR vs random / high-loss / low-confidence
         --> each cell computed separately for EACH seed; reported as mean ± std.
+  (c)   Within-seed Spearman rank correlation between per-sample variance
+        computed with a small window (E_small, default 2) and a larger window
+        (E_large, default 5). Anchors the sanity check for the E=2 selection
+        (Concern 4). Computed separately for EACH seed; reported as mean ± std.
 
 Usage:
     python analyze_cgr_diag.py --diag_dir cgr_diag_logs --E 4 --buffer_size 1000
+    # optional: --E_small 2 --E_large 5   (defaults shown)
 """
 
 import argparse
@@ -29,7 +34,9 @@ def load_seed_logs(diag_dir):
     paths = sorted(Path(diag_dir).glob('cgr_diag_seed*.pt'))
     if not paths:
         raise FileNotFoundError(f"No 'cgr_diag_seed*.pt' files found in {diag_dir}")
-    return [torch.load(p, map_location='cpu') for p in paths]
+    # weights_only=False is required for torch >=2.6 to load the numpy scalars in the log.
+    # Only run this script on trusted .pt files you produced yourself.
+    return [torch.load(p, map_location='cpu', weights_only=False) for p in paths]
 
 
 # ------------------------- Metrics ---------------------------
@@ -78,6 +85,28 @@ def variance_vs_forgetting_per_seed(logs, E):
         results.append({'seed': log['seed'], 'rho': float(r), 'p': float(p)})
     rhos = [r['rho'] for r in results]
     return results, float(np.mean(rhos)), float(np.std(rhos))
+
+
+# ---------------- (c) Within-seed E_small vs E_large (Concern 4) ---------
+
+def within_seed_E_small_vs_E_large_spearman(logs, E_small, E_large):
+    """Per-seed Spearman ρ between per-sample σ² computed over the first
+    E_small epochs and over the first E_large epochs. Anchors the sanity
+    check for the E=2 selection (AE Concern 4)."""
+    if E_small >= E_large:
+        raise ValueError(f"E_small ({E_small}) must be < E_large ({E_large})")
+    results = []
+    for log in logs:
+        n_epochs = log['cgr_confidence_by_sample'].shape[0]
+        if E_large > n_epochs:
+            raise ValueError(f"E_large={E_large} exceeds recorded epochs ({n_epochs}) "
+                             f"for seed {log['seed']}")
+        v_small = variance_from_eval_confidence(log, E_small)
+        v_large = variance_from_eval_confidence(log, E_large)
+        r, p = spearmanr(v_small, v_large)
+        results.append({'seed': log['seed'], 'rho': float(r), 'p': float(p)})
+    rhos = [r['rho'] for r in results]
+    return results, float(np.mean(rhos)), float(np.std(rhos, ddof=1))
 
 
 # ---------------- (b.2) Diagnostic table (all seeds) ----------------------
@@ -192,6 +221,20 @@ def print_a2(results, mean_rho, std_rho):
     print(f"\n  Paper insertion: \\rho = {mean_rho:.2f} \\pm {std_rho:.2f}")
 
 
+def print_c(results, mean_rho, std_rho, E_small, E_large):
+    print(f"\n=== (c) Within-seed Spearman: σ² at E={E_small} vs σ² at E={E_large} "
+          f"[Concern 4 anchor] ===")
+    print(f"Per-seed ρ values:")
+    for r in results:
+        sig = '***' if r['p'] < 1e-50 else ('**' if r['p'] < 1e-10 else '')
+        print(f"  seed {r['seed']}: ρ = {r['rho']:.4f}  (p = {r['p']:.3e})  {sig}")
+    rhos = [r['rho'] for r in results]
+    print(f"\nMean ρ ± std over {len(results)} seeds: {mean_rho:.4f} ± {std_rho:.4f}")
+    print(f"Range: [{min(rhos):.4f}, {max(rhos):.4f}]")
+    print(f"\n  Paper insertion: "
+          f"\\bar\\rho_{{E={E_small},E={E_large}}} = {mean_rho:.3f} \\pm {std_rho:.3f}")
+
+
 def print_b2(agg, per_seed_rows, k_per_class, num_classes, n_seeds):
     print(f"\n=== (b.2) Diagnostic table (averaged over {n_seeds} seeds) ===")
     print(f"Per-class budget K = {k_per_class}  ({num_classes} classes seen in task 1)\n")
@@ -243,6 +286,12 @@ def main():
                         help='CGR variance window (should match what was used in training).')
     parser.add_argument('--buffer_size', type=int, default=1000,
                         help='Buffer size used in the run; controls per-class top-K.')
+    parser.add_argument('--E_small', type=int, default=2,
+                        help='Small window for the within-seed E_small-vs-E_large check (Concern 4). '
+                             'Default 2.')
+    parser.add_argument('--E_large', type=int, default=5,
+                        help='Large window for the within-seed E_small-vs-E_large check (Concern 4). '
+                             'Default 5.')
     args = parser.parse_args()
 
     logs = load_seed_logs(args.diag_dir)
@@ -257,6 +306,12 @@ def main():
         print_b1(mean_rho, std_rho, all_rhos, pairs, len(logs))
     else:
         print("\n(b.1) Cross-seed correlation skipped: need >= 2 seeds.")
+
+    # (c) within-seed E_small vs E_large -- anchors Concern 4 sanity check
+    c_results, c_mean, c_std = within_seed_E_small_vs_E_large_spearman(
+        logs, args.E_small, args.E_large
+    )
+    print_c(c_results, c_mean, c_std, args.E_small, args.E_large)
 
     # (b.2) diagnostic table -- averaged across all seeds
     agg, per_seed_rows, k_per_class, num_classes = diagnostic_table_all_seeds(
