@@ -1,7 +1,3 @@
-Below are the final results:
-
-
-```
 Loaded 5 seed logs from cgr_diag_logs
   seed=0  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
   seed=1  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
@@ -71,5 +67,3 @@ Low confidence & $-0.367 \pm 0.008$ & $4.97 \pm 0.20$ & $0.072 \pm 0.003$ \\
 CGR (variance) & $0.184 \pm 0.017$ & $3.07 \pm 0.24$ & $0.443 \pm 0.008$ \\
 \bottomrule
 \end{tabular}
-
-```
