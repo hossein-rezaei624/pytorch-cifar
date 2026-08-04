@@ -22,6 +22,19 @@ Per-pair ρ values:
 
   Paper insertion: \bar\rho = 0.49 \pm 0.01
 
+=== (c) Within-seed Spearman: σ² at E=2 vs σ² at E=5 [Concern 4 anchor] ===
+Per-seed ρ values:
+  seed 0: ρ = 0.4412  (p = 2.559e-237)  ***
+  seed 1: ρ = 0.4508  (p = 7.322e-249)  ***
+  seed 2: ρ = 0.4279  (p = 7.662e-222)  ***
+  seed 3: ρ = 0.4509  (p = 5.051e-249)  ***
+  seed 4: ρ = 0.4680  (p = 1.229e-270)  ***
+
+Mean ρ ± std over 5 seeds: 0.4478 ± 0.0147
+Range: [0.4279, 0.4680]
+
+  Paper insertion: \bar\rho_{E=2,E=5} = 0.448 \pm 0.015
+
 === (b.2) Diagnostic table (averaged over 5 seeds) ===
 Per-class budget K = 100  (10 classes seen in task 1)
 
