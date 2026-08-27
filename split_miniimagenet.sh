@@ -7,15 +7,6 @@ When --cgr_diag_log is set, this version:
   * Records, from that same eval-mode pass: per-sample target confidence,
     margin (target prob - max other prob), correctness (argmax == label),
     and per-sample cross-entropy loss.
-  * ALSO records, from the same eval-mode pass, per-sample feature-space
-    signed distance to the nearest boundary of the target-class region and
-    of the predicted-class region, defined as
-        d^{tgt}_{i,e} = min_{k != y_i} (z_{y_i,e} - z_{k,e}) / ||w_{y_i,e} - w_{k,e}||_2
-        d^{pred}_{i,e} = min_{k != y_hat} (z_{y_hat,e} - z_{k,e}) / ||w_{y_hat,e} - w_{k,e}||_2
-    where w_k are the rows of the classifier head at epoch e. For correctly
-    classified samples the two are equal. This is the affine feature-space
-    boundary distance requested for the boundary-interpretation analysis
-    (Concern 2).
   * After the last epoch of task 1, saves all of the above plus
     CGR's confidence trajectory to disk as cgr_diag_logs/cgr_diag_seed<S>.pt
     (one file per run).
@@ -144,75 +135,11 @@ class Cgr(ContinualModel):
         self.diag_correct = None      # (n_epochs, n_sample_per_task) bool
         self.diag_loss = None         # (n_epochs, n_sample_per_task) per-sample CE
         self.diag_labels = None       # (n_sample_per_task,) global class id
-        # NEW: feature-space signed distance to nearest boundary (Concern 2)
-        self.diag_feat_dist_target = None  # (n_epochs, n_sample_per_task)
-        self.diag_feat_dist_pred   = None  # (n_epochs, n_sample_per_task)
         # === END DIAG ===
 
     def _diag_active(self):
         """True iff diagnostic logging is enabled AND we're in task 1."""
         return getattr(self.args, 'cgr_diag_log', False) and self.task == 1
-
-    # === DIAG: helper for feature-space distance analysis (Concern 2) ===
-    def _diag_get_classifier_head(self):
-        """Return the last nn.Linear in the network, assumed to be the classifier
-        head. Robust to networks wrapped in Sequential / ContinualLearner
-        modules (as in Mammoth's ResNet18 setup)."""
-        last_linear = None
-        for m in self.net.modules():
-            if isinstance(m, nn.Linear):
-                last_linear = m
-        if last_linear is None:
-            raise RuntimeError("_diag_get_classifier_head: no nn.Linear found in self.net")
-        return last_linear
-
-    def _diag_feat_distances(self, logits, labels_dev):
-        """Compute per-sample signed feature-space distance to the nearest
-        boundary of (i) the target-class region and (ii) the predicted-class
-        region. Uses only the classifier head's weight matrix; biases cancel
-        because z = W*phi + b already includes bias.
-
-        Args:
-            logits: (B, C) raw logits from the eval-mode forward pass
-            labels_dev: (B,) target class indices on the same device
-
-        Returns:
-            d_target: (B,) signed distance for target class (may be negative
-                      if some competing class beats target)
-            d_pred:   (B,) signed distance for argmax class (always >= 0)
-        """
-        head = self._diag_get_classifier_head()
-        W = head.weight.detach()  # (C, d_feat)
-        # Pairwise weight-vector distances ||w_i - w_j||_2 (C, C)
-        # Small (100x100 for CIFAR-100) so cost is negligible.
-        W_dist = torch.cdist(W.unsqueeze(0), W.unsqueeze(0), p=2).squeeze(0)
-
-        B, C = logits.shape
-
-        # -- d_target: (z_y - z_k) / ||w_y - w_k||, min over k != y --
-        target_logits = logits.gather(1, labels_dev.unsqueeze(1)).squeeze(1)   # (B,)
-        z_diff_t = target_logits.unsqueeze(1) - logits                          # (B, C)
-        w_diff_t = W_dist[labels_dev]                                            # (B, C)
-        # avoid div-by-zero at k=y (0/0); we'll mask that column afterwards
-        ratio_t = z_diff_t / w_diff_t.clamp(min=1e-12)
-        mask_t = torch.zeros_like(ratio_t, dtype=torch.bool)
-        mask_t.scatter_(1, labels_dev.unsqueeze(1), True)
-        ratio_t = ratio_t.masked_fill(mask_t, float('inf'))
-        d_target = ratio_t.min(dim=1).values                                     # (B,)
-
-        # -- d_pred: same but using argmax class --
-        y_hat = logits.argmax(dim=1)                                             # (B,)
-        pred_logits = logits.gather(1, y_hat.unsqueeze(1)).squeeze(1)            # (B,)
-        z_diff_p = pred_logits.unsqueeze(1) - logits                             # (B, C)
-        w_diff_p = W_dist[y_hat]                                                  # (B, C)
-        ratio_p = z_diff_p / w_diff_p.clamp(min=1e-12)
-        mask_p = torch.zeros_like(ratio_p, dtype=torch.bool)
-        mask_p.scatter_(1, y_hat.unsqueeze(1), True)
-        ratio_p = ratio_p.masked_fill(mask_p, float('inf'))
-        d_pred = ratio_p.min(dim=1).values                                       # (B,)
-
-        return d_target, d_pred
-    # === END DIAG ===
 
     def begin_train(self, dataset):
         self.n_sample_per_task = dataset.get_examples_number() // dataset.N_TASKS
@@ -237,9 +164,6 @@ class Cgr(ContinualModel):
             self.diag_correct = torch.zeros((n_e, n_s), dtype=torch.bool)
             self.diag_loss = torch.zeros((n_e, n_s))
             self.diag_labels = torch.full((n_s,), -1, dtype=torch.long)
-            # NEW: feature-space distances
-            self.diag_feat_dist_target = torch.zeros((n_e, n_s))
-            self.diag_feat_dist_pred   = torch.zeros((n_e, n_s))
         # === END DIAG ===
 
     def _save_diag(self):
@@ -264,9 +188,6 @@ class Cgr(ContinualModel):
             'diag_correct': self.diag_correct.clone(),
             'diag_loss': self.diag_loss.clone(),
             'diag_labels': self.diag_labels.clone(),
-            # NEW (Concern 2): feature-space signed distances to nearest boundary
-            'diag_feat_dist_target': self.diag_feat_dist_target.clone(),
-            'diag_feat_dist_pred':   self.diag_feat_dist_pred.clone(),
             'class_mapping': dict(self.mapping),
         }, save_path)
         print(f"[CGR-Diag] Saved task-1 diagnostics to {save_path}")
@@ -443,11 +364,6 @@ class Cgr(ContinualModel):
 
                     per_sample_loss = F.cross_entropy(cgr_logits, labels_dev, reduction='none').cpu()
 
-                    # NEW (Concern 2): feature-space signed distance to nearest boundary
-                    d_target, d_pred = self._diag_feat_distances(cgr_logits, labels_dev)
-                    d_target = d_target.cpu()
-                    d_pred = d_pred.cpu()
-
                     if torch.is_tensor(index_):
                         idx_cpu = index_.detach().cpu().long()
                     else:
@@ -456,8 +372,6 @@ class Cgr(ContinualModel):
                     self.diag_correct[self.epoch, idx_cpu] = correct
                     self.diag_loss[self.epoch, idx_cpu] = per_sample_loss
                     self.diag_labels[idx_cpu] = labels.detach().cpu().long()
-                    self.diag_feat_dist_target[self.epoch, idx_cpu] = d_target
-                    self.diag_feat_dist_pred[self.epoch, idx_cpu] = d_pred
                 # === END DIAG ===
             self.net.train()
 
