@@ -1,533 +1,101 @@
-"""
-Modified cgr.py with diagnostic logging for the rebuttal experiments.
-
-When --cgr_diag_log is set, this version:
-  * During task 1 ONLY, runs CGR's existing eval-mode forward pass on
-    not_aug_inputs for ALL epochs of the task (instead of just the first E).
-  * Records, from that same eval-mode pass: per-sample target confidence,
-    probability margin (target prob - max other prob), correctness (argmax ==
-    label), per-sample cross-entropy loss, and logit margin (target logit -
-    max other logit). Probability margin and logit margin share sign but not
-    magnitude or cross-sample ranking; both are recorded so downstream
-    analyses can use the appropriate one (probability margin for
-    Data-Cartography-style analyses, logit margin for boundary-diagnostic
-    analyses).
-  * ALSO records, from the same eval-mode pass, per-sample feature-space
-    signed distance to the nearest boundary of the target-class region and
-    of the predicted-class region, defined as
-        d^{tgt}_{i,e} = min_{k != y_i} (z_{y_i,e} - z_{k,e}) / ||w_{y_i,e} - w_{k,e}||_2
-        d^{pred}_{i,e} = min_{k != y_hat} (z_{y_hat,e} - z_{k,e}) / ||w_{y_hat,e} - w_{k,e}||_2
-    where w_k are the rows of the classifier head at epoch e. For correctly
-    classified samples the two are equal and both give the signed distance
-    to the nearest boundary of the correct-class region. For misclassified
-    samples, d^{pred} is still the boundary distance (of the predicted-class
-    region), while d^{tgt} equals the minimum normalized target margin and
-    is NOT a geometric distance to the target-region boundary. This is the
-    affine feature-space boundary distance requested for the boundary-
-    interpretation analysis (Concern 2).
-  * After the last epoch of task 1, saves all of the above plus
-    CGR's confidence trajectory to disk as cgr_diag_logs/cgr_diag_seed<S>.pt
-    (one file per run).
-
-Run separately for each seed (--seed 0, --seed 1, ...). Each run produces
-one .pt file. Combine across seeds by hand.
-
-When --cgr_diag_log is NOT set, behaviour is identical to your original cgr.py.
-
-All additions are marked with `# === DIAG: ... === / === END DIAG ===` blocks.
-"""
-
-import os
-import torch
-from utils.buffer import Buffer
-from utils.args import *
-from models.utils.continual_model import ContinualModel
-
-import torch.nn as nn
-import numpy as np
-import torch.nn.functional as F
-
-
-def get_parser() -> ArgumentParser:
-    parser = ArgumentParser(description='CGR: Confidence-Guided Reply for Buffer-Based Continual Learning')
-    add_management_args(parser)
-    add_experiment_args(parser)
-    add_rehearsal_args(parser)
-    parser.add_argument('--E', type=int, default=4,
-                        help='Epoch for selecting samples')
-    # === DIAG: new CLI args ===
-    parser.add_argument('--cgr_diag_log', action='store_true',
-                        help='If set, record per-sample diagnostics during task 1 (from CGR\'s eval forward pass) and save to disk.')
-    parser.add_argument('--cgr_diag_dir', type=str, default='cgr_diag_logs',
-                        help='Directory to save per-seed diagnostic logs.')
-    # === END DIAG ===
-    return parser
-
-
-def distribute_samples(probabilities, M):
-    total_probability = sum(probabilities.values())
-    normalized_probabilities = {k: v / total_probability for k, v in probabilities.items()}
-    samples = {k: round(v * M) for k, v in normalized_probabilities.items()}
-    discrepancy = M - sum(samples.values())
-    for key in samples:
-        if discrepancy == 0:
-            break
-        if discrepancy > 0:
-            samples[key] += 1
-            discrepancy -= 1
-        elif discrepancy < 0 and samples[key] > 0:
-            samples[key] -= 1
-            discrepancy += 1
-    return samples
-
-
-def distribute_excess(lst, check_bound):
-    total_excess = sum(val - check_bound for val in lst if val > check_bound)
-    recipients = [i for i, val in enumerate(lst) if val < check_bound]
-    num_recipients = len(recipients)
-    avg_share, remainder = divmod(total_excess, num_recipients)
-    lst = [val if val <= check_bound else check_bound for val in lst]
-    for idx in recipients:
-        lst[idx] += avg_share
-    for idx in recipients[:remainder]:
-        lst[idx] += 1
-    for i, val in enumerate(lst):
-        if val > check_bound:
-            return distribute_excess(lst, check_bound)
-    return lst
-
-
-def adjust_values_integer_include_all(a, b):
-    excess = {}
-    shortage = {}
-    total_excess = 0
-    for k in a:
-        if k in b:
-            if a[k] > b[k]:
-                excess[k] = a[k] - b[k]
-                total_excess += a[k] - b[k]
-                a[k] = b[k]
-            elif a[k] < b[k]:
-                shortage[k] = b[k] - a[k]
-        else:
-            shortage[k] = float('inf')
-    while total_excess > 0 and shortage:
-        per_key_excess = max(total_excess // len(shortage), 1)
-        for k in list(shortage):
-            if total_excess == 0:
-                break
-            if shortage[k] == float('inf'):
-                increment = per_key_excess
-            else:
-                increment = min(shortage[k], per_key_excess)
-            a[k] += increment
-            total_excess -= increment
-            if shortage[k] != float('inf'):
-                shortage[k] -= increment
-                if shortage[k] == 0:
-                    del shortage[k]
-    for key in a:
-        a[key] = int(a[key])
-    return a
-
-
-class Cgr(ContinualModel):
-    NAME = 'cgr'
-    COMPATIBILITY = ['class-il', 'task-il']
-
-    def __init__(self, backbone, loss, args, transform):
-        super(Cgr, self).__init__(backbone, loss, args, transform)
-        self.buffer = Buffer(self.args.buffer_size, self.device)
-        self.task = 0
-        self.epoch = 0
-        self.unique_classes = set()
-        self.mapping = {}
-        self.reverse_mapping = {}
-        self.confidence_by_sample = None
-        self.n_sample_per_task = None
-        self.class_portion = []
-        self.dist_task_prev = None
-        self.dist_class_prev = None
-        # === DIAG: per-sample diagnostic tensors (allocated in begin_task for task 1 only) ===
-        self.diag_margin = None       # (n_epochs, n_sample_per_task) — probability margin
-        self.diag_correct = None      # (n_epochs, n_sample_per_task) bool
-        self.diag_loss = None         # (n_epochs, n_sample_per_task) per-sample CE
-        self.diag_labels = None       # (n_sample_per_task,) global class id
-        # NEW: logit margin z_y - max_{k!=y} z_k (for boundary-diagnostic analyses,
-        # per GPT critique — probability margin and logit margin share sign but
-        # differ in magnitude and cross-sample ranking).
-        self.diag_logit_margin = None  # (n_epochs, n_sample_per_task)
-        # NEW: feature-space signed distance / normalized target margin (Concern 2)
-        self.diag_feat_dist_target = None  # (n_epochs, n_sample_per_task)
-        self.diag_feat_dist_pred   = None  # (n_epochs, n_sample_per_task)
-        # === END DIAG ===
-
-    def _diag_active(self):
-        """True iff diagnostic logging is enabled AND we're in task 1."""
-        return getattr(self.args, 'cgr_diag_log', False) and self.task == 1
-
-    # === DIAG: helper for feature-space distance analysis (Concern 2) ===
-    def _diag_get_classifier_head(self):
-        """Return the last nn.Linear in the network, assumed to be the classifier
-        head. Robust to networks wrapped in Sequential / ContinualLearner
-        modules (as in Mammoth's ResNet18 setup)."""
-        last_linear = None
-        for m in self.net.modules():
-            if isinstance(m, nn.Linear):
-                last_linear = m
-        if last_linear is None:
-            raise RuntimeError("_diag_get_classifier_head: no nn.Linear found in self.net")
-        return last_linear
-
-    def _diag_feat_distances(self, logits, labels_dev):
-        """Compute per-sample signed feature-space quantities using the
-        classifier head's weight matrix. The bias term (b_y - b_k) is already
-        absorbed into the logit difference z_y - z_k = (w_y - w_k)^T phi +
-        (b_y - b_k), so only the pairwise weight-vector norms ||w_i - w_j||_2
-        are needed for the denominator.
-
-        Two per-sample quantities are returned:
-
-        d_pred (i)  = min_{k != y_hat_i} (z_{y_hat_i} - z_k) / ||w_{y_hat_i} - w_k||_2
-            Always >= 0 (y_hat is the argmax by construction). Geometrically
-            the signed perpendicular distance from phi(x_i) to the nearest
-            boundary of the *predicted* class region under the affine head.
-
-        d_target(i) = min_{k != y_i}    (z_{y_i}    - z_k) / ||w_{y_i}    - w_k||_2
-            Interpretation depends on classification status:
-              - Correctly classified (y_hat_i == y_i): equals d_pred(i);
-                a valid signed distance to the nearest boundary of the target
-                (== correct) class region.
-              - Misclassified (y_hat_i != y_i): negative; equals the
-                *minimum normalized target margin*, i.e. the most-violated
-                pairwise (target vs competitor) constraint. NOT a geometric
-                distance from phi(x_i) to the target-region boundary, since
-                that would require solving a QP over multiple half-space
-                constraints. Report separately for the misclassified subset in
-                downstream analysis.
-
-        For the cleanest "distance to boundary" analysis, restrict to samples
-        where diag_correct == True; on that subset d_pred == d_target and is
-        the signed distance to the correct-class region boundary.
-
-        Args:
-            logits: (B, C) raw logits from the eval-mode forward pass
-            labels_dev: (B,) target class indices on the same device
-
-        Returns:
-            d_target: (B,) see above.
-            d_pred:   (B,) see above; always >= 0.
-        """
-        head = self._diag_get_classifier_head()
-        W = head.weight.detach()  # (C, d_feat)
-        # Pairwise weight-vector distances ||w_i - w_j||_2 (C, C)
-        # Small (100x100 for CIFAR-100) so cost is negligible.
-        W_dist = torch.cdist(W.unsqueeze(0), W.unsqueeze(0), p=2).squeeze(0)
-
-        B, C = logits.shape
-
-        # -- d_target: (z_y - z_k) / ||w_y - w_k||, min over k != y --
-        target_logits = logits.gather(1, labels_dev.unsqueeze(1)).squeeze(1)   # (B,)
-        z_diff_t = target_logits.unsqueeze(1) - logits                          # (B, C)
-        w_diff_t = W_dist[labels_dev]                                            # (B, C)
-        # avoid div-by-zero at k=y (0/0); we'll mask that column afterwards
-        ratio_t = z_diff_t / w_diff_t.clamp(min=1e-12)
-        mask_t = torch.zeros_like(ratio_t, dtype=torch.bool)
-        mask_t.scatter_(1, labels_dev.unsqueeze(1), True)
-        ratio_t = ratio_t.masked_fill(mask_t, float('inf'))
-        d_target = ratio_t.min(dim=1).values                                     # (B,)
-
-        # -- d_pred: same but using argmax class --
-        y_hat = logits.argmax(dim=1)                                             # (B,)
-        pred_logits = logits.gather(1, y_hat.unsqueeze(1)).squeeze(1)            # (B,)
-        z_diff_p = pred_logits.unsqueeze(1) - logits                             # (B, C)
-        w_diff_p = W_dist[y_hat]                                                  # (B, C)
-        ratio_p = z_diff_p / w_diff_p.clamp(min=1e-12)
-        mask_p = torch.zeros_like(ratio_p, dtype=torch.bool)
-        mask_p.scatter_(1, y_hat.unsqueeze(1), True)
-        ratio_p = ratio_p.masked_fill(mask_p, float('inf'))
-        d_pred = ratio_p.min(dim=1).values                                       # (B,)
-
-        return d_target, d_pred
-    # === END DIAG ===
-
-    def begin_train(self, dataset):
-        self.n_sample_per_task = dataset.get_examples_number() // dataset.N_TASKS
-
-    def begin_task(self, dataset, train_loader):
-        self.epoch = 0
-        self.task += 1
-        self.unique_classes = set()
-        for _, labels, _, _ in train_loader:
-            self.unique_classes.update(labels.numpy())
-            if len(self.unique_classes) == dataset.N_CLASSES_PER_TASK:
-                break
-        self.mapping = {value: index for index, value in enumerate(self.unique_classes)}
-        self.reverse_mapping = {index: value for value, index in self.mapping.items()}
-        self.confidence_by_sample = torch.zeros((self.args.n_epochs, self.n_sample_per_task))
-
-        # === DIAG: allocate task-1 diagnostic tensors ===
-        if self._diag_active():
-            n_e = self.args.n_epochs
-            n_s = self.n_sample_per_task
-            self.diag_margin = torch.zeros((n_e, n_s))
-            self.diag_correct = torch.zeros((n_e, n_s), dtype=torch.bool)
-            self.diag_loss = torch.zeros((n_e, n_s))
-            self.diag_labels = torch.full((n_s,), -1, dtype=torch.long)
-            # NEW: logit margin
-            self.diag_logit_margin = torch.zeros((n_e, n_s))
-            # NEW: feature-space distances
-            self.diag_feat_dist_target = torch.zeros((n_e, n_s))
-            self.diag_feat_dist_pred   = torch.zeros((n_e, n_s))
-        # === END DIAG ===
-
-    def _save_diag(self):
-        """Dump task-1 diagnostics to disk at the end of task 1's last epoch."""
-        if not self._diag_active():
-            return
-        save_dir = getattr(self.args, 'cgr_diag_dir', 'cgr_diag_logs')
-        os.makedirs(save_dir, exist_ok=True)
-        seed = getattr(self.args, 'seed', 'unknown')
-        save_path = os.path.join(save_dir, f'cgr_diag_seed{seed}.pt')
-        torch.save({
-            'seed': seed,
-            'E': self.args.E,
-            'n_epochs': self.args.n_epochs,
-            'n_sample_per_task': self.n_sample_per_task,
-            'buffer_size': self.args.buffer_size,
-            # CGR's eval-mode target confidence. With --cgr_diag_log this is
-            # filled for ALL epochs of task 1; use [:E] for CGR's variance.
-            'cgr_confidence_by_sample': self.confidence_by_sample.clone(),
-            # Diagnostics computed from the same eval-mode forward pass on not_aug_inputs
-            'diag_margin': self.diag_margin.clone(),               # probability margin (p_y - max_{k!=y} p_k)
-            'diag_correct': self.diag_correct.clone(),
-            'diag_loss': self.diag_loss.clone(),
-            'diag_labels': self.diag_labels.clone(),
-            'diag_logit_margin': self.diag_logit_margin.clone(),   # NEW: logit margin (z_y - max_{k!=y} z_k)
-            # NEW (Concern 2): feature-space signed distances / normalized target margin
-            'diag_feat_dist_target': self.diag_feat_dist_target.clone(),
-            'diag_feat_dist_pred':   self.diag_feat_dist_pred.clone(),
-            'class_mapping': dict(self.mapping),
-        }, save_path)
-        print(f"[CGR-Diag] Saved task-1 diagnostics to {save_path}")
-
-    def end_epoch(self, dataset, train_loader):
-
-        self.epoch += 1
-
-        if self.epoch == self.args.n_epochs:
-            # === DIAG: dump task-1 diagnostics before the buffer-update logic ===
-            self._save_diag()
-            # === END DIAG ===
-
-            # ... rest of the function unchanged from original ...
-            std_of_means_by_class = {class_id: 1 for class_id, __ in enumerate(self.unique_classes)}
-            std_of_means_by_task = {task_id: 1 for task_id in range(self.task)}
-
-            Confidence_mean = self.confidence_by_sample[:self.args.E].mean(dim=0)
-            Variability = self.confidence_by_sample[:self.args.E].var(dim=0)
-
-            sorted_indices_2 = np.argsort(Variability.numpy())
-            top_indices_sorted = sorted_indices_2[::-1].copy()
-
-            all_inputs, all_labels, all_not_aug_inputs, all_indices = [], [], [], []
-            for data_1 in train_loader:
-                inputs_1, labels_1, not_aug_inputs_1, indices_1 = data_1
-                all_inputs.append(inputs_1)
-                all_labels.append(labels_1)
-                all_not_aug_inputs.append(not_aug_inputs_1)
-                all_indices.append(indices_1)
-
-            all_inputs = torch.cat(all_inputs, dim=0)
-            all_labels = torch.cat(all_labels, dim=0)
-            all_not_aug_inputs = torch.cat(all_not_aug_inputs, dim=0)
-            all_indices = torch.cat(all_indices, dim=0)
-
-            top_indices_sorted = torch.tensor(top_indices_sorted, dtype=torch.long)
-            positions = torch.hstack([torch.where(all_indices == index)[0] for index in top_indices_sorted])
-
-            all_images = all_not_aug_inputs[positions]
-            all_labels = all_labels[positions]
-
-            updated_std_of_means_by_class = {self.reverse_mapping[k]: 1 for k, _ in std_of_means_by_class.items()}
-            self.class_portion.append(updated_std_of_means_by_class)
-            updated_std_of_means_by_task = {k: 1 for k, v in std_of_means_by_task.items()}
-            dist_task_before = distribute_samples(updated_std_of_means_by_task, self.args.buffer_size)
-
-            if self.task > 1:
-                dist_task = adjust_values_integer_include_all(dist_task_before.copy(), self.dist_task_prev)
-            else:
-                dist_task = dist_task_before
-
-            dist_class = [distribute_samples(self.class_portion[i], dist_task[i]) for i in range(self.task)]
-            self.dist_task_prev = dist_task
-
-            dist = dist_class.pop()
-            dist_last = dist.copy()
-            dist = {self.mapping[k]: v for k, v in dist.items()}
-
-            counter_class = [0 for _ in range(len(self.unique_classes))]
-            condition = [dist[k] for k in range(len(dist))]
-
-            check_bound = self.n_sample_per_task // len(self.unique_classes)
-            for i in range(len(condition)):
-                if condition[i] > check_bound:
-                    condition = distribute_excess(condition, check_bound)
-                    break
-
-            images_list_ = []
-            labels_list_ = []
-            for i in range(all_labels.shape[0]):
-                if counter_class[self.mapping[all_labels[i].item()]] < condition[self.mapping[all_labels[i].item()]]:
-                    counter_class[self.mapping[all_labels[i].item()]] += 1
-                    labels_list_.append(all_labels[i])
-                    images_list_.append(all_images[i])
-                if counter_class == condition:
-                    break
-
-            all_images_ = torch.stack(images_list_).to(self.device)
-            all_labels_ = torch.stack(labels_list_).to(self.device)
-
-            counter_manage = [{k: 0 for k, __ in dist_class[i].items()} for i in range(self.task - 1)]
-            dist_class_merged = {}
-            counter_manage_merged = {}
-            dist_class_merged_prev = {}
-
-            for d in dist_class:
-                dist_class_merged.update(d)
-            for f in counter_manage:
-                counter_manage_merged.update(f)
-            if self.task > 1:
-                dist_class_merged_prev = self.dist_class_prev
-                class_key = list(dist_class_merged.keys())
-                temp_key = -1
-                for k, value in dist_class_merged.items():
-                    temp_key += 1
-                    if value > dist_class_merged_prev[k]:
-                        temp = value - dist_class_merged_prev[k]
-                        dist_class_merged[k] -= temp
-                        for hh in range(temp):
-                            dist_class_merged[class_key[temp_key + hh + 1]] += 1
-
-            self.dist_class_prev = dist_class_merged.copy()
-            self.dist_class_prev.update(dist_last)
-
-            if not self.buffer.is_empty():
-                images_store = []
-                labels_store = []
-                for i in range(len(self.buffer)):
-                    if counter_manage_merged[self.buffer.labels[i].item()] < dist_class_merged[self.buffer.labels[i].item()]:
-                        counter_manage_merged[self.buffer.labels[i].item()] += 1
-                        labels_store.append(self.buffer.labels[i])
-                        images_store.append(self.buffer.examples[i])
-                    if counter_manage_merged == dist_class_merged:
-                        break
-                images_store_ = torch.stack(images_store).to(self.device)
-                labels_store_ = torch.stack(labels_store).to(self.device)
-                all_images_ = torch.cat((images_store_, all_images_))
-                all_labels_ = torch.cat((labels_store_, all_labels_))
-
-            if not hasattr(self.buffer, 'examples'):
-                self.buffer.init_tensors(all_images_, all_labels_, None, None)
-
-            self.buffer.num_seen_examples += self.n_sample_per_task
-            self.buffer.labels = all_labels_
-            self.buffer.examples = all_images_
-
-    def observe(self, inputs, labels, not_aug_inputs, index_):
-
-        real_batch_size = inputs.shape[0]
-
-        batch_x, batch_y = inputs, labels
-        batch_x = batch_x.to(self.device)
-        batch_y = batch_y.to(self.device)
-        batch_x_combine = batch_x
-        batch_y_combine = batch_y
-
-        self.opt.zero_grad()
-
-        # === DIAG: decide whether to run the eval forward pass on this step ===
-        # Original CGR: only during the first E epochs (for variance computation).
-        # With diag logging: for ALL epochs of task 1, so we get target confidence,
-        # margin, correctness, and per-sample loss from the SAME eval-mode pass at
-        # every epoch (needed for forgetting events and the diagnostic table).
-        run_eval_pass = self.epoch < self.args.E
-        if self._diag_active() and self.epoch < self.args.n_epochs:
-            run_eval_pass = True
-        # === END DIAG ===
-
-        if run_eval_pass:
-            targets = torch.tensor([self.mapping[val.item()] for val in labels]).to(self.device)
-            confidence_batch = []
-            self.net.eval()
-            with torch.no_grad():
-                cgr_logits = self.net(not_aug_inputs)
-                soft_ = nn.functional.softmax(cgr_logits, dim=1)
-                # Existing: per-sample target confidence into self.confidence_by_sample
-                for i in range(targets.shape[0]):
-                    confidence_batch.append(soft_[i, labels[i]].item())
-                conf_tensor = torch.tensor(confidence_batch)
-                self.confidence_by_sample[self.epoch, index_] = conf_tensor
-
-                # === DIAG: record margin / correctness / per-sample loss from same eval pass ===
-                if self._diag_active():
-                    labels_dev = labels.to(self.device).long()
-                    target_prob = soft_.gather(1, labels_dev.unsqueeze(1)).squeeze(1)
-                    soft_other = soft_.clone()
-                    soft_other.scatter_(1, labels_dev.unsqueeze(1), float('-inf'))
-                    max_other = soft_other.max(dim=1)[0]
-                    margin = (target_prob - max_other).cpu()  # probability margin, kept for compatibility
-
-                    pred = cgr_logits.argmax(dim=1)
-                    correct = (pred == labels_dev).cpu()
-
-                    per_sample_loss = F.cross_entropy(cgr_logits, labels_dev, reduction='none').cpu()
-
-                    # NEW: logit margin z_y - max_{k!=y} z_k (per GPT critique for the
-                    # boundary-diagnostic analysis; shares sign with probability margin
-                    # but differs in magnitude and cross-sample ranking).
-                    target_logits = cgr_logits.gather(1, labels_dev.unsqueeze(1)).squeeze(1)
-                    logit_other = cgr_logits.clone()
-                    logit_other.scatter_(1, labels_dev.unsqueeze(1), float('-inf'))
-                    max_other_logit = logit_other.max(dim=1)[0]
-                    logit_margin = (target_logits - max_other_logit).cpu()
-
-                    # NEW (Concern 2): feature-space signed distance to nearest boundary
-                    d_target, d_pred = self._diag_feat_distances(cgr_logits, labels_dev)
-                    d_target = d_target.cpu()
-                    d_pred = d_pred.cpu()
-
-                    if torch.is_tensor(index_):
-                        idx_cpu = index_.detach().cpu().long()
-                    else:
-                        idx_cpu = torch.as_tensor(index_, dtype=torch.long)
-                    self.diag_margin[self.epoch, idx_cpu] = margin
-                    self.diag_correct[self.epoch, idx_cpu] = correct
-                    self.diag_loss[self.epoch, idx_cpu] = per_sample_loss
-                    self.diag_labels[idx_cpu] = labels.detach().cpu().long()
-                    self.diag_logit_margin[self.epoch, idx_cpu] = logit_margin
-                    self.diag_feat_dist_target[self.epoch, idx_cpu] = d_target
-                    self.diag_feat_dist_pred[self.epoch, idx_cpu] = d_pred
-                # === END DIAG ===
-            self.net.train()
-
-        # SGD forward + backward (unchanged)
-        if self.buffer.is_empty():
-            logits = self.net(batch_x_combine)
-            novel_loss = self.loss(logits, batch_y_combine)
-        else:
-            mem_x, mem_y = self.buffer.get_data(
-                self.args.minibatch_size, transform=self.transform)
-            mem_x = mem_x.to(self.device)
-            mem_y = mem_y.to(self.device)
-            mem_x_combine = mem_x
-            mem_y_combine = mem_y
-            combined_inputs = torch.cat([mem_x_combine, batch_x_combine])
-            combined_labels = torch.cat((mem_y_combine, batch_y_combine))
-            combined_logits = self.net(combined_inputs)
-            novel_loss = self.loss(combined_logits, combined_labels)
-
-        novel_loss.backward()
-        self.opt.step()
-
-        return novel_loss.item()
+Loaded 5 seed logs from cgr_diag_logs
+  seed=0  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+  seed=1  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+  seed=2  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+  seed=3  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+  seed=4  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+
+=== (b.1) Cross-seed Spearman correlation of variance vectors ===
+Number of seeds: 5  (10 pairs)
+Mean ρ ± std: 0.4887 ± 0.0134
+Per-pair ρ values:
+  (seed 0, seed 1): ρ = 0.5023
+  (seed 0, seed 2): ρ = 0.4941
+  (seed 0, seed 3): ρ = 0.4898
+  (seed 0, seed 4): ρ = 0.4845
+  (seed 1, seed 2): ρ = 0.4708
+  (seed 1, seed 3): ρ = 0.5049
+  (seed 1, seed 4): ρ = 0.5110
+  (seed 2, seed 3): ρ = 0.4786
+  (seed 2, seed 4): ρ = 0.4724
+  (seed 3, seed 4): ρ = 0.4785
+
+  Paper insertion: \bar\rho = 0.49 \pm 0.01
+
+=== (c) Within-seed Spearman: σ² at E=2 vs σ² at E=5 [Concern 4 anchor] ===
+Per-seed ρ values:
+  seed 0: ρ = 0.4412  (p = 2.559e-237)  ***
+  seed 1: ρ = 0.4508  (p = 7.322e-249)  ***
+  seed 2: ρ = 0.4279  (p = 7.662e-222)  ***
+  seed 3: ρ = 0.4509  (p = 5.051e-249)  ***
+  seed 4: ρ = 0.4680  (p = 1.229e-270)  ***
+
+Mean ρ ± std over 5 seeds: 0.4478 ± 0.0147
+Range: [0.4279, 0.4680]
+
+  Paper insertion: \bar\rho_{E=2,E=5} = 0.448 \pm 0.015
+
+=== (b.2) Diagnostic table (averaged over 5 seeds) ===
+Per-class budget K = 100  (10 classes seen in task 1)
+
+Rule                    Margin (mean±std)      Forget (mean±std)    MeanConf (mean±std)
+---------------------------------------------------------------------------------------
+Random             -0.0168 ± 0.0095      3.989 ± 0.198     0.3015 ± 0.0056
+High loss          -0.3543 ± 0.0097      4.929 ± 0.224     0.0972 ± 0.0093
+High confidence     0.3685 ± 0.0188      2.544 ± 0.274     0.5622 ± 0.0127
+Low confidence     -0.3673 ± 0.0081      4.966 ± 0.203     0.0719 ± 0.0033
+CGR (variance)      0.1840 ± 0.0172      3.067 ± 0.244     0.4433 ± 0.0082
+
+Per-seed breakdown:
+  Random:
+    margin: ['-0.0121', '-0.0206', '-0.0062', '-0.0333', '-0.0115']
+    forget: ['3.6310', '3.9940', '3.9740', '4.1800', '4.1670']
+    conf: ['0.3092', '0.2974', '0.3065', '0.2941', '0.3004']
+  High loss:
+    margin: ['-0.3635', '-0.3587', '-0.3523', '-0.3607', '-0.3364']
+    forget: ['4.5160', '4.9340', '5.0960', '5.1570', '4.9440']
+    conf: ['0.0886', '0.0936', '0.0883', '0.1036', '0.1121']
+  High confidence:
+    margin: ['0.4005', '0.3567', '0.3755', '0.3639', '0.3457']
+    forget: ['2.0660', '2.7270', '2.4170', '2.6970', '2.8150']
+    conf: ['0.5851', '0.5544', '0.5643', '0.5590', '0.5480']
+  Low confidence:
+    margin: ['-0.3717', '-0.3713', '-0.3571', '-0.3780', '-0.3585']
+    forget: ['4.6010', '4.8870', '5.1160', '5.1240', '5.1010']
+    conf: ['0.0770', '0.0700', '0.0738', '0.0674', '0.0713']
+  CGR (variance):
+    margin: ['0.2125', '0.1787', '0.1936', '0.1649', '0.1703']
+    forget: ['2.6100', '3.1080', '3.0850', '3.2050', '3.3260']
+    conf: ['0.4575', '0.4392', '0.4471', '0.4355', '0.4372']
+
+--- LaTeX (paste into Table tab:diagnostic) ---
+\begin{tabular}{lccc}
+\toprule
+Selection rule & Mean margin $\downarrow$ & Forgetting events $\uparrow$ & Mean target conf. \\
+\midrule
+Random & $-0.017 \pm 0.009$ & $3.99 \pm 0.20$ & $0.302 \pm 0.006$ \\
+High loss & $-0.354 \pm 0.010$ & $4.93 \pm 0.22$ & $0.097 \pm 0.009$ \\
+High confidence & $0.368 \pm 0.019$ & $2.54 \pm 0.27$ & $0.562 \pm 0.013$ \\
+Low confidence & $-0.367 \pm 0.008$ & $4.97 \pm 0.20$ & $0.072 \pm 0.003$ \\
+CGR (variance) & $0.184 \pm 0.017$ & $3.07 \pm 0.24$ & $0.443 \pm 0.008$ \\
+\bottomrule
+\end{tabular}
+
+=== (d) Boundary-intuition verification [Concern 2] ===
+(end-of-training characterization, averaged over 5 seeds)
+
+Rule                          Correct     MargPctl       Resolved       Boundary        Outlier
+-----------------------------------------------------------------------------------------------
+CGR (high variance)     0.973±0.011     62.7±1.3     0.875±0.009     0.098±0.015     0.027±0.011
+Random                  0.960±0.007     50.1±0.8     0.797±0.007     0.162±0.014     0.040±0.007
+High confidence         0.975±0.009     65.5±1.8     0.887±0.004     0.088±0.006     0.025±0.009
+Low confidence          0.927±0.010     34.7±0.8     0.693±0.009     0.234±0.009     0.073±0.010
+High loss               0.932±0.012     36.7±1.3     0.704±0.012     0.228±0.016     0.068±0.012
+
+Overlap between CGR selection and direct low-|margin| selection: 0.006 ± 0.002
+CGR-selected samples' mean margin: early (first E) = 0.184 ± 0.019, late (last 5) = 0.925 ± 0.017
+
+  Paper insertion (for Table 17 caption and §4 paragraph):
+    Overlap value: 0.006
+    Early margin:  0.184 \pm 0.019
+    Late margin:   0.925 \pm 0.017
