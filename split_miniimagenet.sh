@@ -5,17 +5,26 @@ When --cgr_diag_log is set, this version:
   * During task 1 ONLY, runs CGR's existing eval-mode forward pass on
     not_aug_inputs for ALL epochs of the task (instead of just the first E).
   * Records, from that same eval-mode pass: per-sample target confidence,
-    margin (target prob - max other prob), correctness (argmax == label),
-    and per-sample cross-entropy loss.
+    probability margin (target prob - max other prob), correctness (argmax ==
+    label), per-sample cross-entropy loss, and logit margin (target logit -
+    max other logit). Probability margin and logit margin share sign but not
+    magnitude or cross-sample ranking; both are recorded so downstream
+    analyses can use the appropriate one (probability margin for
+    Data-Cartography-style analyses, logit margin for boundary-diagnostic
+    analyses).
   * ALSO records, from the same eval-mode pass, per-sample feature-space
     signed distance to the nearest boundary of the target-class region and
     of the predicted-class region, defined as
         d^{tgt}_{i,e} = min_{k != y_i} (z_{y_i,e} - z_{k,e}) / ||w_{y_i,e} - w_{k,e}||_2
         d^{pred}_{i,e} = min_{k != y_hat} (z_{y_hat,e} - z_{k,e}) / ||w_{y_hat,e} - w_{k,e}||_2
     where w_k are the rows of the classifier head at epoch e. For correctly
-    classified samples the two are equal. This is the affine feature-space
-    boundary distance requested for the boundary-interpretation analysis
-    (Concern 2).
+    classified samples the two are equal and both give the signed distance
+    to the nearest boundary of the correct-class region. For misclassified
+    samples, d^{pred} is still the boundary distance (of the predicted-class
+    region), while d^{tgt} equals the minimum normalized target margin and
+    is NOT a geometric distance to the target-region boundary. This is the
+    affine feature-space boundary distance requested for the boundary-
+    interpretation analysis (Concern 2).
   * After the last epoch of task 1, saves all of the above plus
     CGR's confidence trajectory to disk as cgr_diag_logs/cgr_diag_seed<S>.pt
     (one file per run).
@@ -140,11 +149,15 @@ class Cgr(ContinualModel):
         self.dist_task_prev = None
         self.dist_class_prev = None
         # === DIAG: per-sample diagnostic tensors (allocated in begin_task for task 1 only) ===
-        self.diag_margin = None       # (n_epochs, n_sample_per_task)
+        self.diag_margin = None       # (n_epochs, n_sample_per_task) — probability margin
         self.diag_correct = None      # (n_epochs, n_sample_per_task) bool
         self.diag_loss = None         # (n_epochs, n_sample_per_task) per-sample CE
         self.diag_labels = None       # (n_sample_per_task,) global class id
-        # NEW: feature-space signed distance to nearest boundary (Concern 2)
+        # NEW: logit margin z_y - max_{k!=y} z_k (for boundary-diagnostic analyses,
+        # per GPT critique — probability margin and logit margin share sign but
+        # differ in magnitude and cross-sample ranking).
+        self.diag_logit_margin = None  # (n_epochs, n_sample_per_task)
+        # NEW: feature-space signed distance / normalized target margin (Concern 2)
         self.diag_feat_dist_target = None  # (n_epochs, n_sample_per_task)
         self.diag_feat_dist_pred   = None  # (n_epochs, n_sample_per_task)
         # === END DIAG ===
@@ -167,19 +180,43 @@ class Cgr(ContinualModel):
         return last_linear
 
     def _diag_feat_distances(self, logits, labels_dev):
-        """Compute per-sample signed feature-space distance to the nearest
-        boundary of (i) the target-class region and (ii) the predicted-class
-        region. Uses only the classifier head's weight matrix; biases cancel
-        because z = W*phi + b already includes bias.
+        """Compute per-sample signed feature-space quantities using the
+        classifier head's weight matrix. The bias term (b_y - b_k) is already
+        absorbed into the logit difference z_y - z_k = (w_y - w_k)^T phi +
+        (b_y - b_k), so only the pairwise weight-vector norms ||w_i - w_j||_2
+        are needed for the denominator.
+
+        Two per-sample quantities are returned:
+
+        d_pred (i)  = min_{k != y_hat_i} (z_{y_hat_i} - z_k) / ||w_{y_hat_i} - w_k||_2
+            Always >= 0 (y_hat is the argmax by construction). Geometrically
+            the signed perpendicular distance from phi(x_i) to the nearest
+            boundary of the *predicted* class region under the affine head.
+
+        d_target(i) = min_{k != y_i}    (z_{y_i}    - z_k) / ||w_{y_i}    - w_k||_2
+            Interpretation depends on classification status:
+              - Correctly classified (y_hat_i == y_i): equals d_pred(i);
+                a valid signed distance to the nearest boundary of the target
+                (== correct) class region.
+              - Misclassified (y_hat_i != y_i): negative; equals the
+                *minimum normalized target margin*, i.e. the most-violated
+                pairwise (target vs competitor) constraint. NOT a geometric
+                distance from phi(x_i) to the target-region boundary, since
+                that would require solving a QP over multiple half-space
+                constraints. Report separately for the misclassified subset in
+                downstream analysis.
+
+        For the cleanest "distance to boundary" analysis, restrict to samples
+        where diag_correct == True; on that subset d_pred == d_target and is
+        the signed distance to the correct-class region boundary.
 
         Args:
             logits: (B, C) raw logits from the eval-mode forward pass
             labels_dev: (B,) target class indices on the same device
 
         Returns:
-            d_target: (B,) signed distance for target class (may be negative
-                      if some competing class beats target)
-            d_pred:   (B,) signed distance for argmax class (always >= 0)
+            d_target: (B,) see above.
+            d_pred:   (B,) see above; always >= 0.
         """
         head = self._diag_get_classifier_head()
         W = head.weight.detach()  # (C, d_feat)
@@ -237,6 +274,8 @@ class Cgr(ContinualModel):
             self.diag_correct = torch.zeros((n_e, n_s), dtype=torch.bool)
             self.diag_loss = torch.zeros((n_e, n_s))
             self.diag_labels = torch.full((n_s,), -1, dtype=torch.long)
+            # NEW: logit margin
+            self.diag_logit_margin = torch.zeros((n_e, n_s))
             # NEW: feature-space distances
             self.diag_feat_dist_target = torch.zeros((n_e, n_s))
             self.diag_feat_dist_pred   = torch.zeros((n_e, n_s))
@@ -260,11 +299,12 @@ class Cgr(ContinualModel):
             # filled for ALL epochs of task 1; use [:E] for CGR's variance.
             'cgr_confidence_by_sample': self.confidence_by_sample.clone(),
             # Diagnostics computed from the same eval-mode forward pass on not_aug_inputs
-            'diag_margin': self.diag_margin.clone(),
+            'diag_margin': self.diag_margin.clone(),               # probability margin (p_y - max_{k!=y} p_k)
             'diag_correct': self.diag_correct.clone(),
             'diag_loss': self.diag_loss.clone(),
             'diag_labels': self.diag_labels.clone(),
-            # NEW (Concern 2): feature-space signed distances to nearest boundary
+            'diag_logit_margin': self.diag_logit_margin.clone(),   # NEW: logit margin (z_y - max_{k!=y} z_k)
+            # NEW (Concern 2): feature-space signed distances / normalized target margin
             'diag_feat_dist_target': self.diag_feat_dist_target.clone(),
             'diag_feat_dist_pred':   self.diag_feat_dist_pred.clone(),
             'class_mapping': dict(self.mapping),
@@ -436,12 +476,21 @@ class Cgr(ContinualModel):
                     soft_other = soft_.clone()
                     soft_other.scatter_(1, labels_dev.unsqueeze(1), float('-inf'))
                     max_other = soft_other.max(dim=1)[0]
-                    margin = (target_prob - max_other).cpu()
+                    margin = (target_prob - max_other).cpu()  # probability margin, kept for compatibility
 
                     pred = cgr_logits.argmax(dim=1)
                     correct = (pred == labels_dev).cpu()
 
                     per_sample_loss = F.cross_entropy(cgr_logits, labels_dev, reduction='none').cpu()
+
+                    # NEW: logit margin z_y - max_{k!=y} z_k (per GPT critique for the
+                    # boundary-diagnostic analysis; shares sign with probability margin
+                    # but differs in magnitude and cross-sample ranking).
+                    target_logits = cgr_logits.gather(1, labels_dev.unsqueeze(1)).squeeze(1)
+                    logit_other = cgr_logits.clone()
+                    logit_other.scatter_(1, labels_dev.unsqueeze(1), float('-inf'))
+                    max_other_logit = logit_other.max(dim=1)[0]
+                    logit_margin = (target_logits - max_other_logit).cpu()
 
                     # NEW (Concern 2): feature-space signed distance to nearest boundary
                     d_target, d_pred = self._diag_feat_distances(cgr_logits, labels_dev)
@@ -456,6 +505,7 @@ class Cgr(ContinualModel):
                     self.diag_correct[self.epoch, idx_cpu] = correct
                     self.diag_loss[self.epoch, idx_cpu] = per_sample_loss
                     self.diag_labels[idx_cpu] = labels.detach().cpu().long()
+                    self.diag_logit_margin[self.epoch, idx_cpu] = logit_margin
                     self.diag_feat_dist_target[self.epoch, idx_cpu] = d_target
                     self.diag_feat_dist_pred[self.epoch, idx_cpu] = d_pred
                 # === END DIAG ===
