@@ -80,3 +80,22 @@ Low confidence & $-0.367 \pm 0.008$ & $4.97 \pm 0.20$ & $0.072 \pm 0.003$ \\
 CGR (variance) & $0.184 \pm 0.017$ & $3.07 \pm 0.24$ & $0.443 \pm 0.008$ \\
 \bottomrule
 \end{tabular}
+
+=== (d) Boundary-intuition verification [Concern 2] ===
+(end-of-training characterization, averaged over 5 seeds)
+
+Rule                          Correct     MargPctl       Resolved       Boundary        Outlier
+-----------------------------------------------------------------------------------------------
+CGR (high variance)     0.973±0.011     62.7±1.3     0.875±0.009     0.098±0.015     0.027±0.011
+Random                  0.960±0.007     50.1±0.8     0.797±0.007     0.162±0.014     0.040±0.007
+High confidence         0.975±0.009     65.5±1.8     0.887±0.004     0.088±0.006     0.025±0.009
+Low confidence          0.927±0.010     34.7±0.8     0.693±0.009     0.234±0.009     0.073±0.010
+High loss               0.932±0.012     36.7±1.3     0.704±0.012     0.228±0.016     0.068±0.012
+
+Overlap between CGR selection and direct low-|margin| selection: 0.006 ± 0.002
+CGR-selected samples' mean margin: early (first E) = 0.184 ± 0.019, late (last 5) = 0.925 ± 0.017
+
+  Paper insertion (for Table 17 caption and §4 paragraph):
+    Overlap value: 0.006
+    Early margin:  0.184 \pm 0.019
+    Late margin:   0.925 \pm 0.017
