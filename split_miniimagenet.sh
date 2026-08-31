@@ -95,7 +95,22 @@ High loss               0.932±0.012     36.7±1.3     0.704±0.012     0.228±0
 Overlap between CGR selection and direct low-|margin| selection: 0.006 ± 0.002
 CGR-selected samples' mean margin: early (first E) = 0.184 ± 0.019, late (last 5) = 0.925 ± 0.017
 
-  Paper insertion (for Table 17 caption and §4 paragraph):
+  Paper insertion (for Table 18 caption and §4 paragraph):
     Overlap value: 0.006
     Early margin:  0.184 \pm 0.019
     Late margin:   0.925 \pm 0.017
+
+=== (d2) Selection-time boundary diagnostics at epoch E [Concern 2, extended] ===
+(averaged over 5 seeds)
+
+Rule                    SignChg 1..E         m_E>0     |m_E| med   d_pred mean    bot20% |m|      bot20% d
+----------------------------------------------------------------------------------------------------------
+CGR (high variance)      0.969±0.006   0.826±0.011     2.26±0.16     1.99±0.13   0.077±0.006   0.066±0.006
+Random                   0.634±0.005   0.503±0.015     1.47±0.12     1.20±0.08   0.198±0.012   0.201±0.016
+High confidence          0.659±0.003   0.925±0.004     2.15±0.20     2.05±0.13   0.092±0.008   0.053±0.011
+Low confidence           0.113±0.015   0.033±0.006     2.19±0.07     0.91±0.09   0.090±0.011   0.262±0.008
+High loss                0.244±0.028   0.116±0.034     2.33±0.14     1.04±0.06   0.103±0.012   0.244±0.009
+
+Overlap of CGR selection with per-class bottom-K at epoch E:
+  by |logit margin|:      0.077 ± 0.006
+  by d^pred (feat-space): 0.066 ± 0.006
