@@ -20,6 +20,15 @@ Computes ACROSS ALL SEEDS:
         ambiguous samples (variability-based, migrating from low margin to
         high margin during a single task), not persistently-near-boundary
         samples. Computed separately for EACH seed; reported as mean ± std.
+  (d2)  Selection-time boundary diagnostics (Concern 2, extended). For five
+        selection rules, characterizes samples at epoch E (end of the CGR
+        selection window) using logit margin m_E = z_y - max_{k!=y} z_k and
+        the affine-head feature-space signed distance d^{pred}. Reports:
+        prediction sign-change rate over epochs 1..E, fraction with m_E > 0,
+        median/mean |m_E|, mean d^{pred}, fraction in per-class bottom-20%
+        by |m_E| and by d^{pred}, and the overlap of CGR selection with per-
+        class bottom-K by |m_E| and by d^{pred}. Requires the extended log
+        format with diag_logit_margin and diag_feat_dist_{target,pred}.
 
 Usage:
     python analyze_cgr_diag.py --diag_dir cgr_diag_logs --E 4 --buffer_size 1000
@@ -323,6 +332,95 @@ def cgr_margin_trajectory(logs, E, buffer_size, late_window=5):
             float(np.mean(late_all)),  float(np.std(late_all, ddof=1)))
 
 
+# ---------------- (d2) Selection-time boundary diagnostics (Concern 2, extended) ----
+
+def selection_time_diagnostics(logs, E, buffer_size):
+    """Per selection rule, characterize the samples at epoch E (end of CGR
+    selection window) using logit margin (m_E = z_y - max_{k!=y} z_k) and
+    the affine-head feature-space distance d^{pred}. Computed per seed.
+
+    Requires the extended log format with keys 'diag_logit_margin' and
+    'diag_feat_dist_pred' (produced by the updated cgr_with_diag.py).
+    """
+    rules = ['CGR (high variance)', 'Random', 'High confidence',
+             'Low confidence', 'High loss']
+    keys = ['sign_change', 'frac_pos_m', 'abs_m_median', 'abs_m_mean',
+            'd_pred_mean', 'frac_low_m_class', 'frac_low_d_class']
+    per_seed = {r: {k: [] for k in keys} for r in rules}
+    ovl_low_m, ovl_low_d = [], []
+
+    for log in logs:
+        # Verify extended fields are present
+        for req in ['diag_logit_margin', 'diag_feat_dist_pred']:
+            if req not in log:
+                raise KeyError(f"Log for seed {log.get('seed', '?')} missing '{req}'. "
+                               "Re-run cgr_with_diag.py after the Concern-2 update.")
+        conf    = log['cgr_confidence_by_sample'].numpy()
+        loss    = log['diag_loss'].numpy()
+        labels  = log['diag_labels'].numpy()
+        logit_m = log['diag_logit_margin'].numpy()
+        d_pred  = log['diag_feat_dist_pred'].numpy()
+        seed = int(log['seed']) if str(log['seed']).isdigit() else 0
+
+        n_classes = len(np.unique(labels))
+        per_class = buffer_size // n_classes
+
+        rng = np.random.default_rng(seed)
+        sigma2 = np.var(conf[:E], axis=0)
+        mean_conf_E = conf[:E].mean(axis=0)
+        mean_loss_E = loss[:E].mean(axis=0)
+        selections = {
+            'CGR (high variance)': _top_k_per_class(sigma2, labels, per_class, descending=True),
+            'Random': np.concatenate([
+                rng.choice(np.where(labels == c)[0],
+                           size=min(per_class, (labels == c).sum()),
+                           replace=False) for c in np.unique(labels)]),
+            'High confidence': _top_k_per_class(mean_conf_E, labels, per_class, descending=True),
+            'Low confidence':  _top_k_per_class(mean_conf_E, labels, per_class, descending=False),
+            'High loss':       _top_k_per_class(mean_loss_E, labels, per_class, descending=True),
+        }
+
+        m_E = logit_m[E-1]
+        dp_E = d_pred[E-1]
+        abs_m_E = np.abs(m_E)
+
+        # Sign-change indicator over epochs 1..E (any of the E-1 transitions)
+        signs = np.sign(logit_m[:E])
+        sign_change = np.any(signs[:-1] != signs[1:], axis=0)
+
+        # Per-class bottom-20% indicators
+        low_m_class = np.zeros(len(labels), dtype=bool)
+        low_d_class = np.zeros(len(labels), dtype=bool)
+        for c in np.unique(labels):
+            ci = np.where(labels == c)[0]
+            low_m_class[ci] = abs_m_E[ci] <= np.percentile(abs_m_E[ci], 20)
+            low_d_class[ci] = dp_E[ci] <= np.percentile(dp_E[ci], 20)
+
+        for name, idx in selections.items():
+            per_seed[name]['sign_change'].append(float(sign_change[idx].mean()))
+            per_seed[name]['frac_pos_m'].append(float((m_E[idx] > 0).mean()))
+            per_seed[name]['abs_m_median'].append(float(np.median(abs_m_E[idx])))
+            per_seed[name]['abs_m_mean'].append(float(np.mean(abs_m_E[idx])))
+            per_seed[name]['d_pred_mean'].append(float(dp_E[idx].mean()))
+            per_seed[name]['frac_low_m_class'].append(float(low_m_class[idx].mean()))
+            per_seed[name]['frac_low_d_class'].append(float(low_d_class[idx].mean()))
+
+        cgr_set = set(selections['CGR (high variance)'])
+        low_m_topk = set(_top_k_per_class(abs_m_E, labels, per_class, descending=False))
+        low_d_topk = set(_top_k_per_class(dp_E,    labels, per_class, descending=False))
+        ovl_low_m.append(len(cgr_set & low_m_topk) / len(cgr_set))
+        ovl_low_d.append(len(cgr_set & low_d_topk) / len(cgr_set))
+
+    agg = {}
+    for name, dd in per_seed.items():
+        agg[name] = {k: (float(np.mean(v)), float(np.std(v, ddof=1))) for k, v in dd.items()}
+    ovl = {
+        'CGR_vs_low_m_at_E':      (float(np.mean(ovl_low_m)), float(np.std(ovl_low_m, ddof=1))),
+        'CGR_vs_low_d_pred_at_E': (float(np.mean(ovl_low_d)), float(np.std(ovl_low_d, ddof=1))),
+    }
+    return agg, ovl
+
+
 # ------------------------- Reporting -------------------------
 
 def print_b1(mean_rho, std_rho, all_rhos, pairs, n_seeds):
@@ -362,10 +460,28 @@ def print_d(agg, ovl_mean, ovl_std, early_mu, early_sd, late_mu, late_sd, n_seed
           f"{ovl_mean:.3f} ± {ovl_std:.3f}")
     print(f"CGR-selected samples' mean margin: early (first E) = {early_mu:.3f} ± {early_sd:.3f}, "
           f"late (last 5) = {late_mu:.3f} ± {late_sd:.3f}")
-    print(f"\n  Paper insertion (for Table 17 caption and §4 paragraph):")
+    print(f"\n  Paper insertion (for Table 18 caption and §4 paragraph):")
     print(f"    Overlap value: {ovl_mean:.3f}")
     print(f"    Early margin:  {early_mu:.3f} \\pm {early_sd:.3f}")
     print(f"    Late margin:   {late_mu:.3f} \\pm {late_sd:.3f}")
+
+
+def print_d2(agg, ovl, n_seeds):
+    print(f"\n=== (d2) Selection-time boundary diagnostics at epoch E [Concern 2, extended] ===")
+    print(f"(averaged over {n_seeds} seeds)\n")
+    header = (f"{'Rule':<22} {'SignChg 1..E':>13} {'m_E>0':>13} {'|m_E| med':>13} "
+              f"{'d_pred mean':>13} {'bot20% |m|':>13} {'bot20% d':>13}")
+    print(header); print('-' * len(header))
+    for name, d in agg.items():
+        def f(k, dg=3):
+            mu, sd = d[k]
+            return f"{mu:>6.{dg}f}±{sd:.{dg}f}"
+        print(f"{name:<22} {f('sign_change'):>13} {f('frac_pos_m'):>13} "
+              f"{f('abs_m_median',2):>13} {f('d_pred_mean',2):>13} "
+              f"{f('frac_low_m_class'):>13} {f('frac_low_d_class'):>13}")
+    print(f"\nOverlap of CGR selection with per-class bottom-K at epoch E:")
+    print(f"  by |logit margin|:      {ovl['CGR_vs_low_m_at_E'][0]:.3f} ± {ovl['CGR_vs_low_m_at_E'][1]:.3f}")
+    print(f"  by d^pred (feat-space): {ovl['CGR_vs_low_d_pred_at_E'][0]:.3f} ± {ovl['CGR_vs_low_d_pred_at_E'][1]:.3f}")
 
 
 def print_c(results, mean_rho, std_rho, E_small, E_large):
@@ -471,6 +587,14 @@ def main():
     ovl_mean, ovl_std = overlap_with_direct_boundary(logs, args.E, args.buffer_size)
     early_mu, early_sd, late_mu, late_sd = cgr_margin_trajectory(logs, args.E, args.buffer_size)
     print_d(agg_d, ovl_mean, ovl_std, early_mu, early_sd, late_mu, late_sd, len(logs))
+
+    # (d2) selection-time boundary diagnostics -- Concern 2, extended
+    # (requires extended log format with diag_logit_margin and diag_feat_dist_pred)
+    try:
+        agg_d2, ovl_d2 = selection_time_diagnostics(logs, args.E, args.buffer_size)
+        print_d2(agg_d2, ovl_d2, len(logs))
+    except KeyError as e:
+        print(f"\n[Skipping (d2)] {e}")
 
 
 if __name__ == '__main__':
