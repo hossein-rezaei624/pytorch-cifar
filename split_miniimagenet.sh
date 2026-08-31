@@ -1,7 +1,3 @@
-Below are the final results:
-
-
-```
 Loaded 5 seed logs from cgr_diag_logs
   seed=0  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
   seed=1  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
@@ -25,6 +21,19 @@ Per-pair ρ values:
   (seed 3, seed 4): ρ = 0.4785
 
   Paper insertion: \bar\rho = 0.49 \pm 0.01
+
+=== (c) Within-seed Spearman: σ² at E=2 vs σ² at E=5 [Concern 4 anchor] ===
+Per-seed ρ values:
+  seed 0: ρ = 0.4412  (p = 2.559e-237)  ***
+  seed 1: ρ = 0.4508  (p = 7.322e-249)  ***
+  seed 2: ρ = 0.4279  (p = 7.662e-222)  ***
+  seed 3: ρ = 0.4509  (p = 5.051e-249)  ***
+  seed 4: ρ = 0.4680  (p = 1.229e-270)  ***
+
+Mean ρ ± std over 5 seeds: 0.4478 ± 0.0147
+Range: [0.4279, 0.4680]
+
+  Paper insertion: \bar\rho_{E=2,E=5} = 0.448 \pm 0.015
 
 === (b.2) Diagnostic table (averaged over 5 seeds) ===
 Per-class budget K = 100  (10 classes seen in task 1)
@@ -71,5 +80,3 @@ Low confidence & $-0.367 \pm 0.008$ & $4.97 \pm 0.20$ & $0.072 \pm 0.003$ \\
 CGR (variance) & $0.184 \pm 0.017$ & $3.07 \pm 0.24$ & $0.443 \pm 0.008$ \\
 \bottomrule
 \end{tabular}
-
-```
