@@ -13,6 +13,13 @@ Computes ACROSS ALL SEEDS:
         computed with a small window (E_small, default 2) and a larger window
         (E_large, default 5). Anchors the sanity check for the E=2 selection
         (Concern 4). Computed separately for EACH seed; reported as mean ± std.
+  (d)   Boundary-intuition verification (Concern 2): for five selection rules,
+        characterizes the end-of-training margin and correctness distribution
+        of the selected samples, plus the overlap between CGR and a direct
+        low-|margin| selection. Shows that CGR selects Swayamdipta-style
+        ambiguous samples (variability-based, migrating from low margin to
+        high margin during a single task), not persistently-near-boundary
+        samples. Computed separately for EACH seed; reported as mean ± std.
 
 Usage:
     python analyze_cgr_diag.py --diag_dir cgr_diag_logs --E 4 --buffer_size 1000
@@ -198,6 +205,124 @@ def diagnostic_table_all_seeds(logs, E, buffer_size):
     return agg, per_seed_rows, k_per_class, num_classes
 
 
+# ---------------- (d) Boundary-intuition verification (Concern 2) --------
+
+def _top_k_per_class(scores, labels, k, descending=True):
+    """Per-class top-K selection helper (respects class-balance constraint)."""
+    out = []
+    for c in np.unique(labels):
+        ci = np.where(labels == c)[0]
+        order = np.argsort(-scores[ci] if descending else scores[ci])[:k]
+        out.append(ci[order])
+    return np.concatenate(out)
+
+
+def boundary_intuition_test(logs, E, buffer_size, final_epoch_idx=None,
+                             margin_pctl_threshold=20.0):
+    """For each of five selection rules, characterize the end-of-training margin
+    and correctness distribution of the selected samples. Tests whether CGR-
+    selected samples remain near the decision boundary at end of training. They
+    mostly do not — they migrate from ambiguous (low margin) to well-classified
+    (high margin), matching Swayamdipta et al. (2020) ambiguous-then-learned."""
+    per_seed_records = []
+    for log in logs:
+        conf   = log['cgr_confidence_by_sample'].numpy()
+        margin = log['diag_margin'].numpy()
+        correct = log['diag_correct'].numpy().astype(bool)
+        loss   = log['diag_loss'].numpy()
+        labels = log['diag_labels'].numpy()
+        seed   = int(log['seed']) if str(log['seed']).isdigit() else 0
+
+        n_epochs = conf.shape[0]
+        _final = (n_epochs - 1) if final_epoch_idx is None else final_epoch_idx
+        final_margin = margin[_final]
+        final_correct = correct[_final]
+
+        n_classes = len(np.unique(labels))
+        per_class = buffer_size // n_classes
+        low_thr = np.percentile(final_margin, margin_pctl_threshold)
+        margin_ranks = np.argsort(np.argsort(final_margin))
+
+        rng = np.random.default_rng(seed)
+        rules = {}
+        sigma2 = np.var(conf[:E], axis=0)
+        rules['CGR (high variance)'] = _top_k_per_class(sigma2, labels, per_class, descending=True)
+        rules['Random'] = np.concatenate([
+            rng.choice(np.where(labels == c)[0],
+                       size=min(per_class, (labels == c).sum()),
+                       replace=False)
+            for c in np.unique(labels)
+        ])
+        mean_conf_E = conf[:E].mean(axis=0)
+        mean_loss_E = loss[:E].mean(axis=0)
+        rules['High confidence'] = _top_k_per_class(mean_conf_E, labels, per_class, descending=True)
+        rules['Low confidence']  = _top_k_per_class(mean_conf_E, labels, per_class, descending=False)
+        rules['High loss']       = _top_k_per_class(mean_loss_E, labels, per_class, descending=True)
+
+        seed_row = {}
+        for name, idx in rules.items():
+            sfm = final_margin[idx]
+            sfc = final_correct[idx]
+            seed_row[name] = {
+                'frac_correct':   float(sfc.mean()),
+                'median_pctl':    float(np.median(margin_ranks[idx] / len(labels) * 100)),
+                'resolved':       float((sfc & (sfm >= low_thr)).mean()),
+                'still_boundary': float((sfc & (sfm <  low_thr)).mean()),
+                'outlier':        float((~sfc & (sfm < low_thr)).mean()),
+            }
+        per_seed_records.append(seed_row)
+
+    agg = {}
+    for name in per_seed_records[0]:
+        agg[name] = {}
+        for metric in ['frac_correct','median_pctl','resolved','still_boundary','outlier']:
+            vals = [r[name][metric] for r in per_seed_records]
+            agg[name][f'{metric}_mean'] = float(np.mean(vals))
+            agg[name][f'{metric}_std']  = float(np.std(vals, ddof=1))
+    return agg, per_seed_records
+
+
+def overlap_with_direct_boundary(logs, E, buffer_size):
+    """Fraction of CGR-selected samples that are also in a 'lowest |margin|'
+    per-class top-K selection. Small overlap means CGR is selecting
+    variability-based (ambiguous) samples rather than persistently-near-
+    boundary samples."""
+    overlaps = []
+    for log in logs:
+        conf = log['cgr_confidence_by_sample'].numpy()
+        margin = log['diag_margin'].numpy()
+        labels = log['diag_labels'].numpy()
+        n_classes = len(np.unique(labels))
+        per_class = buffer_size // n_classes
+
+        sigma2 = np.var(conf[:E], axis=0)
+        cgr_sel = set(_top_k_per_class(sigma2, labels, per_class, descending=True))
+        abs_marg = np.abs(margin[:E]).mean(axis=0)
+        bnd_sel = set(_top_k_per_class(abs_marg, labels, per_class, descending=False))
+        overlaps.append(len(cgr_sel & bnd_sel) / len(cgr_sel))
+    return float(np.mean(overlaps)), float(np.std(overlaps, ddof=1))
+
+
+def cgr_margin_trajectory(logs, E, buffer_size, late_window=5):
+    """For CGR-selected samples, compute mean margin early (first E epochs) vs
+    late (last `late_window` epochs). Shows the ambiguous-then-learned
+    trajectory within a single task."""
+    early_all, late_all = [], []
+    for log in logs:
+        conf = log['cgr_confidence_by_sample'].numpy()
+        margin = log['diag_margin'].numpy()
+        labels = log['diag_labels'].numpy()
+        n_epochs = margin.shape[0]
+        n_classes = len(np.unique(labels))
+        per_class = buffer_size // n_classes
+        sigma2 = np.var(conf[:E], axis=0)
+        selected = _top_k_per_class(sigma2, labels, per_class, descending=True)
+        early_all.append(float(margin[:E, selected].mean()))
+        late_all.append(float(margin[n_epochs - late_window : n_epochs, selected].mean()))
+    return (float(np.mean(early_all)), float(np.std(early_all, ddof=1)),
+            float(np.mean(late_all)),  float(np.std(late_all, ddof=1)))
+
+
 # ------------------------- Reporting -------------------------
 
 def print_b1(mean_rho, std_rho, all_rhos, pairs, n_seeds):
@@ -219,6 +344,28 @@ def print_a2(results, mean_rho, std_rho):
         print(f"  seed {r['seed']}: ρ = {r['rho']:.4f}  (p = {r['p']:.3e})  {sig}")
     print(f"\nMean ρ ± std over {len(results)} seeds: {mean_rho:.4f} ± {std_rho:.4f}")
     print(f"\n  Paper insertion: \\rho = {mean_rho:.2f} \\pm {std_rho:.2f}")
+
+
+def print_d(agg, ovl_mean, ovl_std, early_mu, early_sd, late_mu, late_sd, n_seeds):
+    print(f"\n=== (d) Boundary-intuition verification [Concern 2] ===")
+    print(f"(end-of-training characterization, averaged over {n_seeds} seeds)\n")
+    header = f"{'Rule':<22} {'Correct':>14} {'MargPctl':>12} {'Resolved':>14} {'Boundary':>14} {'Outlier':>14}"
+    print(header); print('-' * len(header))
+    for name, d in agg.items():
+        print(f"{name:<22} "
+              f"{d['frac_correct_mean']:>6.3f}±{d['frac_correct_std']:.3f}    "
+              f"{d['median_pctl_mean']:>5.1f}±{d['median_pctl_std']:.1f}    "
+              f"{d['resolved_mean']:>6.3f}±{d['resolved_std']:.3f}    "
+              f"{d['still_boundary_mean']:>6.3f}±{d['still_boundary_std']:.3f}    "
+              f"{d['outlier_mean']:>6.3f}±{d['outlier_std']:.3f}")
+    print(f"\nOverlap between CGR selection and direct low-|margin| selection: "
+          f"{ovl_mean:.3f} ± {ovl_std:.3f}")
+    print(f"CGR-selected samples' mean margin: early (first E) = {early_mu:.3f} ± {early_sd:.3f}, "
+          f"late (last 5) = {late_mu:.3f} ± {late_sd:.3f}")
+    print(f"\n  Paper insertion (for Table 17 caption and §4 paragraph):")
+    print(f"    Overlap value: {ovl_mean:.3f}")
+    print(f"    Early margin:  {early_mu:.3f} \\pm {early_sd:.3f}")
+    print(f"    Late margin:   {late_mu:.3f} \\pm {late_sd:.3f}")
 
 
 def print_c(results, mean_rho, std_rho, E_small, E_large):
@@ -318,6 +465,12 @@ def main():
         logs, args.E, args.buffer_size
     )
     print_b2(agg, per_seed_rows, k_per_class, num_classes, len(logs))
+
+    # (d) boundary-intuition verification -- Concern 2
+    agg_d, _ = boundary_intuition_test(logs, args.E, args.buffer_size)
+    ovl_mean, ovl_std = overlap_with_direct_boundary(logs, args.E, args.buffer_size)
+    early_mu, early_sd, late_mu, late_sd = cgr_margin_trajectory(logs, args.E, args.buffer_size)
+    print_d(agg_d, ovl_mean, ovl_std, early_mu, early_sd, late_mu, late_sd, len(logs))
 
 
 if __name__ == '__main__':
