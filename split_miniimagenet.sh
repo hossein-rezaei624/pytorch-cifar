@@ -1,32 +1,51 @@
 """
 Modified cgr.py with diagnostic logging for the rebuttal experiments.
 
+IMPORTANT NOTE ON TIMING: The diagnostic forward pass runs INSIDE `observe`,
+i.e. BEFORE that batch's SGD update. This is faithful to CGR's own confidence
+recording, but consequently different samples within the same epoch are
+evaluated under slightly different model states. The tensors below therefore
+record, for each (sample, epoch) pair, the eval-mode quantity computed
+DURING THAT SAMPLE'S DIAGNOSTIC PASS in that epoch — not a common
+end-of-epoch checkpoint. Downstream analyses should describe them as such.
+
 When --cgr_diag_log is set, this version:
   * During task 1 ONLY, runs CGR's existing eval-mode forward pass on
     not_aug_inputs for ALL epochs of the task (instead of just the first E).
-  * Records, from that same eval-mode pass: per-sample target confidence,
-    probability margin (target prob - max other prob), correctness (argmax ==
-    label), per-sample cross-entropy loss, and logit margin (target logit -
-    max other logit). Probability margin and logit margin share sign but not
-    magnitude or cross-sample ranking; both are recorded so downstream
-    analyses can use the appropriate one (probability margin for
-    Data-Cartography-style analyses, logit margin for boundary-diagnostic
-    analyses).
+  * Records, from that same eval-mode pass, per-sample per-epoch:
+      -- target confidence (CGR's existing signal)
+      -- probability margin p_y - max_{k!=y} p_k                     (`diag_margin`, signed)
+      -- probability margin p_yhat - max_{k!=yhat} p_k               (`diag_margin_pred`, >=0)
+      -- correctness (argmax == label)                                (`diag_correct`)
+      -- per-sample cross-entropy loss                                (`diag_loss`)
+      -- logit margin z_y - max_{k!=y} z_k                            (`diag_logit_margin`, signed)
+      -- logit margin z_yhat - max_{k!=yhat} z_k                      (`diag_logit_margin_pred`, >=0)
+      -- nearest pairwise |z_y - z_k| over k != y                     (`diag_nearest_pair_logit_gap`, >=0)
+      -- nearest pairwise |z_yhat - z_k| over k != yhat               (`diag_nearest_pair_logit_gap_pred`, >=0)
+    Probability margin and logit margin share sign but not magnitude or
+    cross-sample ranking; nearest-pair gaps and target/pred aggregated
+    margins are ALSO different for misclassified samples (see below).
+    All are recorded so downstream analyses can use the most appropriate one.
   * ALSO records, from the same eval-mode pass, per-sample feature-space
-    signed distance to the nearest boundary of the target-class region and
-    of the predicted-class region, defined as
-        d^{tgt}_{i,e} = min_{k != y_i} (z_{y_i,e} - z_{k,e}) / ||w_{y_i,e} - w_{k,e}||_2
-        d^{pred}_{i,e} = min_{k != y_hat} (z_{y_hat,e} - z_{k,e}) / ||w_{y_hat,e} - w_{k,e}||_2
+    quantities using the classifier head's weight matrix:
+      -- d_target_signed = min_{k != y}   (z_y   - z_k) / ||w_y   - w_k||_2   (`diag_feat_dist_target`, signed)
+      -- d_target_absmin = min_{k != y}  |(z_y   - z_k)|/ ||w_y   - w_k||_2   (`diag_feat_dist_target_absmin`, >=0)
+      -- d_pred          = min_{k != yhat}(z_yhat- z_k) / ||w_yhat - w_k||_2  (`diag_feat_dist_pred`, >=0)
     where w_k are the rows of the classifier head at epoch e. For correctly
-    classified samples the two are equal and both give the signed distance
-    to the nearest boundary of the correct-class region. For misclassified
-    samples, d^{pred} is still the boundary distance (of the predicted-class
-    region), while d^{tgt} equals the minimum normalized target margin and
-    is NOT a geometric distance to the target-region boundary. This is the
-    affine feature-space boundary distance requested for the boundary-
-    interpretation analysis (Concern 2).
-  * After the last epoch of task 1, saves all of the above plus
-    CGR's confidence trajectory to disk as cgr_diag_logs/cgr_diag_seed<S>.pt
+    classified samples all three coincide (d_target_signed = d_target_absmin
+    = d_pred, and all equal the signed distance to the nearest boundary of
+    the correct-class region). For misclassified samples:
+      -- d_target_signed is the most-violated normalized pairwise target
+         constraint (negative). NOT a geometric distance to the target-region
+         boundary.
+      -- d_target_absmin is the geometric distance to the nearest single
+         target-vs-competitor hyperplane (an upper bound on distance to the
+         full target region because the region is the intersection of many
+         half-spaces).
+      -- d_pred remains the signed distance to the nearest boundary of the
+         predicted-class region.
+  * After the last epoch of task 1, saves all of the above plus CGR's
+    confidence trajectory to disk as cgr_diag_logs/cgr_diag_seed<S>.pt
     (one file per run).
 
 Run separately for each seed (--seed 0, --seed 1, ...). Each run produces
@@ -149,17 +168,23 @@ class Cgr(ContinualModel):
         self.dist_task_prev = None
         self.dist_class_prev = None
         # === DIAG: per-sample diagnostic tensors (allocated in begin_task for task 1 only) ===
-        self.diag_margin = None       # (n_epochs, n_sample_per_task) — probability margin
-        self.diag_correct = None      # (n_epochs, n_sample_per_task) bool
-        self.diag_loss = None         # (n_epochs, n_sample_per_task) per-sample CE
-        self.diag_labels = None       # (n_sample_per_task,) global class id
-        # NEW: logit margin z_y - max_{k!=y} z_k (for boundary-diagnostic analyses,
-        # per GPT critique — probability margin and logit margin share sign but
-        # differ in magnitude and cross-sample ranking).
-        self.diag_logit_margin = None  # (n_epochs, n_sample_per_task)
-        # NEW: feature-space signed distance / normalized target margin (Concern 2)
-        self.diag_feat_dist_target = None  # (n_epochs, n_sample_per_task)
-        self.diag_feat_dist_pred   = None  # (n_epochs, n_sample_per_task)
+        # All tensors are shape (n_epochs, n_sample_per_task) unless noted. Each entry is
+        # recorded during that sample's eval-mode diagnostic pass in that epoch (see the
+        # module docstring for the timing caveat — this is NOT a common end-of-epoch
+        # checkpoint).
+        self.diag_margin = None                        # p_y - max_{k!=y} p_k (signed prob margin)
+        self.diag_margin_pred = None                   # p_yhat - max_{k!=yhat} p_k (>=0)
+        self.diag_correct = None                       # bool: argmax == label
+        self.diag_loss = None                          # per-sample cross-entropy loss
+        self.diag_labels = None                        # (n_sample_per_task,) global class id
+        self.diag_logit_margin = None                  # z_y - max_{k!=y} z_k (signed logit margin)
+        self.diag_logit_margin_pred = None             # z_yhat - max_{k!=yhat} z_k (>=0)
+        self.diag_nearest_pair_logit_gap = None        # min_{k!=y}    |z_y    - z_k| (>=0)
+        self.diag_nearest_pair_logit_gap_pred = None   # min_{k!=yhat} |z_yhat - z_k| (>=0)
+        # Feature-space (affine-head) distances (Concern 2):
+        self.diag_feat_dist_target = None              # min_{k!=y} (z_y - z_k)/||w_y - w_k||_2 (signed)
+        self.diag_feat_dist_target_absmin = None       # min_{k!=y} |(z_y - z_k)|/||w_y - w_k||_2 (>=0)
+        self.diag_feat_dist_pred = None                # min_{k!=yhat} (z_yhat - z_k)/||w_yhat - w_k||_2 (>=0)
         # === END DIAG ===
 
     def _diag_active(self):
@@ -180,43 +205,49 @@ class Cgr(ContinualModel):
         return last_linear
 
     def _diag_feat_distances(self, logits, labels_dev):
-        """Compute per-sample signed feature-space quantities using the
-        classifier head's weight matrix. The bias term (b_y - b_k) is already
-        absorbed into the logit difference z_y - z_k = (w_y - w_k)^T phi +
-        (b_y - b_k), so only the pairwise weight-vector norms ||w_i - w_j||_2
-        are needed for the denominator.
+        """Compute per-sample feature-space quantities using the classifier
+        head's weight matrix. The bias term (b_y - b_k) is already absorbed
+        into the logit difference z_y - z_k = (w_y - w_k)^T phi + (b_y - b_k),
+        so only the pairwise weight-vector norms ||w_i - w_j||_2 are needed
+        for the denominator.
 
-        Two per-sample quantities are returned:
+        Three per-sample quantities are returned:
 
-        d_pred (i)  = min_{k != y_hat_i} (z_{y_hat_i} - z_k) / ||w_{y_hat_i} - w_k||_2
+        d_target_signed(i) = min_{k != y_i} (z_{y_i} - z_k) / ||w_{y_i} - w_k||_2
+            Interpretation depends on classification status:
+              - Correctly classified (y_hat_i == y_i): all pairwise ratios >= 0,
+                so d_target_signed = d_target_absmin = signed distance to the
+                nearest boundary of the (correct) target-class region.
+              - Misclassified (y_hat_i != y_i): negative; the MOST-VIOLATED
+                normalized pairwise target constraint. NOT a geometric distance
+                to the target-region boundary. Downstream analyses should
+                describe it as the "minimum normalized target margin".
+
+        d_target_absmin(i) = min_{k != y_i} |(z_{y_i} - z_k)| / ||w_{y_i} - w_k||_2
+            Always >= 0. The NEAREST single pairwise target-vs-competitor
+            hyperplane in Euclidean feature-space distance. Coincides with
+            d_target_signed for correctly-classified samples. For misclassified
+            samples it is an UPPER BOUND on the distance from phi(x_i) to the
+            full target region (which is the intersection of many half-spaces
+            and would require a QP to compute exactly).
+
+        d_pred(i) = min_{k != y_hat_i} (z_{y_hat_i} - z_k) / ||w_{y_hat_i} - w_k||_2
             Always >= 0 (y_hat is the argmax by construction). Geometrically
             the signed perpendicular distance from phi(x_i) to the nearest
             boundary of the *predicted* class region under the affine head.
 
-        d_target(i) = min_{k != y_i}    (z_{y_i}    - z_k) / ||w_{y_i}    - w_k||_2
-            Interpretation depends on classification status:
-              - Correctly classified (y_hat_i == y_i): equals d_pred(i);
-                a valid signed distance to the nearest boundary of the target
-                (== correct) class region.
-              - Misclassified (y_hat_i != y_i): negative; equals the
-                *minimum normalized target margin*, i.e. the most-violated
-                pairwise (target vs competitor) constraint. NOT a geometric
-                distance from phi(x_i) to the target-region boundary, since
-                that would require solving a QP over multiple half-space
-                constraints. Report separately for the misclassified subset in
-                downstream analysis.
-
-        For the cleanest "distance to boundary" analysis, restrict to samples
-        where diag_correct == True; on that subset d_pred == d_target and is
-        the signed distance to the correct-class region boundary.
+        For the cleanest "distance to correct-region boundary" analysis,
+        restrict to samples where diag_correct == True; on that subset all
+        three coincide.
 
         Args:
             logits: (B, C) raw logits from the eval-mode forward pass
             labels_dev: (B,) target class indices on the same device
 
         Returns:
-            d_target: (B,) see above.
-            d_pred:   (B,) see above; always >= 0.
+            d_target_signed: (B,) see above.
+            d_target_absmin: (B,) see above; always >= 0.
+            d_pred:          (B,) see above; always >= 0.
         """
         head = self._diag_get_classifier_head()
         W = head.weight.detach()  # (C, d_feat)
@@ -226,29 +257,35 @@ class Cgr(ContinualModel):
 
         B, C = logits.shape
 
-        # -- d_target: (z_y - z_k) / ||w_y - w_k||, min over k != y --
-        target_logits = logits.gather(1, labels_dev.unsqueeze(1)).squeeze(1)   # (B,)
-        z_diff_t = target_logits.unsqueeze(1) - logits                          # (B, C)
-        w_diff_t = W_dist[labels_dev]                                            # (B, C)
-        # avoid div-by-zero at k=y (0/0); we'll mask that column afterwards
-        ratio_t = z_diff_t / w_diff_t.clamp(min=1e-12)
+        # -- Target-based ratios: (z_y - z_k) / ||w_y - w_k||, over k --
+        target_logits = logits.gather(1, labels_dev.unsqueeze(1)).squeeze(1)  # (B,)
+        z_diff_t = target_logits.unsqueeze(1) - logits                         # (B, C)
+        w_diff_t = W_dist[labels_dev]                                          # (B, C)
+        # avoid div-by-zero at k=y (0/0); mask k=y before reducing
+        ratio_t = z_diff_t / w_diff_t.clamp(min=1e-12)                         # (B, C)
         mask_t = torch.zeros_like(ratio_t, dtype=torch.bool)
         mask_t.scatter_(1, labels_dev.unsqueeze(1), True)
-        ratio_t = ratio_t.masked_fill(mask_t, float('inf'))
-        d_target = ratio_t.min(dim=1).values                                     # (B,)
 
-        # -- d_pred: same but using argmax class --
-        y_hat = logits.argmax(dim=1)                                             # (B,)
-        pred_logits = logits.gather(1, y_hat.unsqueeze(1)).squeeze(1)            # (B,)
-        z_diff_p = pred_logits.unsqueeze(1) - logits                             # (B, C)
-        w_diff_p = W_dist[y_hat]                                                  # (B, C)
+        # d_target_signed: min over k != y of the signed ratio (may be negative)
+        ratio_t_masked_inf = ratio_t.masked_fill(mask_t, float('inf'))
+        d_target_signed = ratio_t_masked_inf.min(dim=1).values                 # (B,)
+
+        # d_target_absmin: min over k != y of |ratio| — nearest single hyperplane
+        # (mask k=y with +inf so it's excluded from the min over absolute values)
+        abs_ratio_t_masked_inf = ratio_t.abs().masked_fill(mask_t, float('inf'))
+        d_target_absmin = abs_ratio_t_masked_inf.min(dim=1).values             # (B,)
+
+        # -- d_pred: same as d_target_signed but using argmax class --
+        y_hat = logits.argmax(dim=1)                                            # (B,)
+        pred_logits = logits.gather(1, y_hat.unsqueeze(1)).squeeze(1)           # (B,)
+        z_diff_p = pred_logits.unsqueeze(1) - logits                            # (B, C)
+        w_diff_p = W_dist[y_hat]                                                # (B, C)
         ratio_p = z_diff_p / w_diff_p.clamp(min=1e-12)
         mask_p = torch.zeros_like(ratio_p, dtype=torch.bool)
         mask_p.scatter_(1, y_hat.unsqueeze(1), True)
-        ratio_p = ratio_p.masked_fill(mask_p, float('inf'))
-        d_pred = ratio_p.min(dim=1).values                                       # (B,)
+        d_pred = ratio_p.masked_fill(mask_p, float('inf')).min(dim=1).values    # (B,)
 
-        return d_target, d_pred
+        return d_target_signed, d_target_absmin, d_pred
     # === END DIAG ===
 
     def begin_train(self, dataset):
@@ -267,18 +304,24 @@ class Cgr(ContinualModel):
         self.confidence_by_sample = torch.zeros((self.args.n_epochs, self.n_sample_per_task))
 
         # === DIAG: allocate task-1 diagnostic tensors ===
+        # Numeric tensors are initialized with NaN so unset entries (should not exist,
+        # but sanity-checkable) are detectable in the log.
         if self._diag_active():
             n_e = self.args.n_epochs
             n_s = self.n_sample_per_task
-            self.diag_margin = torch.zeros((n_e, n_s))
+            def _nan(shape): return torch.full(shape, float('nan'))
+            self.diag_margin = _nan((n_e, n_s))
+            self.diag_margin_pred = _nan((n_e, n_s))
             self.diag_correct = torch.zeros((n_e, n_s), dtype=torch.bool)
-            self.diag_loss = torch.zeros((n_e, n_s))
+            self.diag_loss = _nan((n_e, n_s))
             self.diag_labels = torch.full((n_s,), -1, dtype=torch.long)
-            # NEW: logit margin
-            self.diag_logit_margin = torch.zeros((n_e, n_s))
-            # NEW: feature-space distances
-            self.diag_feat_dist_target = torch.zeros((n_e, n_s))
-            self.diag_feat_dist_pred   = torch.zeros((n_e, n_s))
+            self.diag_logit_margin = _nan((n_e, n_s))
+            self.diag_logit_margin_pred = _nan((n_e, n_s))
+            self.diag_nearest_pair_logit_gap = _nan((n_e, n_s))
+            self.diag_nearest_pair_logit_gap_pred = _nan((n_e, n_s))
+            self.diag_feat_dist_target = _nan((n_e, n_s))
+            self.diag_feat_dist_target_absmin = _nan((n_e, n_s))
+            self.diag_feat_dist_pred = _nan((n_e, n_s))
         # === END DIAG ===
 
     def _save_diag(self):
@@ -298,15 +341,25 @@ class Cgr(ContinualModel):
             # CGR's eval-mode target confidence. With --cgr_diag_log this is
             # filled for ALL epochs of task 1; use [:E] for CGR's variance.
             'cgr_confidence_by_sample': self.confidence_by_sample.clone(),
-            # Diagnostics computed from the same eval-mode forward pass on not_aug_inputs
-            'diag_margin': self.diag_margin.clone(),               # probability margin (p_y - max_{k!=y} p_k)
-            'diag_correct': self.diag_correct.clone(),
-            'diag_loss': self.diag_loss.clone(),
-            'diag_labels': self.diag_labels.clone(),
-            'diag_logit_margin': self.diag_logit_margin.clone(),   # NEW: logit margin (z_y - max_{k!=y} z_k)
-            # NEW (Concern 2): feature-space signed distances / normalized target margin
-            'diag_feat_dist_target': self.diag_feat_dist_target.clone(),
-            'diag_feat_dist_pred':   self.diag_feat_dist_pred.clone(),
+            # ---- Diagnostics from the same eval-mode pass on not_aug_inputs ----
+            # See module docstring for the timing caveat: each entry is
+            # recorded during that sample's eval-mode pass in that epoch,
+            # which is BEFORE the batch's SGD update. Different samples in
+            # the same epoch see slightly different model states.
+            'diag_correct': self.diag_correct.clone(),                                   # bool: argmax == label
+            'diag_loss':    self.diag_loss.clone(),                                      # per-sample CE loss
+            'diag_labels':  self.diag_labels.clone(),                                    # (n_s,) global class id
+            # Scalar margin quantities (all shape (n_epochs, n_sample_per_task)):
+            'diag_margin':                       self.diag_margin.clone(),                       # signed prob margin (target)
+            'diag_margin_pred':                  self.diag_margin_pred.clone(),                  # prob margin (predicted, >=0)
+            'diag_logit_margin':                 self.diag_logit_margin.clone(),                 # signed logit margin (target)
+            'diag_logit_margin_pred':            self.diag_logit_margin_pred.clone(),            # logit margin (predicted, >=0)
+            'diag_nearest_pair_logit_gap':       self.diag_nearest_pair_logit_gap.clone(),       # min_{k!=y}    |z_y    - z_k|
+            'diag_nearest_pair_logit_gap_pred':  self.diag_nearest_pair_logit_gap_pred.clone(),  # min_{k!=yhat} |z_yhat - z_k|
+            # Feature-space (affine-head) distances:
+            'diag_feat_dist_target':         self.diag_feat_dist_target.clone(),         # signed min over k!=y of ratios
+            'diag_feat_dist_target_absmin':  self.diag_feat_dist_target_absmin.clone(),  # min over k!=y of |ratios|
+            'diag_feat_dist_pred':           self.diag_feat_dist_pred.clone(),           # signed min over k!=yhat of ratios (>=0)
             'class_mapping': dict(self.mapping),
         }, save_path)
         print(f"[CGR-Diag] Saved task-1 diagnostics to {save_path}")
@@ -469,45 +522,90 @@ class Cgr(ContinualModel):
                 conf_tensor = torch.tensor(confidence_batch)
                 self.confidence_by_sample[self.epoch, index_] = conf_tensor
 
-                # === DIAG: record margin / correctness / per-sample loss from same eval pass ===
+                # === DIAG: record all per-sample per-epoch quantities from same eval pass ===
+                # Recorded DURING THIS SAMPLE'S DIAGNOSTIC PASS in this epoch (before
+                # the batch's SGD update) — NOT a common end-of-epoch checkpoint.
                 if self._diag_active():
                     labels_dev = labels.to(self.device).long()
-                    target_prob = soft_.gather(1, labels_dev.unsqueeze(1)).squeeze(1)
-                    soft_other = soft_.clone()
-                    soft_other.scatter_(1, labels_dev.unsqueeze(1), float('-inf'))
-                    max_other = soft_other.max(dim=1)[0]
-                    margin = (target_prob - max_other).cpu()  # probability margin, kept for compatibility
 
-                    pred = cgr_logits.argmax(dim=1)
-                    correct = (pred == labels_dev).cpu()
+                    # ---- Probability-space margin quantities ----
+                    target_prob = soft_.gather(1, labels_dev.unsqueeze(1)).squeeze(1)          # p_y
+                    # target-based signed prob margin: p_y - max_{k!=y} p_k
+                    soft_other_tgt = soft_.clone()
+                    soft_other_tgt.scatter_(1, labels_dev.unsqueeze(1), float('-inf'))
+                    max_other_prob_tgt = soft_other_tgt.max(dim=1).values
+                    margin = (target_prob - max_other_prob_tgt).cpu()
+                    # predicted-based (top-two) prob gap: p_yhat - max_{k!=yhat} p_k (>=0)
+                    y_hat = soft_.argmax(dim=1)
+                    pred_prob = soft_.gather(1, y_hat.unsqueeze(1)).squeeze(1)
+                    soft_other_pred = soft_.clone()
+                    soft_other_pred.scatter_(1, y_hat.unsqueeze(1), float('-inf'))
+                    max_other_prob_pred = soft_other_pred.max(dim=1).values
+                    margin_pred = (pred_prob - max_other_prob_pred).cpu()
 
-                    per_sample_loss = F.cross_entropy(cgr_logits, labels_dev, reduction='none').cpu()
+                    # ---- Correctness (argmax == label) ----
+                    correct = (y_hat == labels_dev).cpu()
 
-                    # NEW: logit margin z_y - max_{k!=y} z_k (per GPT critique for the
-                    # boundary-diagnostic analysis; shares sign with probability margin
-                    # but differs in magnitude and cross-sample ranking).
+                    # ---- Per-sample cross-entropy loss ----
+                    per_sample_loss = F.cross_entropy(cgr_logits, labels_dev,
+                                                     reduction='none').cpu()
+
+                    # ---- Logit-space margin quantities ----
+                    # target-based signed logit margin: z_y - max_{k!=y} z_k
                     target_logits = cgr_logits.gather(1, labels_dev.unsqueeze(1)).squeeze(1)
-                    logit_other = cgr_logits.clone()
-                    logit_other.scatter_(1, labels_dev.unsqueeze(1), float('-inf'))
-                    max_other_logit = logit_other.max(dim=1)[0]
-                    logit_margin = (target_logits - max_other_logit).cpu()
+                    logit_other_tgt = cgr_logits.clone()
+                    logit_other_tgt.scatter_(1, labels_dev.unsqueeze(1), float('-inf'))
+                    max_other_logit_tgt = logit_other_tgt.max(dim=1).values
+                    logit_margin = (target_logits - max_other_logit_tgt).cpu()
+                    # predicted-based (top-two) logit gap: z_yhat - max_{k!=yhat} z_k (>=0)
+                    pred_logits_val = cgr_logits.gather(1, y_hat.unsqueeze(1)).squeeze(1)
+                    logit_other_pred = cgr_logits.clone()
+                    logit_other_pred.scatter_(1, y_hat.unsqueeze(1), float('-inf'))
+                    max_other_logit_pred = logit_other_pred.max(dim=1).values
+                    logit_margin_pred = (pred_logits_val - max_other_logit_pred).cpu()
 
-                    # NEW (Concern 2): feature-space signed distance to nearest boundary
-                    d_target, d_pred = self._diag_feat_distances(cgr_logits, labels_dev)
-                    d_target = d_target.cpu()
+                    # ---- Nearest pairwise |z - z_k| (differs from |scalar margin|
+                    #      for misclassified samples: |min|(diffs) != min |diffs|) ----
+                    # target-based: min_{k!=y} |z_y - z_k|
+                    z_diff_tgt = target_logits.unsqueeze(1) - cgr_logits  # (B, C)
+                    abs_diff_tgt = z_diff_tgt.abs()
+                    mask_tgt = torch.zeros_like(abs_diff_tgt, dtype=torch.bool)
+                    mask_tgt.scatter_(1, labels_dev.unsqueeze(1), True)
+                    nearest_pair_logit_gap = abs_diff_tgt.masked_fill(
+                        mask_tgt, float('inf')).min(dim=1).values.cpu()
+                    # predicted-based: min_{k!=yhat} |z_yhat - z_k|
+                    z_diff_pred = pred_logits_val.unsqueeze(1) - cgr_logits  # (B, C)
+                    abs_diff_pred = z_diff_pred.abs()
+                    mask_pred = torch.zeros_like(abs_diff_pred, dtype=torch.bool)
+                    mask_pred.scatter_(1, y_hat.unsqueeze(1), True)
+                    nearest_pair_logit_gap_pred = abs_diff_pred.masked_fill(
+                        mask_pred, float('inf')).min(dim=1).values.cpu()
+
+                    # ---- Feature-space distances (Concern 2) ----
+                    d_target_signed, d_target_absmin, d_pred = \
+                        self._diag_feat_distances(cgr_logits, labels_dev)
+                    d_target_signed = d_target_signed.cpu()
+                    d_target_absmin = d_target_absmin.cpu()
                     d_pred = d_pred.cpu()
 
+                    # ---- Scatter all quantities into the tensors ----
                     if torch.is_tensor(index_):
                         idx_cpu = index_.detach().cpu().long()
                     else:
                         idx_cpu = torch.as_tensor(index_, dtype=torch.long)
-                    self.diag_margin[self.epoch, idx_cpu] = margin
-                    self.diag_correct[self.epoch, idx_cpu] = correct
-                    self.diag_loss[self.epoch, idx_cpu] = per_sample_loss
+                    e = self.epoch
+                    self.diag_margin[e, idx_cpu] = margin
+                    self.diag_margin_pred[e, idx_cpu] = margin_pred
+                    self.diag_correct[e, idx_cpu] = correct
+                    self.diag_loss[e, idx_cpu] = per_sample_loss
                     self.diag_labels[idx_cpu] = labels.detach().cpu().long()
-                    self.diag_logit_margin[self.epoch, idx_cpu] = logit_margin
-                    self.diag_feat_dist_target[self.epoch, idx_cpu] = d_target
-                    self.diag_feat_dist_pred[self.epoch, idx_cpu] = d_pred
+                    self.diag_logit_margin[e, idx_cpu] = logit_margin
+                    self.diag_logit_margin_pred[e, idx_cpu] = logit_margin_pred
+                    self.diag_nearest_pair_logit_gap[e, idx_cpu] = nearest_pair_logit_gap
+                    self.diag_nearest_pair_logit_gap_pred[e, idx_cpu] = nearest_pair_logit_gap_pred
+                    self.diag_feat_dist_target[e, idx_cpu] = d_target_signed
+                    self.diag_feat_dist_target_absmin[e, idx_cpu] = d_target_absmin
+                    self.diag_feat_dist_pred[e, idx_cpu] = d_pred
                 # === END DIAG ===
             self.net.train()
 
