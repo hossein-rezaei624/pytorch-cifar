@@ -1,601 +1,533 @@
 """
-Analysis script for CGR diagnostic logs produced by cgr_with_diag.py
-(when run with --cgr_diag_log).
+Modified cgr.py with diagnostic logging for the rebuttal experiments.
 
-Computes ACROSS ALL SEEDS:
-  (b.1) Cross-seed Spearman rank correlation of per-sample variance vectors
-        --> mean ± std over the 10 pairs of seeds.
-  (a.2) Variance vs forgetting-event Spearman correlation
-        --> computed separately for EACH seed; reported as mean ± std over seeds.
-  (b.2) Diagnostic table comparing CGR vs random / high-loss / low-confidence
-        --> each cell computed separately for EACH seed; reported as mean ± std.
-  (c)   Within-seed Spearman rank correlation between per-sample variance
-        computed with a small window (E_small, default 2) and a larger window
-        (E_large, default 5). Anchors the sanity check for the E=2 selection
-        (Concern 4). Computed separately for EACH seed; reported as mean ± std.
-  (d)   Boundary-intuition verification (Concern 2): for five selection rules,
-        characterizes the end-of-training margin and correctness distribution
-        of the selected samples, plus the overlap between CGR and a direct
-        low-|margin| selection. Shows that CGR selects Swayamdipta-style
-        ambiguous samples (variability-based, migrating from low margin to
-        high margin during a single task), not persistently-near-boundary
-        samples. Computed separately for EACH seed; reported as mean ± std.
-  (d2)  Selection-time boundary diagnostics (Concern 2, extended). For five
-        selection rules, characterizes samples at epoch E (end of the CGR
-        selection window) using logit margin m_E = z_y - max_{k!=y} z_k and
-        the affine-head feature-space signed distance d^{pred}. Reports:
-        prediction sign-change rate over epochs 1..E, fraction with m_E > 0,
-        median/mean |m_E|, mean d^{pred}, fraction in per-class bottom-20%
-        by |m_E| and by d^{pred}, and the overlap of CGR selection with per-
-        class bottom-K by |m_E| and by d^{pred}. Requires the extended log
-        format with diag_logit_margin and diag_feat_dist_{target,pred}.
+When --cgr_diag_log is set, this version:
+  * During task 1 ONLY, runs CGR's existing eval-mode forward pass on
+    not_aug_inputs for ALL epochs of the task (instead of just the first E).
+  * Records, from that same eval-mode pass: per-sample target confidence,
+    probability margin (target prob - max other prob), correctness (argmax ==
+    label), per-sample cross-entropy loss, and logit margin (target logit -
+    max other logit). Probability margin and logit margin share sign but not
+    magnitude or cross-sample ranking; both are recorded so downstream
+    analyses can use the appropriate one (probability margin for
+    Data-Cartography-style analyses, logit margin for boundary-diagnostic
+    analyses).
+  * ALSO records, from the same eval-mode pass, per-sample feature-space
+    signed distance to the nearest boundary of the target-class region and
+    of the predicted-class region, defined as
+        d^{tgt}_{i,e} = min_{k != y_i} (z_{y_i,e} - z_{k,e}) / ||w_{y_i,e} - w_{k,e}||_2
+        d^{pred}_{i,e} = min_{k != y_hat} (z_{y_hat,e} - z_{k,e}) / ||w_{y_hat,e} - w_{k,e}||_2
+    where w_k are the rows of the classifier head at epoch e. For correctly
+    classified samples the two are equal and both give the signed distance
+    to the nearest boundary of the correct-class region. For misclassified
+    samples, d^{pred} is still the boundary distance (of the predicted-class
+    region), while d^{tgt} equals the minimum normalized target margin and
+    is NOT a geometric distance to the target-region boundary. This is the
+    affine feature-space boundary distance requested for the boundary-
+    interpretation analysis (Concern 2).
+  * After the last epoch of task 1, saves all of the above plus
+    CGR's confidence trajectory to disk as cgr_diag_logs/cgr_diag_seed<S>.pt
+    (one file per run).
 
-Usage:
-    python analyze_cgr_diag.py --diag_dir cgr_diag_logs --E 4 --buffer_size 1000
-    # optional: --E_small 2 --E_large 5   (defaults shown)
+Run separately for each seed (--seed 0, --seed 1, ...). Each run produces
+one .pt file. Combine across seeds by hand.
+
+When --cgr_diag_log is NOT set, behaviour is identical to your original cgr.py.
+
+All additions are marked with `# === DIAG: ... === / === END DIAG ===` blocks.
 """
 
-import argparse
 import os
-from pathlib import Path
-
-import numpy as np
 import torch
-from scipy.stats import spearmanr
-
-
-# ----------------------------- I/O -----------------------------
-
-def load_seed_logs(diag_dir):
-    paths = sorted(Path(diag_dir).glob('cgr_diag_seed*.pt'))
-    if not paths:
-        raise FileNotFoundError(f"No 'cgr_diag_seed*.pt' files found in {diag_dir}")
-    # weights_only=False is required for torch >=2.6 to load the numpy scalars in the log.
-    # Only run this script on trusted .pt files you produced yourself.
-    return [torch.load(p, map_location='cpu', weights_only=False) for p in paths]
-
-
-# ------------------------- Metrics ---------------------------
-
-def variance_from_eval_confidence(log, E):
-    """CGR's actual variance signal: variance of eval-mode confidence over first E epochs."""
-    conf = log['cgr_confidence_by_sample']
-    return conf[:E].var(dim=0).numpy()
-
-
-def forgetting_events(correct):
-    """Toneva-style forgetting events: # of correct -> incorrect transitions over training."""
-    correct = correct.bool()
-    transitions = correct[:-1] & ~correct[1:]
-    return transitions.sum(dim=0).numpy()
-
-
-# --------------------- (b.1) Cross-seed -----------------------
-
-def cross_seed_spearman(logs, E):
-    variances = [variance_from_eval_confidence(log, E) for log in logs]
-    lens = {v.shape[0] for v in variances}
-    if len(lens) != 1:
-        raise ValueError(f"Variance vectors differ across seeds: {lens}")
-
-    rhos = []
-    pairs = []
-    n = len(variances)
-    for i in range(n):
-        for j in range(i + 1, n):
-            r, _ = spearmanr(variances[i], variances[j])
-            rhos.append(r)
-            pairs.append((logs[i]['seed'], logs[j]['seed']))
-    return float(np.mean(rhos)), float(np.std(rhos)), rhos, pairs
-
-
-# ---------------- (a.2) Variance vs forgetting (all seeds) ----------------
-
-def variance_vs_forgetting_per_seed(logs, E):
-    """Compute Spearman ρ between variance and forgetting events for EACH seed."""
-    results = []
-    for log in logs:
-        variance = variance_from_eval_confidence(log, E)
-        forgetting = forgetting_events(log['diag_correct'])
-        r, p = spearmanr(variance, forgetting)
-        results.append({'seed': log['seed'], 'rho': float(r), 'p': float(p)})
-    rhos = [r['rho'] for r in results]
-    return results, float(np.mean(rhos)), float(np.std(rhos))
-
-
-# ---------------- (c) Within-seed E_small vs E_large (Concern 4) ---------
-
-def within_seed_E_small_vs_E_large_spearman(logs, E_small, E_large):
-    """Per-seed Spearman ρ between per-sample σ² computed over the first
-    E_small epochs and over the first E_large epochs. Anchors the sanity
-    check for the E=2 selection (AE Concern 4)."""
-    if E_small >= E_large:
-        raise ValueError(f"E_small ({E_small}) must be < E_large ({E_large})")
-    results = []
-    for log in logs:
-        n_epochs = log['cgr_confidence_by_sample'].shape[0]
-        if E_large > n_epochs:
-            raise ValueError(f"E_large={E_large} exceeds recorded epochs ({n_epochs}) "
-                             f"for seed {log['seed']}")
-        v_small = variance_from_eval_confidence(log, E_small)
-        v_large = variance_from_eval_confidence(log, E_large)
-        r, p = spearmanr(v_small, v_large)
-        results.append({'seed': log['seed'], 'rho': float(r), 'p': float(p)})
-    rhos = [r['rho'] for r in results]
-    return results, float(np.mean(rhos)), float(np.std(rhos, ddof=1))
-
-
-# ---------------- (b.2) Diagnostic table (all seeds) ----------------------
-
-def diagnostic_table_one_seed(log, E, buffer_size, random_seed):
-    target_conf_all = log['cgr_confidence_by_sample']  # (n_epochs, n_samples)
-    n_epochs = target_conf_all.shape[0]
-    labels = log['diag_labels'].numpy()
-
-    # Per-sample selection scores (first E epochs, matching CGR's window and Figure 3 b.1)
-    variance = variance_from_eval_confidence(log, E)
-    mean_conf_E = target_conf_all[:E].mean(dim=0).numpy()
-    mean_loss_E = log['diag_loss'][:E].mean(dim=0).numpy()
-
-    # Per-sample reporting metrics.
-    #   margin: averaged over the FIRST E epochs (matches CGR's selection
-    #     window and Figure 3 b.1; consistent with mean target confidence).
-    #     End-of-training margin would be uninformative because the model has
-    #     converged and margins are large for almost all samples.
-    #   forgetting events: over ALL training epochs (Toneva's definition;
-    #     needs the full trajectory — first E would give at most E-1 transitions).
-    #   mean target confidence: over the FIRST E epochs (matches Figure 3 b.1
-    #     and CGR's selection window).
-    margin_first_E = log['diag_margin'][:E].mean(dim=0).numpy()
-    forgetting = forgetting_events(log['diag_correct'])
-    mean_conf_report = mean_conf_E  # = target_conf_all[:E].mean(dim=0).numpy()
-
-    # Per-class top-K (K = buffer_size // num_classes seen in task 1)
-    unique_classes = np.unique(labels[labels >= 0])
-    num_classes = len(unique_classes)
-    k_per_class = buffer_size // num_classes
-
-    def top_k_per_class(score, descending=True):
-        out = []
-        for c in unique_classes:
-            idx = np.where(labels == c)[0]
-            order = np.argsort(score[idx])
-            if descending:
-                order = order[::-1]
-            out.append(idx[order[:k_per_class]])
-        return np.concatenate(out)
-
-    rng = np.random.default_rng(random_seed)
-    rules = {
-        'Random':          np.concatenate([
-                               rng.choice(np.where(labels == c)[0],
-                                          size=min(k_per_class, (labels == c).sum()),
-                                          replace=False)
-                               for c in unique_classes
-                           ]),
-        'High loss':       top_k_per_class(mean_loss_E, descending=True),
-        'High confidence': top_k_per_class(mean_conf_E, descending=True),
-        'Low confidence':  top_k_per_class(mean_conf_E, descending=False),
-        'CGR (variance)':  top_k_per_class(variance, descending=True),
-    }
-
-    row_dict = {}
-    for name, idx in rules.items():
-        row_dict[name] = {
-            'mean_margin': float(margin_first_E[idx].mean()),
-            'mean_forgetting': float(forgetting[idx].mean()),
-            'mean_target_conf': float(mean_conf_report[idx].mean()),
-        }
-    return row_dict, k_per_class, num_classes
-
-
-def diagnostic_table_all_seeds(logs, E, buffer_size):
-    """Compute the diagnostic table per seed, then aggregate to mean ± std."""
-    per_seed_rows = []
-    k_per_class, num_classes = None, None
-    for log in logs:
-        row_dict, k, nc = diagnostic_table_one_seed(
-            log, E, buffer_size,
-            random_seed=int(log['seed']) if str(log['seed']).isdigit() else 0
-        )
-        per_seed_rows.append(row_dict)
-        k_per_class, num_classes = k, nc
-
-    # Aggregate across seeds
-    rule_names = list(per_seed_rows[0].keys())
-    agg = {}
-    for name in rule_names:
-        agg[name] = {}
-        for metric in ['mean_margin', 'mean_forgetting', 'mean_target_conf']:
-            vals = [seed_row[name][metric] for seed_row in per_seed_rows]
-            agg[name][metric + '_mean'] = float(np.mean(vals))
-            agg[name][metric + '_std']  = float(np.std(vals))
-            agg[name][metric + '_per_seed'] = [float(v) for v in vals]
-    return agg, per_seed_rows, k_per_class, num_classes
-
-
-# ---------------- (d) Boundary-intuition verification (Concern 2) --------
-
-def _top_k_per_class(scores, labels, k, descending=True):
-    """Per-class top-K selection helper (respects class-balance constraint)."""
-    out = []
-    for c in np.unique(labels):
-        ci = np.where(labels == c)[0]
-        order = np.argsort(-scores[ci] if descending else scores[ci])[:k]
-        out.append(ci[order])
-    return np.concatenate(out)
-
-
-def boundary_intuition_test(logs, E, buffer_size, final_epoch_idx=None,
-                             margin_pctl_threshold=20.0):
-    """For each of five selection rules, characterize the end-of-training margin
-    and correctness distribution of the selected samples. Tests whether CGR-
-    selected samples remain near the decision boundary at end of training. They
-    mostly do not — they migrate from ambiguous (low margin) to well-classified
-    (high margin), matching Swayamdipta et al. (2020) ambiguous-then-learned."""
-    per_seed_records = []
-    for log in logs:
-        conf   = log['cgr_confidence_by_sample'].numpy()
-        margin = log['diag_margin'].numpy()
-        correct = log['diag_correct'].numpy().astype(bool)
-        loss   = log['diag_loss'].numpy()
-        labels = log['diag_labels'].numpy()
-        seed   = int(log['seed']) if str(log['seed']).isdigit() else 0
-
-        n_epochs = conf.shape[0]
-        _final = (n_epochs - 1) if final_epoch_idx is None else final_epoch_idx
-        final_margin = margin[_final]
-        final_correct = correct[_final]
-
-        n_classes = len(np.unique(labels))
-        per_class = buffer_size // n_classes
-        low_thr = np.percentile(final_margin, margin_pctl_threshold)
-        margin_ranks = np.argsort(np.argsort(final_margin))
-
-        rng = np.random.default_rng(seed)
-        rules = {}
-        sigma2 = np.var(conf[:E], axis=0)
-        rules['CGR (high variance)'] = _top_k_per_class(sigma2, labels, per_class, descending=True)
-        rules['Random'] = np.concatenate([
-            rng.choice(np.where(labels == c)[0],
-                       size=min(per_class, (labels == c).sum()),
-                       replace=False)
-            for c in np.unique(labels)
-        ])
-        mean_conf_E = conf[:E].mean(axis=0)
-        mean_loss_E = loss[:E].mean(axis=0)
-        rules['High confidence'] = _top_k_per_class(mean_conf_E, labels, per_class, descending=True)
-        rules['Low confidence']  = _top_k_per_class(mean_conf_E, labels, per_class, descending=False)
-        rules['High loss']       = _top_k_per_class(mean_loss_E, labels, per_class, descending=True)
-
-        seed_row = {}
-        for name, idx in rules.items():
-            sfm = final_margin[idx]
-            sfc = final_correct[idx]
-            seed_row[name] = {
-                'frac_correct':   float(sfc.mean()),
-                'median_pctl':    float(np.median(margin_ranks[idx] / len(labels) * 100)),
-                'resolved':       float((sfc & (sfm >= low_thr)).mean()),
-                'still_boundary': float((sfc & (sfm <  low_thr)).mean()),
-                'outlier':        float((~sfc & (sfm < low_thr)).mean()),
-            }
-        per_seed_records.append(seed_row)
-
-    agg = {}
-    for name in per_seed_records[0]:
-        agg[name] = {}
-        for metric in ['frac_correct','median_pctl','resolved','still_boundary','outlier']:
-            vals = [r[name][metric] for r in per_seed_records]
-            agg[name][f'{metric}_mean'] = float(np.mean(vals))
-            agg[name][f'{metric}_std']  = float(np.std(vals, ddof=1))
-    return agg, per_seed_records
-
-
-def overlap_with_direct_boundary(logs, E, buffer_size):
-    """Fraction of CGR-selected samples that are also in a 'lowest |margin|'
-    per-class top-K selection. Small overlap means CGR is selecting
-    variability-based (ambiguous) samples rather than persistently-near-
-    boundary samples."""
-    overlaps = []
-    for log in logs:
-        conf = log['cgr_confidence_by_sample'].numpy()
-        margin = log['diag_margin'].numpy()
-        labels = log['diag_labels'].numpy()
-        n_classes = len(np.unique(labels))
-        per_class = buffer_size // n_classes
-
-        sigma2 = np.var(conf[:E], axis=0)
-        cgr_sel = set(_top_k_per_class(sigma2, labels, per_class, descending=True))
-        abs_marg = np.abs(margin[:E]).mean(axis=0)
-        bnd_sel = set(_top_k_per_class(abs_marg, labels, per_class, descending=False))
-        overlaps.append(len(cgr_sel & bnd_sel) / len(cgr_sel))
-    return float(np.mean(overlaps)), float(np.std(overlaps, ddof=1))
-
-
-def cgr_margin_trajectory(logs, E, buffer_size, late_window=5):
-    """For CGR-selected samples, compute mean margin early (first E epochs) vs
-    late (last `late_window` epochs). Shows the ambiguous-then-learned
-    trajectory within a single task."""
-    early_all, late_all = [], []
-    for log in logs:
-        conf = log['cgr_confidence_by_sample'].numpy()
-        margin = log['diag_margin'].numpy()
-        labels = log['diag_labels'].numpy()
-        n_epochs = margin.shape[0]
-        n_classes = len(np.unique(labels))
-        per_class = buffer_size // n_classes
-        sigma2 = np.var(conf[:E], axis=0)
-        selected = _top_k_per_class(sigma2, labels, per_class, descending=True)
-        early_all.append(float(margin[:E, selected].mean()))
-        late_all.append(float(margin[n_epochs - late_window : n_epochs, selected].mean()))
-    return (float(np.mean(early_all)), float(np.std(early_all, ddof=1)),
-            float(np.mean(late_all)),  float(np.std(late_all, ddof=1)))
-
-
-# ---------------- (d2) Selection-time boundary diagnostics (Concern 2, extended) ----
-
-def selection_time_diagnostics(logs, E, buffer_size):
-    """Per selection rule, characterize the samples at epoch E (end of CGR
-    selection window) using logit margin (m_E = z_y - max_{k!=y} z_k) and
-    the affine-head feature-space distance d^{pred}. Computed per seed.
-
-    Requires the extended log format with keys 'diag_logit_margin' and
-    'diag_feat_dist_pred' (produced by the updated cgr_with_diag.py).
-    """
-    rules = ['CGR (high variance)', 'Random', 'High confidence',
-             'Low confidence', 'High loss']
-    keys = ['sign_change', 'frac_pos_m', 'abs_m_median', 'abs_m_mean',
-            'd_pred_mean', 'frac_low_m_class', 'frac_low_d_class']
-    per_seed = {r: {k: [] for k in keys} for r in rules}
-    ovl_low_m, ovl_low_d = [], []
-
-    for log in logs:
-        # Verify extended fields are present
-        for req in ['diag_logit_margin', 'diag_feat_dist_pred']:
-            if req not in log:
-                raise KeyError(f"Log for seed {log.get('seed', '?')} missing '{req}'. "
-                               "Re-run cgr_with_diag.py after the Concern-2 update.")
-        conf    = log['cgr_confidence_by_sample'].numpy()
-        loss    = log['diag_loss'].numpy()
-        labels  = log['diag_labels'].numpy()
-        logit_m = log['diag_logit_margin'].numpy()
-        d_pred  = log['diag_feat_dist_pred'].numpy()
-        seed = int(log['seed']) if str(log['seed']).isdigit() else 0
-
-        n_classes = len(np.unique(labels))
-        per_class = buffer_size // n_classes
-
-        rng = np.random.default_rng(seed)
-        sigma2 = np.var(conf[:E], axis=0)
-        mean_conf_E = conf[:E].mean(axis=0)
-        mean_loss_E = loss[:E].mean(axis=0)
-        selections = {
-            'CGR (high variance)': _top_k_per_class(sigma2, labels, per_class, descending=True),
-            'Random': np.concatenate([
-                rng.choice(np.where(labels == c)[0],
-                           size=min(per_class, (labels == c).sum()),
-                           replace=False) for c in np.unique(labels)]),
-            'High confidence': _top_k_per_class(mean_conf_E, labels, per_class, descending=True),
-            'Low confidence':  _top_k_per_class(mean_conf_E, labels, per_class, descending=False),
-            'High loss':       _top_k_per_class(mean_loss_E, labels, per_class, descending=True),
-        }
-
-        m_E = logit_m[E-1]
-        dp_E = d_pred[E-1]
-        abs_m_E = np.abs(m_E)
-
-        # Sign-change indicator over epochs 1..E (any of the E-1 transitions)
-        signs = np.sign(logit_m[:E])
-        sign_change = np.any(signs[:-1] != signs[1:], axis=0)
-
-        # Per-class bottom-20% indicators
-        low_m_class = np.zeros(len(labels), dtype=bool)
-        low_d_class = np.zeros(len(labels), dtype=bool)
-        for c in np.unique(labels):
-            ci = np.where(labels == c)[0]
-            low_m_class[ci] = abs_m_E[ci] <= np.percentile(abs_m_E[ci], 20)
-            low_d_class[ci] = dp_E[ci] <= np.percentile(dp_E[ci], 20)
-
-        for name, idx in selections.items():
-            per_seed[name]['sign_change'].append(float(sign_change[idx].mean()))
-            per_seed[name]['frac_pos_m'].append(float((m_E[idx] > 0).mean()))
-            per_seed[name]['abs_m_median'].append(float(np.median(abs_m_E[idx])))
-            per_seed[name]['abs_m_mean'].append(float(np.mean(abs_m_E[idx])))
-            per_seed[name]['d_pred_mean'].append(float(dp_E[idx].mean()))
-            per_seed[name]['frac_low_m_class'].append(float(low_m_class[idx].mean()))
-            per_seed[name]['frac_low_d_class'].append(float(low_d_class[idx].mean()))
-
-        cgr_set = set(selections['CGR (high variance)'])
-        low_m_topk = set(_top_k_per_class(abs_m_E, labels, per_class, descending=False))
-        low_d_topk = set(_top_k_per_class(dp_E,    labels, per_class, descending=False))
-        ovl_low_m.append(len(cgr_set & low_m_topk) / len(cgr_set))
-        ovl_low_d.append(len(cgr_set & low_d_topk) / len(cgr_set))
-
-    agg = {}
-    for name, dd in per_seed.items():
-        agg[name] = {k: (float(np.mean(v)), float(np.std(v, ddof=1))) for k, v in dd.items()}
-    ovl = {
-        'CGR_vs_low_m_at_E':      (float(np.mean(ovl_low_m)), float(np.std(ovl_low_m, ddof=1))),
-        'CGR_vs_low_d_pred_at_E': (float(np.mean(ovl_low_d)), float(np.std(ovl_low_d, ddof=1))),
-    }
-    return agg, ovl
-
-
-# ------------------------- Reporting -------------------------
-
-def print_b1(mean_rho, std_rho, all_rhos, pairs, n_seeds):
-    n_pairs = len(all_rhos)
-    print(f"\n=== (b.1) Cross-seed Spearman correlation of variance vectors ===")
-    print(f"Number of seeds: {n_seeds}  ({n_pairs} pairs)")
-    print(f"Mean ρ ± std: {mean_rho:.4f} ± {std_rho:.4f}")
-    print(f"Per-pair ρ values:")
-    for (s1, s2), r in zip(pairs, all_rhos):
-        print(f"  (seed {s1}, seed {s2}): ρ = {r:.4f}")
-    print(f"\n  Paper insertion: \\bar\\rho = {mean_rho:.2f} \\pm {std_rho:.2f}")
-
-
-def print_a2(results, mean_rho, std_rho):
-    print(f"\n=== (a.2) Variance vs forgetting events (ALL seeds) ===")
-    print(f"Per-seed ρ values:")
-    for r in results:
-        sig = '***' if r['p'] < 1e-50 else ('**' if r['p'] < 1e-10 else '')
-        print(f"  seed {r['seed']}: ρ = {r['rho']:.4f}  (p = {r['p']:.3e})  {sig}")
-    print(f"\nMean ρ ± std over {len(results)} seeds: {mean_rho:.4f} ± {std_rho:.4f}")
-    print(f"\n  Paper insertion: \\rho = {mean_rho:.2f} \\pm {std_rho:.2f}")
-
-
-def print_d(agg, ovl_mean, ovl_std, early_mu, early_sd, late_mu, late_sd, n_seeds):
-    print(f"\n=== (d) Boundary-intuition verification [Concern 2] ===")
-    print(f"(end-of-training characterization, averaged over {n_seeds} seeds)\n")
-    header = f"{'Rule':<22} {'Correct':>14} {'MargPctl':>12} {'Resolved':>14} {'Boundary':>14} {'Outlier':>14}"
-    print(header); print('-' * len(header))
-    for name, d in agg.items():
-        print(f"{name:<22} "
-              f"{d['frac_correct_mean']:>6.3f}±{d['frac_correct_std']:.3f}    "
-              f"{d['median_pctl_mean']:>5.1f}±{d['median_pctl_std']:.1f}    "
-              f"{d['resolved_mean']:>6.3f}±{d['resolved_std']:.3f}    "
-              f"{d['still_boundary_mean']:>6.3f}±{d['still_boundary_std']:.3f}    "
-              f"{d['outlier_mean']:>6.3f}±{d['outlier_std']:.3f}")
-    print(f"\nOverlap between CGR selection and direct low-|margin| selection: "
-          f"{ovl_mean:.3f} ± {ovl_std:.3f}")
-    print(f"CGR-selected samples' mean margin: early (first E) = {early_mu:.3f} ± {early_sd:.3f}, "
-          f"late (last 5) = {late_mu:.3f} ± {late_sd:.3f}")
-    print(f"\n  Paper insertion (for Table 18 caption and §4 paragraph):")
-    print(f"    Overlap value: {ovl_mean:.3f}")
-    print(f"    Early margin:  {early_mu:.3f} \\pm {early_sd:.3f}")
-    print(f"    Late margin:   {late_mu:.3f} \\pm {late_sd:.3f}")
-
-
-def print_d2(agg, ovl, n_seeds):
-    print(f"\n=== (d2) Selection-time boundary diagnostics at epoch E [Concern 2, extended] ===")
-    print(f"(averaged over {n_seeds} seeds)\n")
-    header = (f"{'Rule':<22} {'SignChg 1..E':>13} {'m_E>0':>13} {'|m_E| med':>13} "
-              f"{'d_pred mean':>13} {'bot20% |m|':>13} {'bot20% d':>13}")
-    print(header); print('-' * len(header))
-    for name, d in agg.items():
-        def f(k, dg=3):
-            mu, sd = d[k]
-            return f"{mu:>6.{dg}f}±{sd:.{dg}f}"
-        print(f"{name:<22} {f('sign_change'):>13} {f('frac_pos_m'):>13} "
-              f"{f('abs_m_median',2):>13} {f('d_pred_mean',2):>13} "
-              f"{f('frac_low_m_class'):>13} {f('frac_low_d_class'):>13}")
-    print(f"\nOverlap of CGR selection with per-class bottom-K at epoch E:")
-    print(f"  by |logit margin|:      {ovl['CGR_vs_low_m_at_E'][0]:.3f} ± {ovl['CGR_vs_low_m_at_E'][1]:.3f}")
-    print(f"  by d^pred (feat-space): {ovl['CGR_vs_low_d_pred_at_E'][0]:.3f} ± {ovl['CGR_vs_low_d_pred_at_E'][1]:.3f}")
-
-
-def print_c(results, mean_rho, std_rho, E_small, E_large):
-    print(f"\n=== (c) Within-seed Spearman: σ² at E={E_small} vs σ² at E={E_large} "
-          f"[Concern 4 anchor] ===")
-    print(f"Per-seed ρ values:")
-    for r in results:
-        sig = '***' if r['p'] < 1e-50 else ('**' if r['p'] < 1e-10 else '')
-        print(f"  seed {r['seed']}: ρ = {r['rho']:.4f}  (p = {r['p']:.3e})  {sig}")
-    rhos = [r['rho'] for r in results]
-    print(f"\nMean ρ ± std over {len(results)} seeds: {mean_rho:.4f} ± {std_rho:.4f}")
-    print(f"Range: [{min(rhos):.4f}, {max(rhos):.4f}]")
-    print(f"\n  Paper insertion: "
-          f"\\bar\\rho_{{E={E_small},E={E_large}}} = {mean_rho:.3f} \\pm {std_rho:.3f}")
-
-
-def print_b2(agg, per_seed_rows, k_per_class, num_classes, n_seeds):
-    print(f"\n=== (b.2) Diagnostic table (averaged over {n_seeds} seeds) ===")
-    print(f"Per-class budget K = {k_per_class}  ({num_classes} classes seen in task 1)\n")
-
-    rule_names = list(agg.keys())
-    header = f"{'Rule':<18} {'Margin (mean±std)':>22} {'Forget (mean±std)':>22} {'MeanConf (mean±std)':>22}"
-    print(header)
-    print('-' * len(header))
-    for name in rule_names:
-        d = agg[name]
-        print(f"{name:<18} "
-              f"{d['mean_margin_mean']:>7.4f} ± {d['mean_margin_std']:.4f}    "
-              f"{d['mean_forgetting_mean']:>7.3f} ± {d['mean_forgetting_std']:.3f}    "
-              f"{d['mean_target_conf_mean']:>7.4f} ± {d['mean_target_conf_std']:.4f}")
-
-    print("\nPer-seed breakdown:")
-    for name in rule_names:
-        print(f"  {name}:")
-        d = agg[name]
-        for metric_pretty, metric_key in [('margin', 'mean_margin_per_seed'),
-                                          ('forget', 'mean_forgetting_per_seed'),
-                                          ('conf',   'mean_target_conf_per_seed')]:
-            vals = d[metric_key]
-            print(f"    {metric_pretty}: {[f'{v:.4f}' for v in vals]}")
-
-    # LaTeX table
-    print("\n--- LaTeX (paste into Table tab:diagnostic) ---")
-    print(r"\begin{tabular}{lccc}")
-    print(r"\toprule")
-    print(r"Selection rule & Mean margin $\downarrow$ & Forgetting events $\uparrow$ & Mean target conf. \\")
-    print(r"\midrule")
-    for name in rule_names:
-        d = agg[name]
-        print(f"{name} & "
-              f"${d['mean_margin_mean']:.3f} \\pm {d['mean_margin_std']:.3f}$ & "
-              f"${d['mean_forgetting_mean']:.2f} \\pm {d['mean_forgetting_std']:.2f}$ & "
-              f"${d['mean_target_conf_mean']:.3f} \\pm {d['mean_target_conf_std']:.3f}$ \\\\")
-    print(r"\bottomrule")
-    print(r"\end{tabular}")
-
-
-# ---------------------------- Main ----------------------------
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--diag_dir', type=str, required=True,
-                        help='Directory containing cgr_diag_seed*.pt files.')
+from utils.buffer import Buffer
+from utils.args import *
+from models.utils.continual_model import ContinualModel
+
+import torch.nn as nn
+import numpy as np
+import torch.nn.functional as F
+
+
+def get_parser() -> ArgumentParser:
+    parser = ArgumentParser(description='CGR: Confidence-Guided Reply for Buffer-Based Continual Learning')
+    add_management_args(parser)
+    add_experiment_args(parser)
+    add_rehearsal_args(parser)
     parser.add_argument('--E', type=int, default=4,
-                        help='CGR variance window (should match what was used in training).')
-    parser.add_argument('--buffer_size', type=int, default=1000,
-                        help='Buffer size used in the run; controls per-class top-K.')
-    parser.add_argument('--E_small', type=int, default=2,
-                        help='Small window for the within-seed E_small-vs-E_large check (Concern 4). '
-                             'Default 2.')
-    parser.add_argument('--E_large', type=int, default=5,
-                        help='Large window for the within-seed E_small-vs-E_large check (Concern 4). '
-                             'Default 5.')
-    args = parser.parse_args()
-
-    logs = load_seed_logs(args.diag_dir)
-    print(f"Loaded {len(logs)} seed logs from {args.diag_dir}")
-    for log in logs:
-        print(f"  seed={log['seed']}  E={log['E']}  n_epochs={log['n_epochs']}  "
-              f"n_samples={log['n_sample_per_task']}  buffer_size={log['buffer_size']}")
-
-    # (b.1) cross-seed
-    if len(logs) >= 2:
-        mean_rho, std_rho, all_rhos, pairs = cross_seed_spearman(logs, args.E)
-        print_b1(mean_rho, std_rho, all_rhos, pairs, len(logs))
-    else:
-        print("\n(b.1) Cross-seed correlation skipped: need >= 2 seeds.")
-
-    # (c) within-seed E_small vs E_large -- anchors Concern 4 sanity check
-    c_results, c_mean, c_std = within_seed_E_small_vs_E_large_spearman(
-        logs, args.E_small, args.E_large
-    )
-    print_c(c_results, c_mean, c_std, args.E_small, args.E_large)
-
-    # (b.2) diagnostic table -- averaged across all seeds
-    agg, per_seed_rows, k_per_class, num_classes = diagnostic_table_all_seeds(
-        logs, args.E, args.buffer_size
-    )
-    print_b2(agg, per_seed_rows, k_per_class, num_classes, len(logs))
-
-    # (d) boundary-intuition verification -- Concern 2
-    agg_d, _ = boundary_intuition_test(logs, args.E, args.buffer_size)
-    ovl_mean, ovl_std = overlap_with_direct_boundary(logs, args.E, args.buffer_size)
-    early_mu, early_sd, late_mu, late_sd = cgr_margin_trajectory(logs, args.E, args.buffer_size)
-    print_d(agg_d, ovl_mean, ovl_std, early_mu, early_sd, late_mu, late_sd, len(logs))
-
-    # (d2) selection-time boundary diagnostics -- Concern 2, extended
-    # (requires extended log format with diag_logit_margin and diag_feat_dist_pred)
-    try:
-        agg_d2, ovl_d2 = selection_time_diagnostics(logs, args.E, args.buffer_size)
-        print_d2(agg_d2, ovl_d2, len(logs))
-    except KeyError as e:
-        print(f"\n[Skipping (d2)] {e}")
+                        help='Epoch for selecting samples')
+    # === DIAG: new CLI args ===
+    parser.add_argument('--cgr_diag_log', action='store_true',
+                        help='If set, record per-sample diagnostics during task 1 (from CGR\'s eval forward pass) and save to disk.')
+    parser.add_argument('--cgr_diag_dir', type=str, default='cgr_diag_logs',
+                        help='Directory to save per-seed diagnostic logs.')
+    # === END DIAG ===
+    return parser
 
 
-if __name__ == '__main__':
-    main()
+def distribute_samples(probabilities, M):
+    total_probability = sum(probabilities.values())
+    normalized_probabilities = {k: v / total_probability for k, v in probabilities.items()}
+    samples = {k: round(v * M) for k, v in normalized_probabilities.items()}
+    discrepancy = M - sum(samples.values())
+    for key in samples:
+        if discrepancy == 0:
+            break
+        if discrepancy > 0:
+            samples[key] += 1
+            discrepancy -= 1
+        elif discrepancy < 0 and samples[key] > 0:
+            samples[key] -= 1
+            discrepancy += 1
+    return samples
+
+
+def distribute_excess(lst, check_bound):
+    total_excess = sum(val - check_bound for val in lst if val > check_bound)
+    recipients = [i for i, val in enumerate(lst) if val < check_bound]
+    num_recipients = len(recipients)
+    avg_share, remainder = divmod(total_excess, num_recipients)
+    lst = [val if val <= check_bound else check_bound for val in lst]
+    for idx in recipients:
+        lst[idx] += avg_share
+    for idx in recipients[:remainder]:
+        lst[idx] += 1
+    for i, val in enumerate(lst):
+        if val > check_bound:
+            return distribute_excess(lst, check_bound)
+    return lst
+
+
+def adjust_values_integer_include_all(a, b):
+    excess = {}
+    shortage = {}
+    total_excess = 0
+    for k in a:
+        if k in b:
+            if a[k] > b[k]:
+                excess[k] = a[k] - b[k]
+                total_excess += a[k] - b[k]
+                a[k] = b[k]
+            elif a[k] < b[k]:
+                shortage[k] = b[k] - a[k]
+        else:
+            shortage[k] = float('inf')
+    while total_excess > 0 and shortage:
+        per_key_excess = max(total_excess // len(shortage), 1)
+        for k in list(shortage):
+            if total_excess == 0:
+                break
+            if shortage[k] == float('inf'):
+                increment = per_key_excess
+            else:
+                increment = min(shortage[k], per_key_excess)
+            a[k] += increment
+            total_excess -= increment
+            if shortage[k] != float('inf'):
+                shortage[k] -= increment
+                if shortage[k] == 0:
+                    del shortage[k]
+    for key in a:
+        a[key] = int(a[key])
+    return a
+
+
+class Cgr(ContinualModel):
+    NAME = 'cgr'
+    COMPATIBILITY = ['class-il', 'task-il']
+
+    def __init__(self, backbone, loss, args, transform):
+        super(Cgr, self).__init__(backbone, loss, args, transform)
+        self.buffer = Buffer(self.args.buffer_size, self.device)
+        self.task = 0
+        self.epoch = 0
+        self.unique_classes = set()
+        self.mapping = {}
+        self.reverse_mapping = {}
+        self.confidence_by_sample = None
+        self.n_sample_per_task = None
+        self.class_portion = []
+        self.dist_task_prev = None
+        self.dist_class_prev = None
+        # === DIAG: per-sample diagnostic tensors (allocated in begin_task for task 1 only) ===
+        self.diag_margin = None       # (n_epochs, n_sample_per_task) — probability margin
+        self.diag_correct = None      # (n_epochs, n_sample_per_task) bool
+        self.diag_loss = None         # (n_epochs, n_sample_per_task) per-sample CE
+        self.diag_labels = None       # (n_sample_per_task,) global class id
+        # NEW: logit margin z_y - max_{k!=y} z_k (for boundary-diagnostic analyses,
+        # per GPT critique — probability margin and logit margin share sign but
+        # differ in magnitude and cross-sample ranking).
+        self.diag_logit_margin = None  # (n_epochs, n_sample_per_task)
+        # NEW: feature-space signed distance / normalized target margin (Concern 2)
+        self.diag_feat_dist_target = None  # (n_epochs, n_sample_per_task)
+        self.diag_feat_dist_pred   = None  # (n_epochs, n_sample_per_task)
+        # === END DIAG ===
+
+    def _diag_active(self):
+        """True iff diagnostic logging is enabled AND we're in task 1."""
+        return getattr(self.args, 'cgr_diag_log', False) and self.task == 1
+
+    # === DIAG: helper for feature-space distance analysis (Concern 2) ===
+    def _diag_get_classifier_head(self):
+        """Return the last nn.Linear in the network, assumed to be the classifier
+        head. Robust to networks wrapped in Sequential / ContinualLearner
+        modules (as in Mammoth's ResNet18 setup)."""
+        last_linear = None
+        for m in self.net.modules():
+            if isinstance(m, nn.Linear):
+                last_linear = m
+        if last_linear is None:
+            raise RuntimeError("_diag_get_classifier_head: no nn.Linear found in self.net")
+        return last_linear
+
+    def _diag_feat_distances(self, logits, labels_dev):
+        """Compute per-sample signed feature-space quantities using the
+        classifier head's weight matrix. The bias term (b_y - b_k) is already
+        absorbed into the logit difference z_y - z_k = (w_y - w_k)^T phi +
+        (b_y - b_k), so only the pairwise weight-vector norms ||w_i - w_j||_2
+        are needed for the denominator.
+
+        Two per-sample quantities are returned:
+
+        d_pred (i)  = min_{k != y_hat_i} (z_{y_hat_i} - z_k) / ||w_{y_hat_i} - w_k||_2
+            Always >= 0 (y_hat is the argmax by construction). Geometrically
+            the signed perpendicular distance from phi(x_i) to the nearest
+            boundary of the *predicted* class region under the affine head.
+
+        d_target(i) = min_{k != y_i}    (z_{y_i}    - z_k) / ||w_{y_i}    - w_k||_2
+            Interpretation depends on classification status:
+              - Correctly classified (y_hat_i == y_i): equals d_pred(i);
+                a valid signed distance to the nearest boundary of the target
+                (== correct) class region.
+              - Misclassified (y_hat_i != y_i): negative; equals the
+                *minimum normalized target margin*, i.e. the most-violated
+                pairwise (target vs competitor) constraint. NOT a geometric
+                distance from phi(x_i) to the target-region boundary, since
+                that would require solving a QP over multiple half-space
+                constraints. Report separately for the misclassified subset in
+                downstream analysis.
+
+        For the cleanest "distance to boundary" analysis, restrict to samples
+        where diag_correct == True; on that subset d_pred == d_target and is
+        the signed distance to the correct-class region boundary.
+
+        Args:
+            logits: (B, C) raw logits from the eval-mode forward pass
+            labels_dev: (B,) target class indices on the same device
+
+        Returns:
+            d_target: (B,) see above.
+            d_pred:   (B,) see above; always >= 0.
+        """
+        head = self._diag_get_classifier_head()
+        W = head.weight.detach()  # (C, d_feat)
+        # Pairwise weight-vector distances ||w_i - w_j||_2 (C, C)
+        # Small (100x100 for CIFAR-100) so cost is negligible.
+        W_dist = torch.cdist(W.unsqueeze(0), W.unsqueeze(0), p=2).squeeze(0)
+
+        B, C = logits.shape
+
+        # -- d_target: (z_y - z_k) / ||w_y - w_k||, min over k != y --
+        target_logits = logits.gather(1, labels_dev.unsqueeze(1)).squeeze(1)   # (B,)
+        z_diff_t = target_logits.unsqueeze(1) - logits                          # (B, C)
+        w_diff_t = W_dist[labels_dev]                                            # (B, C)
+        # avoid div-by-zero at k=y (0/0); we'll mask that column afterwards
+        ratio_t = z_diff_t / w_diff_t.clamp(min=1e-12)
+        mask_t = torch.zeros_like(ratio_t, dtype=torch.bool)
+        mask_t.scatter_(1, labels_dev.unsqueeze(1), True)
+        ratio_t = ratio_t.masked_fill(mask_t, float('inf'))
+        d_target = ratio_t.min(dim=1).values                                     # (B,)
+
+        # -- d_pred: same but using argmax class --
+        y_hat = logits.argmax(dim=1)                                             # (B,)
+        pred_logits = logits.gather(1, y_hat.unsqueeze(1)).squeeze(1)            # (B,)
+        z_diff_p = pred_logits.unsqueeze(1) - logits                             # (B, C)
+        w_diff_p = W_dist[y_hat]                                                  # (B, C)
+        ratio_p = z_diff_p / w_diff_p.clamp(min=1e-12)
+        mask_p = torch.zeros_like(ratio_p, dtype=torch.bool)
+        mask_p.scatter_(1, y_hat.unsqueeze(1), True)
+        ratio_p = ratio_p.masked_fill(mask_p, float('inf'))
+        d_pred = ratio_p.min(dim=1).values                                       # (B,)
+
+        return d_target, d_pred
+    # === END DIAG ===
+
+    def begin_train(self, dataset):
+        self.n_sample_per_task = dataset.get_examples_number() // dataset.N_TASKS
+
+    def begin_task(self, dataset, train_loader):
+        self.epoch = 0
+        self.task += 1
+        self.unique_classes = set()
+        for _, labels, _, _ in train_loader:
+            self.unique_classes.update(labels.numpy())
+            if len(self.unique_classes) == dataset.N_CLASSES_PER_TASK:
+                break
+        self.mapping = {value: index for index, value in enumerate(self.unique_classes)}
+        self.reverse_mapping = {index: value for value, index in self.mapping.items()}
+        self.confidence_by_sample = torch.zeros((self.args.n_epochs, self.n_sample_per_task))
+
+        # === DIAG: allocate task-1 diagnostic tensors ===
+        if self._diag_active():
+            n_e = self.args.n_epochs
+            n_s = self.n_sample_per_task
+            self.diag_margin = torch.zeros((n_e, n_s))
+            self.diag_correct = torch.zeros((n_e, n_s), dtype=torch.bool)
+            self.diag_loss = torch.zeros((n_e, n_s))
+            self.diag_labels = torch.full((n_s,), -1, dtype=torch.long)
+            # NEW: logit margin
+            self.diag_logit_margin = torch.zeros((n_e, n_s))
+            # NEW: feature-space distances
+            self.diag_feat_dist_target = torch.zeros((n_e, n_s))
+            self.diag_feat_dist_pred   = torch.zeros((n_e, n_s))
+        # === END DIAG ===
+
+    def _save_diag(self):
+        """Dump task-1 diagnostics to disk at the end of task 1's last epoch."""
+        if not self._diag_active():
+            return
+        save_dir = getattr(self.args, 'cgr_diag_dir', 'cgr_diag_logs')
+        os.makedirs(save_dir, exist_ok=True)
+        seed = getattr(self.args, 'seed', 'unknown')
+        save_path = os.path.join(save_dir, f'cgr_diag_seed{seed}.pt')
+        torch.save({
+            'seed': seed,
+            'E': self.args.E,
+            'n_epochs': self.args.n_epochs,
+            'n_sample_per_task': self.n_sample_per_task,
+            'buffer_size': self.args.buffer_size,
+            # CGR's eval-mode target confidence. With --cgr_diag_log this is
+            # filled for ALL epochs of task 1; use [:E] for CGR's variance.
+            'cgr_confidence_by_sample': self.confidence_by_sample.clone(),
+            # Diagnostics computed from the same eval-mode forward pass on not_aug_inputs
+            'diag_margin': self.diag_margin.clone(),               # probability margin (p_y - max_{k!=y} p_k)
+            'diag_correct': self.diag_correct.clone(),
+            'diag_loss': self.diag_loss.clone(),
+            'diag_labels': self.diag_labels.clone(),
+            'diag_logit_margin': self.diag_logit_margin.clone(),   # NEW: logit margin (z_y - max_{k!=y} z_k)
+            # NEW (Concern 2): feature-space signed distances / normalized target margin
+            'diag_feat_dist_target': self.diag_feat_dist_target.clone(),
+            'diag_feat_dist_pred':   self.diag_feat_dist_pred.clone(),
+            'class_mapping': dict(self.mapping),
+        }, save_path)
+        print(f"[CGR-Diag] Saved task-1 diagnostics to {save_path}")
+
+    def end_epoch(self, dataset, train_loader):
+
+        self.epoch += 1
+
+        if self.epoch == self.args.n_epochs:
+            # === DIAG: dump task-1 diagnostics before the buffer-update logic ===
+            self._save_diag()
+            # === END DIAG ===
+
+            # ... rest of the function unchanged from original ...
+            std_of_means_by_class = {class_id: 1 for class_id, __ in enumerate(self.unique_classes)}
+            std_of_means_by_task = {task_id: 1 for task_id in range(self.task)}
+
+            Confidence_mean = self.confidence_by_sample[:self.args.E].mean(dim=0)
+            Variability = self.confidence_by_sample[:self.args.E].var(dim=0)
+
+            sorted_indices_2 = np.argsort(Variability.numpy())
+            top_indices_sorted = sorted_indices_2[::-1].copy()
+
+            all_inputs, all_labels, all_not_aug_inputs, all_indices = [], [], [], []
+            for data_1 in train_loader:
+                inputs_1, labels_1, not_aug_inputs_1, indices_1 = data_1
+                all_inputs.append(inputs_1)
+                all_labels.append(labels_1)
+                all_not_aug_inputs.append(not_aug_inputs_1)
+                all_indices.append(indices_1)
+
+            all_inputs = torch.cat(all_inputs, dim=0)
+            all_labels = torch.cat(all_labels, dim=0)
+            all_not_aug_inputs = torch.cat(all_not_aug_inputs, dim=0)
+            all_indices = torch.cat(all_indices, dim=0)
+
+            top_indices_sorted = torch.tensor(top_indices_sorted, dtype=torch.long)
+            positions = torch.hstack([torch.where(all_indices == index)[0] for index in top_indices_sorted])
+
+            all_images = all_not_aug_inputs[positions]
+            all_labels = all_labels[positions]
+
+            updated_std_of_means_by_class = {self.reverse_mapping[k]: 1 for k, _ in std_of_means_by_class.items()}
+            self.class_portion.append(updated_std_of_means_by_class)
+            updated_std_of_means_by_task = {k: 1 for k, v in std_of_means_by_task.items()}
+            dist_task_before = distribute_samples(updated_std_of_means_by_task, self.args.buffer_size)
+
+            if self.task > 1:
+                dist_task = adjust_values_integer_include_all(dist_task_before.copy(), self.dist_task_prev)
+            else:
+                dist_task = dist_task_before
+
+            dist_class = [distribute_samples(self.class_portion[i], dist_task[i]) for i in range(self.task)]
+            self.dist_task_prev = dist_task
+
+            dist = dist_class.pop()
+            dist_last = dist.copy()
+            dist = {self.mapping[k]: v for k, v in dist.items()}
+
+            counter_class = [0 for _ in range(len(self.unique_classes))]
+            condition = [dist[k] for k in range(len(dist))]
+
+            check_bound = self.n_sample_per_task // len(self.unique_classes)
+            for i in range(len(condition)):
+                if condition[i] > check_bound:
+                    condition = distribute_excess(condition, check_bound)
+                    break
+
+            images_list_ = []
+            labels_list_ = []
+            for i in range(all_labels.shape[0]):
+                if counter_class[self.mapping[all_labels[i].item()]] < condition[self.mapping[all_labels[i].item()]]:
+                    counter_class[self.mapping[all_labels[i].item()]] += 1
+                    labels_list_.append(all_labels[i])
+                    images_list_.append(all_images[i])
+                if counter_class == condition:
+                    break
+
+            all_images_ = torch.stack(images_list_).to(self.device)
+            all_labels_ = torch.stack(labels_list_).to(self.device)
+
+            counter_manage = [{k: 0 for k, __ in dist_class[i].items()} for i in range(self.task - 1)]
+            dist_class_merged = {}
+            counter_manage_merged = {}
+            dist_class_merged_prev = {}
+
+            for d in dist_class:
+                dist_class_merged.update(d)
+            for f in counter_manage:
+                counter_manage_merged.update(f)
+            if self.task > 1:
+                dist_class_merged_prev = self.dist_class_prev
+                class_key = list(dist_class_merged.keys())
+                temp_key = -1
+                for k, value in dist_class_merged.items():
+                    temp_key += 1
+                    if value > dist_class_merged_prev[k]:
+                        temp = value - dist_class_merged_prev[k]
+                        dist_class_merged[k] -= temp
+                        for hh in range(temp):
+                            dist_class_merged[class_key[temp_key + hh + 1]] += 1
+
+            self.dist_class_prev = dist_class_merged.copy()
+            self.dist_class_prev.update(dist_last)
+
+            if not self.buffer.is_empty():
+                images_store = []
+                labels_store = []
+                for i in range(len(self.buffer)):
+                    if counter_manage_merged[self.buffer.labels[i].item()] < dist_class_merged[self.buffer.labels[i].item()]:
+                        counter_manage_merged[self.buffer.labels[i].item()] += 1
+                        labels_store.append(self.buffer.labels[i])
+                        images_store.append(self.buffer.examples[i])
+                    if counter_manage_merged == dist_class_merged:
+                        break
+                images_store_ = torch.stack(images_store).to(self.device)
+                labels_store_ = torch.stack(labels_store).to(self.device)
+                all_images_ = torch.cat((images_store_, all_images_))
+                all_labels_ = torch.cat((labels_store_, all_labels_))
+
+            if not hasattr(self.buffer, 'examples'):
+                self.buffer.init_tensors(all_images_, all_labels_, None, None)
+
+            self.buffer.num_seen_examples += self.n_sample_per_task
+            self.buffer.labels = all_labels_
+            self.buffer.examples = all_images_
+
+    def observe(self, inputs, labels, not_aug_inputs, index_):
+
+        real_batch_size = inputs.shape[0]
+
+        batch_x, batch_y = inputs, labels
+        batch_x = batch_x.to(self.device)
+        batch_y = batch_y.to(self.device)
+        batch_x_combine = batch_x
+        batch_y_combine = batch_y
+
+        self.opt.zero_grad()
+
+        # === DIAG: decide whether to run the eval forward pass on this step ===
+        # Original CGR: only during the first E epochs (for variance computation).
+        # With diag logging: for ALL epochs of task 1, so we get target confidence,
+        # margin, correctness, and per-sample loss from the SAME eval-mode pass at
+        # every epoch (needed for forgetting events and the diagnostic table).
+        run_eval_pass = self.epoch < self.args.E
+        if self._diag_active() and self.epoch < self.args.n_epochs:
+            run_eval_pass = True
+        # === END DIAG ===
+
+        if run_eval_pass:
+            targets = torch.tensor([self.mapping[val.item()] for val in labels]).to(self.device)
+            confidence_batch = []
+            self.net.eval()
+            with torch.no_grad():
+                cgr_logits = self.net(not_aug_inputs)
+                soft_ = nn.functional.softmax(cgr_logits, dim=1)
+                # Existing: per-sample target confidence into self.confidence_by_sample
+                for i in range(targets.shape[0]):
+                    confidence_batch.append(soft_[i, labels[i]].item())
+                conf_tensor = torch.tensor(confidence_batch)
+                self.confidence_by_sample[self.epoch, index_] = conf_tensor
+
+                # === DIAG: record margin / correctness / per-sample loss from same eval pass ===
+                if self._diag_active():
+                    labels_dev = labels.to(self.device).long()
+                    target_prob = soft_.gather(1, labels_dev.unsqueeze(1)).squeeze(1)
+                    soft_other = soft_.clone()
+                    soft_other.scatter_(1, labels_dev.unsqueeze(1), float('-inf'))
+                    max_other = soft_other.max(dim=1)[0]
+                    margin = (target_prob - max_other).cpu()  # probability margin, kept for compatibility
+
+                    pred = cgr_logits.argmax(dim=1)
+                    correct = (pred == labels_dev).cpu()
+
+                    per_sample_loss = F.cross_entropy(cgr_logits, labels_dev, reduction='none').cpu()
+
+                    # NEW: logit margin z_y - max_{k!=y} z_k (per GPT critique for the
+                    # boundary-diagnostic analysis; shares sign with probability margin
+                    # but differs in magnitude and cross-sample ranking).
+                    target_logits = cgr_logits.gather(1, labels_dev.unsqueeze(1)).squeeze(1)
+                    logit_other = cgr_logits.clone()
+                    logit_other.scatter_(1, labels_dev.unsqueeze(1), float('-inf'))
+                    max_other_logit = logit_other.max(dim=1)[0]
+                    logit_margin = (target_logits - max_other_logit).cpu()
+
+                    # NEW (Concern 2): feature-space signed distance to nearest boundary
+                    d_target, d_pred = self._diag_feat_distances(cgr_logits, labels_dev)
+                    d_target = d_target.cpu()
+                    d_pred = d_pred.cpu()
+
+                    if torch.is_tensor(index_):
+                        idx_cpu = index_.detach().cpu().long()
+                    else:
+                        idx_cpu = torch.as_tensor(index_, dtype=torch.long)
+                    self.diag_margin[self.epoch, idx_cpu] = margin
+                    self.diag_correct[self.epoch, idx_cpu] = correct
+                    self.diag_loss[self.epoch, idx_cpu] = per_sample_loss
+                    self.diag_labels[idx_cpu] = labels.detach().cpu().long()
+                    self.diag_logit_margin[self.epoch, idx_cpu] = logit_margin
+                    self.diag_feat_dist_target[self.epoch, idx_cpu] = d_target
+                    self.diag_feat_dist_pred[self.epoch, idx_cpu] = d_pred
+                # === END DIAG ===
+            self.net.train()
+
+        # SGD forward + backward (unchanged)
+        if self.buffer.is_empty():
+            logits = self.net(batch_x_combine)
+            novel_loss = self.loss(logits, batch_y_combine)
+        else:
+            mem_x, mem_y = self.buffer.get_data(
+                self.args.minibatch_size, transform=self.transform)
+            mem_x = mem_x.to(self.device)
+            mem_y = mem_y.to(self.device)
+            mem_x_combine = mem_x
+            mem_y_combine = mem_y
+            combined_inputs = torch.cat([mem_x_combine, batch_x_combine])
+            combined_labels = torch.cat((mem_y_combine, batch_y_combine))
+            combined_logits = self.net(combined_inputs)
+            novel_loss = self.loss(combined_logits, combined_labels)
+
+        novel_loss.backward()
+        self.opt.step()
+
+        return novel_loss.item()
