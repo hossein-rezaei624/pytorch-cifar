@@ -21,7 +21,7 @@ When --cgr_diag_log is set, this version:
       -- logit margin z_y - max_{k!=y} z_k                            (`diag_logit_margin`, signed)
       -- logit margin z_yhat - max_{k!=yhat} z_k                      (`diag_logit_margin_pred`, >=0)
       -- nearest pairwise |z_y - z_k| over k != y                     (`diag_nearest_pair_logit_gap`, >=0)
-      -- nearest pairwise |z_yhat - z_k| over k != yhat               (`diag_nearest_pair_logit_gap_pred`, >=0)
+      -- nearest pairwise |p_y - p_k| over k != y                     (`diag_nearest_pair_probability_gap`, >=0)
     Probability margin and logit margin share sign but not magnitude or
     cross-sample ranking; nearest-pair gaps and target/pred aggregated
     margins are ALSO different for misclassified samples (see below).
@@ -180,7 +180,7 @@ class Cgr(ContinualModel):
         self.diag_logit_margin = None                  # z_y - max_{k!=y} z_k (signed logit margin)
         self.diag_logit_margin_pred = None             # z_yhat - max_{k!=yhat} z_k (>=0)
         self.diag_nearest_pair_logit_gap = None        # min_{k!=y}    |z_y    - z_k| (>=0)
-        self.diag_nearest_pair_logit_gap_pred = None   # min_{k!=yhat} |z_yhat - z_k| (>=0)
+        self.diag_nearest_pair_probability_gap = None # min_{k!=y} |p_y - p_k| (>=0)
         # Feature-space (affine-head) distances (Concern 2):
         self.diag_feat_dist_target = None              # min_{k!=y} (z_y - z_k)/||w_y - w_k||_2 (signed)
         self.diag_feat_dist_target_absmin = None       # min_{k!=y} |(z_y - z_k)|/||w_y - w_k||_2 (>=0)
@@ -318,7 +318,7 @@ class Cgr(ContinualModel):
             self.diag_logit_margin = _nan((n_e, n_s))
             self.diag_logit_margin_pred = _nan((n_e, n_s))
             self.diag_nearest_pair_logit_gap = _nan((n_e, n_s))
-            self.diag_nearest_pair_logit_gap_pred = _nan((n_e, n_s))
+            self.diag_nearest_pair_probability_gap = _nan((n_e, n_s))
             self.diag_feat_dist_target = _nan((n_e, n_s))
             self.diag_feat_dist_target_absmin = _nan((n_e, n_s))
             self.diag_feat_dist_pred = _nan((n_e, n_s))
@@ -355,7 +355,7 @@ class Cgr(ContinualModel):
             'diag_logit_margin':                 self.diag_logit_margin.clone(),                 # signed logit margin (target)
             'diag_logit_margin_pred':            self.diag_logit_margin_pred.clone(),            # logit margin (predicted, >=0)
             'diag_nearest_pair_logit_gap':       self.diag_nearest_pair_logit_gap.clone(),       # min_{k!=y}    |z_y    - z_k|
-            'diag_nearest_pair_logit_gap_pred':  self.diag_nearest_pair_logit_gap_pred.clone(),  # min_{k!=yhat} |z_yhat - z_k|
+            'diag_nearest_pair_probability_gap':  self.diag_nearest_pair_probability_gap.clone(),  # min_{k!=y} |p_y - p_k|
             # Feature-space (affine-head) distances:
             'diag_feat_dist_target':         self.diag_feat_dist_target.clone(),         # signed min over k!=y of ratios
             'diag_feat_dist_target_absmin':  self.diag_feat_dist_target_absmin.clone(),  # min over k!=y of |ratios|
@@ -564,22 +564,27 @@ class Cgr(ContinualModel):
                     max_other_logit_pred = logit_other_pred.max(dim=1).values
                     logit_margin_pred = (pred_logits_val - max_other_logit_pred).cpu()
 
-                    # ---- Nearest pairwise |z - z_k| (differs from |scalar margin|
-                    #      for misclassified samples: |min|(diffs) != min |diffs|) ----
-                    # target-based: min_{k!=y} |z_y - z_k|
+                    # ---- Nearest pairwise |target - k| gap, both logit and probability space
+                    #      (target-based only; the predicted-based analog would equal the
+                    #      top-two gap `*_margin_pred` because y_hat is argmax, so |z_yhat - z_k|
+                    #      = z_yhat - z_k for all k != y_hat, and min = z_yhat - max_{k!=yhat} z_k
+                    #      = logit_margin_pred). Target-based versions differ from |scalar margin|
+                    #      for misclassified samples: |min|(diffs) != min |diffs|. ----
+                    # target-based (logit): min_{k!=y} |z_y - z_k|
                     z_diff_tgt = target_logits.unsqueeze(1) - cgr_logits  # (B, C)
                     abs_diff_tgt = z_diff_tgt.abs()
                     mask_tgt = torch.zeros_like(abs_diff_tgt, dtype=torch.bool)
                     mask_tgt.scatter_(1, labels_dev.unsqueeze(1), True)
                     nearest_pair_logit_gap = abs_diff_tgt.masked_fill(
                         mask_tgt, float('inf')).min(dim=1).values.cpu()
-                    # predicted-based: min_{k!=yhat} |z_yhat - z_k|
-                    z_diff_pred = pred_logits_val.unsqueeze(1) - cgr_logits  # (B, C)
-                    abs_diff_pred = z_diff_pred.abs()
-                    mask_pred = torch.zeros_like(abs_diff_pred, dtype=torch.bool)
-                    mask_pred.scatter_(1, y_hat.unsqueeze(1), True)
-                    nearest_pair_logit_gap_pred = abs_diff_pred.masked_fill(
-                        mask_pred, float('inf')).min(dim=1).values.cpu()
+                    # target-based (probability space): min_{k!=y} |p_y - p_k|
+                    # Reuses `target_prob` (=p_y) and `soft_` (softmax probs) computed above.
+                    p_diff_tgt = target_prob.unsqueeze(1) - soft_  # (B, C), p_y - p_k
+                    abs_p_diff_tgt = p_diff_tgt.abs()
+                    mask_p_tgt = torch.zeros_like(abs_p_diff_tgt, dtype=torch.bool)
+                    mask_p_tgt.scatter_(1, labels_dev.unsqueeze(1), True)
+                    nearest_pair_prob_gap = abs_p_diff_tgt.masked_fill(
+                        mask_p_tgt, float('inf')).min(dim=1).values.cpu()
 
                     # ---- Feature-space distances (Concern 2) ----
                     d_target_signed, d_target_absmin, d_pred = \
@@ -602,7 +607,7 @@ class Cgr(ContinualModel):
                     self.diag_logit_margin[e, idx_cpu] = logit_margin
                     self.diag_logit_margin_pred[e, idx_cpu] = logit_margin_pred
                     self.diag_nearest_pair_logit_gap[e, idx_cpu] = nearest_pair_logit_gap
-                    self.diag_nearest_pair_logit_gap_pred[e, idx_cpu] = nearest_pair_logit_gap_pred
+                    self.diag_nearest_pair_probability_gap[e, idx_cpu] = nearest_pair_prob_gap
                     self.diag_feat_dist_target[e, idx_cpu] = d_target_signed
                     self.diag_feat_dist_target_absmin[e, idx_cpu] = d_target_absmin
                     self.diag_feat_dist_pred[e, idx_cpu] = d_pred
