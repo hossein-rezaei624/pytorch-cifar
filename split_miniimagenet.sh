@@ -477,9 +477,8 @@ def cgr_margin_trajectory(logs, E, buffer_size, late_window=None):
 # ---------------- (d2) Selection-time boundary diagnostics (Concern 2, extended) ----
 
 def selection_time_diagnostics(logs, E, buffer_size):
-    """Per selection rule, characterize the samples PRIMARILY at epoch E
-    (during that sample's diagnostic pass in epoch E — see cgr_with_diag.py
-    module docstring for the timing caveat: this is NOT a common end-of-epoch
+    """Per selection rule, characterize the samples PRIMARILY during each
+    sample's diagnostic pass in epoch E (see cgr_with_diag.py module docstring for the timing caveat: this is NOT a common end-of-epoch
     checkpoint), and COMPLEMENTARILY over the first-E window (mean across
     epochs 0..E-1). Uses all margin variants + feature-space distances +
     correctly-classified-subset d.
@@ -506,7 +505,7 @@ def selection_time_diagnostics(logs, E, buffer_size):
     # Metric keys: <at_E | over_E>_<metric_name>. See paper insertion.
     metric_names_at_E = [
         'sign_change_strict',   # strict sign-change during epochs 0..E-1
-        'frac_correct_at_E',    # correctness at epoch E (from diag_correct[E-1])
+        'frac_correct_at_E',    # correctness during diagnostic pass in epoch E (diag_correct[E-1])
         'prob_margin_signed',   # p_y - max_{k!=y} p_k
         'prob_margin_pred',     # p_yhat - max_{k!=yhat} p_k (>=0)
         'logit_margin_signed',  # z_y - max_{k!=y} z_k
@@ -653,7 +652,7 @@ def selection_time_diagnostics(logs, E, buffer_size):
                 row[f'{key_base}_mean'].append(mn)
                 row[f'{key_base}_range'].append(rg)
 
-        # Overlaps: CGR vs bottom-K under various criteria at epoch E
+        # Overlaps: CGR vs bottom-K under various criteria during epoch E's diagnostic pass
         cgr_set = set(selections['CGR (high variance)'])
         for name, sc in [
             ('CGR_vs_low_absm_at_E',              abs_lm_E),
@@ -725,7 +724,7 @@ def print_overlap(ovl_dict):
     both at-epoch-E and over-first-E-window)."""
     print(f"\n=== Overlap of CGR selection with per-class bottom-K under alternative criteria ===")
     print(f"(Chance overlap under Random selection ≈ 20% for K/N_class = 0.2.)")
-    print(f"\n{'Criterion':<24} {'at epoch E':>18} {'over first-E window':>22}")
+    print(f"\n{'Criterion':<24} {'in epoch-E pass':>18} {'over first-E window':>22}")
     print('-' * 66)
     criteria = ['d_pred', 'm_pred', 'nearest_pair_gap', 'abs_m_tgt', 'signed_m_tgt']
     for c in criteria:
@@ -751,7 +750,7 @@ def print_d2(agg, ovl, n_seeds):
     print(f"(measured during each sample's diagnostic pass in epoch E; NOT a common")
     print(f" end-of-epoch checkpoint. Averaged over {n_seeds} seeds.)\n")
 
-    print("--- POINT-IN-TIME snapshots at epoch E (primary) ---")
+    print("--- POINT-IN-TIME snapshots during each sample's diagnostic pass in epoch E (primary) ---")
     header = (f"{'Rule':<22} {'SignChgSt 1..E':>15} {'Correct@E':>12} "
               f"{'ProbMSgn':>11} {'ProbMPrd':>11} {'LogitMSgn':>11} "
               f"{'|LogitM|':>11} {'LogitMPrd':>11}")
@@ -814,7 +813,7 @@ def print_d2(agg, ovl, n_seeds):
         row = f"{name:<22} " + " ".join(f"{f(kk+'_range',2):>13}" for kk, _ in keys_pairs)
         print(row)
 
-    print(f"\n--- Overlaps of CGR selection with per-class bottom-K at epoch E ---")
+    print(f"\n--- Overlaps of CGR selection with per-class bottom-K during epoch-E diagnostic pass ---")
     for label, key in [
         ('by |logit margin|         ', 'CGR_vs_low_absm_at_E'),
         ('by d_pred (feat-space)    ', 'CGR_vs_low_dpred_at_E'),
