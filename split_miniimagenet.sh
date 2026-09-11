@@ -38,10 +38,12 @@ When --cgr_diag_log is set, this version:
       -- d_target_signed is the most-violated normalized pairwise target
          constraint (negative). NOT a geometric distance to the target-region
          boundary.
-      -- d_target_absmin is the geometric distance to the nearest single
-         target-vs-competitor hyperplane (an upper bound on distance to the
-         full target region because the region is the intersection of many
-         half-spaces).
+      -- d_target_absmin is the geometric distance to the nearest complete
+         target-vs-competitor hyperplane. It is generally a LOWER BOUND on
+         the distance to the full target-class region and may correspond to
+         an inactive pairwise hyperplane (the target region is the intersection
+         of many half-spaces; the nearest pairwise hyperplane can be closer
+         than the region itself).
       -- d_pred remains the signed distance to the nearest boundary of the
          predicted-class region.
   * After the last epoch of task 1, saves all of the above plus CGR's
@@ -224,12 +226,13 @@ class Cgr(ContinualModel):
                 describe it as the "minimum normalized target margin".
 
         d_target_absmin(i) = min_{k != y_i} |(z_{y_i} - z_k)| / ||w_{y_i} - w_k||_2
-            Always >= 0. The NEAREST single pairwise target-vs-competitor
-            hyperplane in Euclidean feature-space distance. Coincides with
-            d_target_signed for correctly-classified samples. For misclassified
-            samples it is an UPPER BOUND on the distance from phi(x_i) to the
-            full target region (which is the intersection of many half-spaces
-            and would require a QP to compute exactly).
+            Always >= 0. The distance to the nearest complete target-versus-
+            competitor hyperplane. Coincides with d_target_signed for
+            correctly-classified samples. For misclassified samples it is
+            generally a LOWER BOUND on the distance from phi(x_i) to the full
+            target region (which is the intersection of many half-spaces and
+            would require a QP to compute exactly), and it may correspond to
+            an inactive pairwise hyperplane.
 
         d_pred(i) = min_{k != y_hat_i} (z_{y_hat_i} - z_k) / ||w_{y_hat_i} - w_k||_2
             Always >= 0 (y_hat is the argmax by construction). Geometrically
