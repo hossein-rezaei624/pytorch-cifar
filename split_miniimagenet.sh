@@ -489,13 +489,13 @@ def selection_time_diagnostics(logs, E, buffer_size):
 
     Requires the extended log format with keys diag_margin, diag_margin_pred,
     diag_logit_margin, diag_logit_margin_pred, diag_nearest_pair_logit_gap,
-    diag_nearest_pair_logit_gap_pred, diag_feat_dist_target,
+    diag_nearest_pair_probability_gap, diag_feat_dist_target,
     diag_feat_dist_target_absmin, diag_feat_dist_pred (produced by the updated
     cgr_with_diag.py).
     """
     required = ['diag_margin', 'diag_margin_pred',
                 'diag_logit_margin', 'diag_logit_margin_pred',
-                'diag_nearest_pair_logit_gap', 'diag_nearest_pair_logit_gap_pred',
+                'diag_nearest_pair_logit_gap', 'diag_nearest_pair_probability_gap',
                 'diag_feat_dist_target', 'diag_feat_dist_target_absmin',
                 'diag_feat_dist_pred', 'diag_correct']
 
@@ -512,7 +512,7 @@ def selection_time_diagnostics(logs, E, buffer_size):
         'abs_logit_margin',     # |z_y - max_{k!=y} z_k|
         'logit_margin_pred',    # z_yhat - max_{k!=yhat} z_k (>=0)
         'nearest_pair_gap',     # min_{k!=y}    |z_y - z_k|
-        'nearest_pair_gap_pred',# min_{k!=yhat} |z_yhat - z_k|
+        'nearest_pair_prob_gap',# min_{k!=y}    |p_y    - p_k| (target-based, prob space)
         'd_target_signed',      # signed feat-space distance to target
         'd_target_absmin',      # feat-space distance to nearest tgt-vs-competitor
         'd_pred',               # feat-space distance to predicted-region boundary
@@ -527,7 +527,7 @@ def selection_time_diagnostics(logs, E, buffer_size):
         'abs_logit_margin_mean',   'abs_logit_margin_range',
         'logit_margin_pred_mean',  'logit_margin_pred_range',
         'nearest_pair_gap_mean',   'nearest_pair_gap_range',
-        'nearest_pair_gap_pred_mean','nearest_pair_gap_pred_range',
+        'nearest_pair_prob_gap_mean','nearest_pair_prob_gap_range',
         'd_target_signed_mean',    'd_target_signed_range',
         'd_target_absmin_mean',    'd_target_absmin_range',
         'd_pred_mean',             'd_pred_range',
@@ -556,7 +556,7 @@ def selection_time_diagnostics(logs, E, buffer_size):
         logit_m  = log['diag_logit_margin'].numpy()
         logit_mp = log['diag_logit_margin_pred'].numpy()
         near_g   = log['diag_nearest_pair_logit_gap'].numpy()
-        near_gp  = log['diag_nearest_pair_logit_gap_pred'].numpy()
+        near_pg  = log['diag_nearest_pair_probability_gap'].numpy()
         d_tgt_s  = log['diag_feat_dist_target'].numpy()
         d_tgt_a  = log['diag_feat_dist_target_absmin'].numpy()
         d_prd    = log['diag_feat_dist_pred'].numpy()
@@ -584,7 +584,7 @@ def selection_time_diagnostics(logs, E, buffer_size):
         # ---- Point-in-time snapshots at epoch index E-1 ----
         prob_m_E   = prob_m[E-1];   prob_mp_E = prob_m_p[E-1]
         logit_m_E  = logit_m[E-1];  logit_mp_E = logit_mp[E-1]
-        near_g_E   = near_g[E-1];   near_gp_E  = near_gp[E-1]
+        near_g_E   = near_g[E-1];   near_pg_E  = near_pg[E-1]
         d_tgt_s_E  = d_tgt_s[E-1];  d_tgt_a_E  = d_tgt_a[E-1]
         d_prd_E    = d_prd[E-1]
         corr_E     = correct[E-1]
@@ -625,7 +625,7 @@ def selection_time_diagnostics(logs, E, buffer_size):
             row['abs_logit_margin'].append(float(abs_lm_E[idx].mean()))
             row['logit_margin_pred'].append(float(logit_mp_E[idx].mean()))
             row['nearest_pair_gap'].append(float(near_g_E[idx].mean()))
-            row['nearest_pair_gap_pred'].append(float(near_gp_E[idx].mean()))
+            row['nearest_pair_prob_gap'].append(float(near_pg_E[idx].mean()))
             row['d_target_signed'].append(float(d_tgt_s_E[idx].mean()))
             row['d_target_absmin'].append(float(d_tgt_a_E[idx].mean()))
             row['d_pred'].append(float(d_prd_E[idx].mean()))
@@ -643,7 +643,7 @@ def selection_time_diagnostics(logs, E, buffer_size):
                 (np.abs(logit_m),  'abs_logit_margin'),
                 (logit_mp,         'logit_margin_pred'),
                 (near_g,           'nearest_pair_gap'),
-                (near_gp,          'nearest_pair_gap_pred'),
+                (near_pg,          'nearest_pair_prob_gap'),
                 (d_tgt_s,          'd_target_signed'),
                 (d_tgt_a,          'd_target_absmin'),
                 (d_prd,            'd_pred'),
@@ -765,7 +765,7 @@ def print_d2(agg, ovl, n_seeds):
               f"{f('logit_margin_pred',2):>11}")
 
     print()
-    header2 = (f"{'Rule':<22} {'NearPairGap':>13} {'NearPairPrd':>13} "
+    header2 = (f"{'Rule':<22} {'NearPairLogitGap':>18} {'NearPairProbGap':>18} "
                f"{'d_tgt_signed':>13} {'d_tgt_absmin':>13} {'d_pred':>13} "
                f"{'d_on_correct':>13}")
     print(header2); print('-' * len(header2))
@@ -773,7 +773,7 @@ def print_d2(agg, ovl, n_seeds):
         def f(k, dg=3):
             mu, sd = d[k]
             return f"{mu:>5.{dg}f}±{sd:.{dg}f}"
-        print(f"{name:<22} {f('nearest_pair_gap',2):>13} {f('nearest_pair_gap_pred',2):>13} "
+        print(f"{name:<22} {f('nearest_pair_gap',2):>18} {f('nearest_pair_prob_gap',3):>18} "
               f"{f('d_target_signed',2):>13} {f('d_target_absmin',2):>13} "
               f"{f('d_pred',2):>13} {f('d_on_correct_subset',2):>13}")
 
