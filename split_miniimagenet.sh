@@ -274,6 +274,18 @@ def boundary_intuition_test(logs, E, buffer_size, margin_type='prob',
       low_margin_correct_end — correct AND margin in bottom-20% within class
       misclassified_end    — incorrect (regardless of margin)
 
+    Percentile-rank families (three families, each with median + mean, and
+    both global and per-class scaling):
+      *_pctl_*          — over SIGNED margin. HIGH = well-classified within
+                          class; LOW = near boundary from correct side, or
+                          misclassified. Not a boundary-proximity measure.
+      *_absmarg_pctl_*  — over |signed margin| (margin-space distance to sign
+                          flip). LOW = close to boundary. Boundary-proximity
+                          measure in margin space.
+      *_dpred_pctl_*    — over d_pred (feature-space signed distance to
+                          predicted-region boundary; always >= 0). LOW =
+                          close to boundary in feature space.
+
     Args:
         margin_type: 'prob' → diag_margin (signed prob margin, p_y - max_{k!=y} p_k)
                      'logit' → diag_logit_margin (signed logit margin, z_y - max_{k!=y} z_k)
@@ -300,15 +312,25 @@ def boundary_intuition_test(logs, E, buffer_size, margin_type='prob',
         loss   = log['diag_loss'].numpy()
         labels = log['diag_labels'].numpy()
         seed   = int(log['seed']) if str(log['seed']).isdigit() else 0
+        # Supplementary quantities for boundary-proximity percentile ranks:
+        #   |signed margin| = distance to sign flip in margin space
+        #   d_pred          = feature-space signed distance to predicted-region
+        #                     boundary (always >= 0)
+        # Low percentile of either  ==>  near the boundary (proper boundary-
+        # proximity measure, unlike the signed-margin percentile which measures
+        # position within the class's signed-margin distribution).
+        d_pred_all = log['diag_feat_dist_pred'].numpy()
 
         n_epochs = conf.shape[0]
 
         if aggregation == 'final':
             end_margin = margin[n_epochs - 1]
             end_correct = correct[n_epochs - 1]
+            end_d_pred = d_pred_all[n_epochs - 1]
         else:  # 'last_E'
             end_margin = margin[n_epochs - E : n_epochs].mean(axis=0)
             end_correct = correct[n_epochs - E : n_epochs].mean(axis=0) >= 0.5
+            end_d_pred = d_pred_all[n_epochs - E : n_epochs].mean(axis=0)
 
         n_classes = len(np.unique(labels))
         per_class = buffer_size // n_classes
@@ -321,6 +343,14 @@ def boundary_intuition_test(logs, E, buffer_size, margin_type='prob',
 
         pctl_global = _percentile_ranks(end_margin)
         pctl_class  = _percentile_ranks_per_class(end_margin, labels)
+        # Supplementary boundary-proximity percentile ranks (address GPT Point 2a:
+        # signed-margin percentile is not a boundary-proximity measure). Low pctl
+        # of |margin| or d_pred = near boundary.
+        abs_end_margin = np.abs(end_margin)
+        absmarg_pctl_global = _percentile_ranks(abs_end_margin)
+        absmarg_pctl_class  = _percentile_ranks_per_class(abs_end_margin, labels)
+        dpred_pctl_global   = _percentile_ranks(end_d_pred)
+        dpred_pctl_class    = _percentile_ranks_per_class(end_d_pred, labels)
 
         rng = np.random.default_rng(seed)
         sigma2 = np.var(conf[:E], axis=0)
@@ -343,20 +373,39 @@ def boundary_intuition_test(logs, E, buffer_size, margin_type='prob',
             sfc = end_correct[idx]
             in_low = sfm < low_thr_per_class[idx]
             seed_row[name] = {
-                'frac_correct_end':          float(sfc.mean()),
-                'median_pctl_global':        float(np.median(pctl_global[idx])),
-                'mean_pctl_global':          float(np.mean(pctl_global[idx])),
-                'median_pctl_class':         float(np.median(pctl_class[idx])),
-                'mean_pctl_class':           float(np.mean(pctl_class[idx])),
-                'well_classified_end':       float((sfc & ~in_low).mean()),
-                'low_margin_correct_end':    float((sfc &  in_low).mean()),
-                'misclassified_end':         float((~sfc).mean()),
+                'frac_correct_end':               float(sfc.mean()),
+                # Signed-margin percentile: within-class position in signed-margin
+                # distribution. HIGH = well-classified within class.
+                'median_pctl_global':             float(np.median(pctl_global[idx])),
+                'mean_pctl_global':               float(np.mean(pctl_global[idx])),
+                'median_pctl_class':              float(np.median(pctl_class[idx])),
+                'mean_pctl_class':                float(np.mean(pctl_class[idx])),
+                # |margin| percentile (boundary-proximity in margin space).
+                # LOW = close to boundary (small |signed margin|).
+                'median_absmarg_pctl_global':     float(np.median(absmarg_pctl_global[idx])),
+                'mean_absmarg_pctl_global':       float(np.mean(absmarg_pctl_global[idx])),
+                'median_absmarg_pctl_class':      float(np.median(absmarg_pctl_class[idx])),
+                'mean_absmarg_pctl_class':        float(np.mean(absmarg_pctl_class[idx])),
+                # d_pred percentile (boundary-proximity in feature space).
+                # LOW = close to predicted-region boundary.
+                'median_dpred_pctl_global':       float(np.median(dpred_pctl_global[idx])),
+                'mean_dpred_pctl_global':         float(np.mean(dpred_pctl_global[idx])),
+                'median_dpred_pctl_class':        float(np.median(dpred_pctl_class[idx])),
+                'mean_dpred_pctl_class':          float(np.mean(dpred_pctl_class[idx])),
+                'well_classified_end':            float((sfc & ~in_low).mean()),
+                'low_margin_correct_end':         float((sfc &  in_low).mean()),
+                'misclassified_end':              float((~sfc).mean()),
             }
         per_seed_records.append(seed_row)
 
     agg = {}
-    metrics = ['frac_correct_end', 'median_pctl_global', 'mean_pctl_global',
+    metrics = ['frac_correct_end',
+               'median_pctl_global', 'mean_pctl_global',
                'median_pctl_class', 'mean_pctl_class',
+               'median_absmarg_pctl_global', 'mean_absmarg_pctl_global',
+               'median_absmarg_pctl_class', 'mean_absmarg_pctl_class',
+               'median_dpred_pctl_global', 'mean_dpred_pctl_global',
+               'median_dpred_pctl_class', 'mean_dpred_pctl_class',
                'well_classified_end', 'low_margin_correct_end', 'misclassified_end']
     for name in per_seed_records[0]:
         agg[name] = {}
@@ -705,7 +754,12 @@ def print_d(agg, margin_type, aggregation, n_seeds):
     """Print the trajectory-outcome analysis (was: boundary-intuition test)."""
     tag = f"margin={margin_type}, aggregation={aggregation}"
     print(f"\n=== (d) Trajectory-outcome analysis at end of task-1 training [{tag}] ===")
-    print(f"(averaged over {n_seeds} seeds; per-class thresholds; NOT a geometric boundary test)\n")
+    print(f"(averaged over {n_seeds} seeds; per-class thresholds; NOT a geometric boundary test)")
+    print(f"(Percentile-rank interpretation: HIGH pctl on signed-margin = well-classified;")
+    print(f" LOW pctl on |margin| or d_pred = near boundary — proper boundary-proximity measures.)\n")
+
+    # Block 1: signed-margin percentile + counts
+    print(f"--- Signed-margin percentiles and counts ---")
     header = (f"{'Rule':<22} {'Correct@end':>14} {'MedPctlGlob':>13} {'MeanPctlGlob':>13} "
               f"{'MedPctlCls':>12} {'MeanPctlCls':>12} "
               f"{'WellClsEnd':>13} {'LowMargEnd':>13} {'MisclsEnd':>13}")
@@ -717,6 +771,30 @@ def print_d(agg, margin_type, aggregation, n_seeds):
               f"{f('median_pctl_class',1):>12} {f('mean_pctl_class',1):>12} "
               f"{f('well_classified_end'):>13} {f('low_margin_correct_end'):>13} "
               f"{f('misclassified_end'):>13}")
+
+    # Block 2: |margin| boundary-proximity percentiles
+    print(f"\n--- |margin| percentiles (boundary-proximity in margin space; LOW = near boundary) ---")
+    header2 = (f"{'Rule':<22} {'MedAbsMargGlob':>16} {'MeanAbsMargGlob':>17} "
+               f"{'MedAbsMargCls':>15} {'MeanAbsMargCls':>16}")
+    print(header2); print('-' * len(header2))
+    for name, d in agg.items():
+        f = lambda k, dg=1: f"{d[k+'_mean']:>6.{dg}f}±{d[k+'_std']:.{dg}f}"
+        print(f"{name:<22} {f('median_absmarg_pctl_global'):>16} "
+              f"{f('mean_absmarg_pctl_global'):>17} "
+              f"{f('median_absmarg_pctl_class'):>15} "
+              f"{f('mean_absmarg_pctl_class'):>16}")
+
+    # Block 3: d_pred boundary-proximity percentiles
+    print(f"\n--- d_pred percentiles (boundary-proximity in feature space; LOW = near boundary) ---")
+    header3 = (f"{'Rule':<22} {'MedDpredGlob':>14} {'MeanDpredGlob':>15} "
+               f"{'MedDpredCls':>13} {'MeanDpredCls':>14}")
+    print(header3); print('-' * len(header3))
+    for name, d in agg.items():
+        f = lambda k, dg=1: f"{d[k+'_mean']:>6.{dg}f}±{d[k+'_std']:.{dg}f}"
+        print(f"{name:<22} {f('median_dpred_pctl_global'):>14} "
+              f"{f('mean_dpred_pctl_global'):>15} "
+              f"{f('median_dpred_pctl_class'):>13} "
+              f"{f('mean_dpred_pctl_class'):>14}")
 
 
 def print_overlap(ovl_dict):
