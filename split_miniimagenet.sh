@@ -14,21 +14,25 @@ Computes ACROSS ALL SEEDS:
         (E_large, default 5). Anchors the sanity check for the E=2 selection
         (Concern 4). Computed separately for EACH seed; reported as mean ± std.
   (d)   Boundary-intuition verification (Concern 2): for five selection rules,
-        characterizes the end-of-training margin and correctness distribution
-        of the selected samples, plus the overlap between CGR and a direct
-        low-|margin| selection. Shows that CGR selects Swayamdipta-style
-        ambiguous samples (variability-based, migrating from low margin to
-        high margin during a single task), not persistently-near-boundary
-        samples. Computed separately for EACH seed; reported as mean ± std.
-        (d) has been reframed as a TRAJECTORY-OUTCOME analysis (NOT a
-        geometric boundary analysis). Renamed categories:
-            well_classified_end     — correct at end AND top-80% margin within class
-            low_margin_correct_end  — correct at end AND bottom-20% margin within class
-            misclassified_end       — incorrect at end of task-1 training
-        Configurable via margin_type ('prob' | 'logit') and aggregation
-        ('final' | 'last_E'). Percentile ranks use scipy.stats.rankdata with
-        method='average' (ties handled) and are reported both globally and
-        per-class, with mean and median.
+        characterizes the margin and correctness distribution of the selected
+        samples as observed during each example's diagnostic pass in the final
+        training epoch (or averaged over the last E such passes), plus the
+        overlap between CGR and a direct low-|margin| selection. Shows that
+        CGR selects Swayamdipta-style ambiguous samples (variability-based,
+        migrating from low margin to high margin during a single task), not
+        persistently-near-boundary samples. Computed separately for EACH seed;
+        reported as mean ± std. (d) has been reframed as a TRAJECTORY-OUTCOME
+        analysis (NOT a geometric boundary analysis). Renamed categories:
+            well_classified_end     — correct AND top-80% margin within class
+            low_margin_correct_end  — correct AND bottom-20% margin within class
+            misclassified_end       — incorrect
+        ("_end" here refers to the final-epoch diagnostic pass or the last-E
+        window average per `aggregation`.) Configurable via margin_type
+        ('prob' | 'logit') and aggregation ('final' | 'last_E'). Percentile
+        ranks use scipy.stats.rankdata with method='average' (ties handled)
+        and are reported both globally and per-class, with mean and median;
+        supplementary boundary-proximity families computed over |margin| and
+        d_pred are also emitted.
   (d2)  Selection-time boundary diagnostics (Concern 2, extended). For five
         selection rules, characterizes selected samples DURING THAT SAMPLE'S
         DIAGNOSTIC PASS in epoch E (NOT a common end-of-epoch checkpoint —
@@ -151,15 +155,18 @@ def diagnostic_table_one_seed(log, E, buffer_size, random_seed):
     mean_loss_E = log['diag_loss'][:E].mean(dim=0).numpy()
 
     # Per-sample reporting metrics.
-    #   margin: averaged over the FIRST E epochs (matches CGR's selection
-    #     window and Figure 3 b.1; consistent with mean target confidence).
-    #     End-of-training margin would be uninformative because the model has
-    #     converged and margins are large for almost all samples.
+    #   prob margin & logit margin: averaged over the FIRST E epochs (matches
+    #     CGR's selection window and Figure 3 b.1). End-of-training margin
+    #     would be uninformative because the model has converged and margins
+    #     are large for almost all samples. Both variants reported because
+    #     they share sign but differ in magnitude and cross-sample ranks
+    #     (competitors range over ALL output classes → CIL-style margins).
     #   forgetting events: over ALL training epochs (Toneva's definition;
     #     needs the full trajectory — first E would give at most E-1 transitions).
     #   mean target confidence: over the FIRST E epochs (matches Figure 3 b.1
     #     and CGR's selection window).
-    margin_first_E = log['diag_margin'][:E].mean(dim=0).numpy()
+    prob_margin_first_E  = log['diag_margin'][:E].mean(dim=0).numpy()  # target probability margin
+    logit_margin_first_E = log['diag_logit_margin'][:E].mean(dim=0).numpy() if 'diag_logit_margin' in log else None
     forgetting = forgetting_events(log['diag_correct'])
     mean_conf_report = mean_conf_E  # = target_conf_all[:E].mean(dim=0).numpy()
 
@@ -195,10 +202,12 @@ def diagnostic_table_one_seed(log, E, buffer_size, random_seed):
     row_dict = {}
     for name, idx in rules.items():
         row_dict[name] = {
-            'mean_margin': float(margin_first_E[idx].mean()),
-            'mean_forgetting': float(forgetting[idx].mean()),
-            'mean_target_conf': float(mean_conf_report[idx].mean()),
+            'mean_prob_margin':   float(prob_margin_first_E[idx].mean()),
+            'mean_forgetting':    float(forgetting[idx].mean()),
+            'mean_target_conf':   float(mean_conf_report[idx].mean()),
         }
+        if logit_margin_first_E is not None:
+            row_dict[name]['mean_logit_margin'] = float(logit_margin_first_E[idx].mean())
     return row_dict, k_per_class, num_classes
 
 
@@ -216,13 +225,24 @@ def diagnostic_table_all_seeds(logs, E, buffer_size):
 
     # Aggregate across seeds
     rule_names = list(per_seed_rows[0].keys())
+    # Metric names — mean_margin was renamed to mean_prob_margin for clarity;
+    # mean_logit_margin may or may not be present (depends on log format).
+    metric_names = ['mean_prob_margin', 'mean_forgetting', 'mean_target_conf']
+    if any('mean_logit_margin' in per_seed_rows[i][rule_names[0]]
+           for i in range(len(per_seed_rows))):
+        metric_names.append('mean_logit_margin')
     agg = {}
     for name in rule_names:
         agg[name] = {}
-        for metric in ['mean_margin', 'mean_forgetting', 'mean_target_conf']:
-            vals = [seed_row[name][metric] for seed_row in per_seed_rows]
+        for metric in metric_names:
+            vals = [seed_row[name].get(metric, float('nan'))
+                    for seed_row in per_seed_rows]
+            vals = [v for v in vals if not (isinstance(v, float) and np.isnan(v))]
+            if len(vals) == 0:
+                continue
             agg[name][metric + '_mean'] = float(np.mean(vals))
-            agg[name][metric + '_std']  = float(np.std(vals, ddof=1))
+            agg[name][metric + '_std']  = (float(np.std(vals, ddof=1))
+                                            if len(vals) > 1 else float('nan'))
             agg[name][metric + '_per_seed'] = [float(v) for v in vals]
     return agg, per_seed_rows, k_per_class, num_classes
 
@@ -261,18 +281,27 @@ def _percentile_ranks_per_class(values, labels):
 
 
 def boundary_intuition_test(logs, E, buffer_size, margin_type='prob',
-                             aggregation='final', margin_pctl_threshold=20.0):
+                             aggregation='final', margin_pctl_threshold=None):
     """TRAJECTORY-OUTCOME analysis (not a geometric boundary analysis).
-    For each of five selection rules, characterize the end-of-training
-    correctness and margin distribution of the selected samples. Answers the
-    question "what happens to CGR-selected samples by end of task-1 training?"
-    — NOT "are they near the decision boundary?" (see selection_time_diagnostics
-    and overlap_with_direct_boundary for the boundary-diagnostic analyses).
+    For each of five selection rules, characterize the correctness and margin
+    distribution of the selected samples as observed during each example's
+    diagnostic pass in the final training epoch (aggregation='final') or
+    averaged over each example's diagnostic passes in the last E training
+    epochs (aggregation='last_E'). See cgr_with_diag.py module docstring for
+    the in-loop measurement timing caveat: values are recorded BEFORE that
+    batch's SGD update, so different samples within an epoch see slightly
+    different model states — this is NOT a common end-of-epoch checkpoint.
+    Answers the question "what happens to CGR-selected samples by late in
+    task-1 training?" — NOT "are they near the decision boundary?" (see
+    selection_time_diagnostics and overlap_with_direct_boundary for the
+    boundary-diagnostic analyses).
 
     Category renaming (was resolved/still_boundary/outlier):
-      well_classified_end  — correct AND margin in top-80% within class
-      low_margin_correct_end — correct AND margin in bottom-20% within class
-      misclassified_end    — incorrect (regardless of margin)
+      well_classified_end     — correct AND margin in top-80% within class
+      low_margin_correct_end  — correct AND margin in bottom-20% within class
+      misclassified_end       — incorrect (regardless of margin)
+    ("_end" here means "at final-epoch diagnostic pass" or "over last-E passes"
+    depending on `aggregation`.)
 
     Percentile-rank families (three families, each with median + mean, and
     both global and per-class scaling):
@@ -281,21 +310,38 @@ def boundary_intuition_test(logs, E, buffer_size, margin_type='prob',
                           misclassified. Not a boundary-proximity measure.
       *_absmarg_pctl_*  — over |signed margin| (margin-space distance to sign
                           flip). LOW = close to boundary. Boundary-proximity
-                          measure in margin space.
+                          measure in margin space. For 'last_E' aggregation,
+                          |m| is averaged over epochs BEFORE ranking, i.e.
+                          mean_e |m_{i,e}| — the correct window-averaged
+                          boundary proximity (not |mean_e m_{i,e}|, which
+                          would collapse to ~0 for oscillating samples).
       *_dpred_pctl_*    — over d_pred (feature-space signed distance to
                           predicted-region boundary; always >= 0). LOW =
                           close to boundary in feature space.
+
+    Note that competitors k range over ALL output classes (CIL-style margins),
+    not just classes seen so far in task 1.
+
+    On misclassified samples, d_target_absmin (reported in selection_time_
+    diagnostics) is the distance to the nearest complete target-versus-
+    competitor hyperplane; it is generally a LOWER BOUND on the distance to
+    the full target-class region (see cgr_with_diag.py _diag_feat_distances
+    docstring for the geometric explanation).
 
     Args:
         margin_type: 'prob' → diag_margin (signed prob margin, p_y - max_{k!=y} p_k)
                      'logit' → diag_logit_margin (signed logit margin, z_y - max_{k!=y} z_k)
                      Both share sign but differ in magnitude and cross-sample ranks.
         aggregation: 'final' → margin[n_epochs-1] and correct[n_epochs-1]
-                     'last_E' → margin over the last E epochs (mean), correctness over
-                                the last E epochs (mean rate; samples deemed
-                                "correct-in-last-E" if correct in >= ceil(E/2) of those epochs).
-        margin_pctl_threshold: default 20.0 matches CGR's selection budget
-                     (K/N = 100/500 = 20% within each class).
+                     'last_E' → margin over the last E epochs (signed mean for
+                                trajectory outcome; mean of |m| for boundary
+                                proximity); correctness by STRICT majority
+                                (> 0.5 fraction of last E epochs correct).
+        margin_pctl_threshold: percentile threshold used to define the "low
+                     margin" cut. If None (default), auto-derived as
+                     100 * buffer_size / n_samples so it exactly matches CGR's
+                     per-class selection quota (20.0 for Split CIFAR-100 task 1
+                     with buffer 1000). Pass an explicit value to override.
     """
     if margin_type not in ('prob', 'logit'):
         raise ValueError(f"margin_type must be 'prob' or 'logit', got {margin_type}")
@@ -322,14 +368,30 @@ def boundary_intuition_test(logs, E, buffer_size, margin_type='prob',
         d_pred_all = log['diag_feat_dist_pred'].numpy()
 
         n_epochs = conf.shape[0]
+        n_samples = len(labels)
+        # Item 10: auto-derive threshold from the buffer's per-class quota so
+        # the "low margin" cut matches CGR's selection budget across buffer sizes.
+        # For Split CIFAR-100 task 1 with buffer 1000: 100.0 * 1000 / 5000 = 20.0.
+        eff_threshold = (margin_pctl_threshold
+                          if margin_pctl_threshold is not None
+                          else 100.0 * buffer_size / n_samples)
 
         if aggregation == 'final':
-            end_margin = margin[n_epochs - 1]
+            end_margin = margin[n_epochs - 1]                          # signed
             end_correct = correct[n_epochs - 1]
             end_d_pred = d_pred_all[n_epochs - 1]
+            # For 'final', |end_margin| coincides with mean-of-abs trivially.
+            abs_end_margin = np.abs(end_margin)
         else:  # 'last_E'
-            end_margin = margin[n_epochs - E : n_epochs].mean(axis=0)
-            end_correct = correct[n_epochs - E : n_epochs].mean(axis=0) >= 0.5
+            last_margin = margin[n_epochs - E : n_epochs]              # (E, N)
+            end_margin = last_margin.mean(axis=0)                      # signed trajectory outcome
+            # Item 2: mean(|m|), NOT |mean(m)|. For a sample oscillating around 0,
+            # |mean| collapses to ~0 (false "near boundary") while mean(|m|) reports
+            # the true window-averaged distance to the sign-flip point.
+            abs_end_margin = np.abs(last_margin).mean(axis=0)
+            # Item 1: strict majority (> 0.5); a sample correct in exactly E/2 epochs
+            # is NOT counted as correct in this window.
+            end_correct = correct[n_epochs - E : n_epochs].mean(axis=0) > 0.5
             end_d_pred = d_pred_all[n_epochs - E : n_epochs].mean(axis=0)
 
         n_classes = len(np.unique(labels))
@@ -339,14 +401,13 @@ def boundary_intuition_test(logs, E, buffer_size, margin_type='prob',
         low_thr_per_class = np.zeros(len(labels))
         for c in np.unique(labels):
             ci = np.where(labels == c)[0]
-            low_thr_per_class[ci] = np.percentile(end_margin[ci], margin_pctl_threshold)
+            low_thr_per_class[ci] = np.percentile(end_margin[ci], eff_threshold)
 
         pctl_global = _percentile_ranks(end_margin)
         pctl_class  = _percentile_ranks_per_class(end_margin, labels)
         # Supplementary boundary-proximity percentile ranks (address GPT Point 2a:
         # signed-margin percentile is not a boundary-proximity measure). Low pctl
         # of |margin| or d_pred = near boundary.
-        abs_end_margin = np.abs(end_margin)
         absmarg_pctl_global = _percentile_ranks(abs_end_margin)
         absmarg_pctl_class  = _percentile_ranks_per_class(abs_end_margin, labels)
         dpred_pctl_global   = _percentile_ranks(end_d_pred)
@@ -532,6 +593,29 @@ def selection_time_diagnostics(logs, E, buffer_size):
     epochs 0..E-1). Uses all margin variants + feature-space distances +
     correctly-classified-subset d.
 
+    CIL-STYLE MARGINS (item 9). All margins and feature distances here are
+    CIL-style: the competitor set k ranges over ALL output classes seen by
+    the model, not just classes seen so far in task 1.
+
+    ON d_target_absmin FOR MISCLASSIFIED SAMPLES (item 8). d_target_absmin is
+    the Euclidean feature-space distance to the nearest complete target-vs-
+    competitor pairwise hyperplane. For correctly-classified samples it
+    coincides with d_target_signed and d_pred, and equals the signed distance
+    to the boundary of the (correct) target-class region. For MISCLASSIFIED
+    samples it is generally a LOWER BOUND on the distance from phi(x_i) to
+    the full target-class region: the target region is the intersection of
+    many half-spaces, and the nearest pairwise hyperplane can be closer than
+    the region itself (and may correspond to an inactive pairwise constraint).
+    On the misclassified subset, interpret d_target_absmin as "distance to
+    nearest target-competitor hyperplane," not "distance to target region."
+
+    ITEM 7 — MEDIAN AND IQR ALONGSIDE MEAN. For skewed quantities (absolute
+    margins and feature distances), the per-seed WITHIN-SELECTION median and
+    IQR (75th - 25th percentile) are reported alongside the within-selection
+    mean; then aggregated across seeds as mean±std of those per-seed
+    statistics. These distributions can be right-skewed by a few high-margin
+    or far-from-boundary samples, and the median is more robust.
+
     Sign-change definition (strict, per GPT Point 4):
         (logit_m[:E-1] * logit_m[1:E] < 0).any(axis=0)
     counts a change only when the sign STRICTLY crosses zero.
@@ -552,6 +636,8 @@ def selection_time_diagnostics(logs, E, buffer_size):
              'Low confidence', 'High loss']
 
     # Metric keys: <at_E | over_E>_<metric_name>. See paper insertion.
+    # "Skewed" quantities (absolute margins + feature distances) also get
+    # _median and _iqr suffixed variants (per GPT item 7).
     metric_names_at_E = [
         'sign_change_strict',   # strict sign-change during epochs 0..E-1
         'frac_correct_at_E',    # correctness during diagnostic pass in epoch E (diag_correct[E-1])
@@ -569,6 +655,13 @@ def selection_time_diagnostics(logs, E, buffer_size):
         'frac_low_absm_class',  # per-class bottom-20% by |logit margin| membership
         'frac_low_dpred_class', # per-class bottom-20% by d_pred membership
     ]
+    # Skewed metrics — add per-seed within-selection median and IQR alongside mean
+    skewed_metrics = ['prob_margin_pred', 'logit_margin_pred', 'abs_logit_margin',
+                      'nearest_pair_gap', 'nearest_pair_prob_gap',
+                      'd_target_signed', 'd_target_absmin', 'd_pred',
+                      'd_on_correct_subset']
+    for m in skewed_metrics:
+        metric_names_at_E += [f'{m}_median', f'{m}_iqr']
     metric_names_over_E = [
         'prob_margin_signed_mean', 'prob_margin_signed_range',
         'prob_margin_pred_mean',   'prob_margin_pred_range',
@@ -665,7 +758,7 @@ def selection_time_diagnostics(logs, E, buffer_size):
 
         for name, idx in selections.items():
             row = per_seed[name]
-            # AT epoch E
+            # AT epoch E (mean)
             row['sign_change_strict'].append(float(strict_sign_change[idx].mean()))
             row['frac_correct_at_E'].append(float(corr_E[idx].mean()))
             row['prob_margin_signed'].append(float(prob_m_E[idx].mean()))
@@ -680,10 +773,30 @@ def selection_time_diagnostics(logs, E, buffer_size):
             row['d_pred'].append(float(d_prd_E[idx].mean()))
             # d on correctly-classified subset (d_pred == d_target there)
             idx_corr = idx[corr_E[idx]]
+            d_on_correct = d_prd_E[idx_corr]  # may be empty
             row['d_on_correct_subset'].append(
-                float(d_prd_E[idx_corr].mean()) if len(idx_corr) > 0 else float('nan'))
+                float(d_on_correct.mean()) if len(d_on_correct) > 0 else float('nan'))
             row['frac_low_absm_class'].append(float(low_absm_class[idx].mean()))
             row['frac_low_dpred_class'].append(float(low_dp_class[idx].mean()))
+            # Item 7: per-seed within-selection MEDIAN and IQR for skewed quantities.
+            for base_name, arr in [
+                ('prob_margin_pred',      prob_mp_E[idx]),
+                ('logit_margin_pred',     logit_mp_E[idx]),
+                ('abs_logit_margin',      abs_lm_E[idx]),
+                ('nearest_pair_gap',      near_g_E[idx]),
+                ('nearest_pair_prob_gap', near_pg_E[idx]),
+                ('d_target_signed',       d_tgt_s_E[idx]),
+                ('d_target_absmin',       d_tgt_a_E[idx]),
+                ('d_pred',                d_prd_E[idx]),
+                ('d_on_correct_subset',   d_on_correct),
+            ]:
+                if len(arr) > 0:
+                    row[f'{base_name}_median'].append(float(np.median(arr)))
+                    row[f'{base_name}_iqr'].append(
+                        float(np.percentile(arr, 75) - np.percentile(arr, 25)))
+                else:
+                    row[f'{base_name}_median'].append(float('nan'))
+                    row[f'{base_name}_iqr'].append(float('nan'))
             # OVER first-E window (mean and range across epochs, per sample)
             for arr, key_base in [
                 (prob_m,           'prob_margin_signed'),
@@ -753,20 +866,23 @@ def print_a2(results, mean_rho, std_rho):
 def print_d(agg, margin_type, aggregation, n_seeds):
     """Print the trajectory-outcome analysis (was: boundary-intuition test)."""
     tag = f"margin={margin_type}, aggregation={aggregation}"
-    print(f"\n=== (d) Trajectory-outcome analysis at end of task-1 training [{tag}] ===")
-    print(f"(averaged over {n_seeds} seeds; per-class thresholds; NOT a geometric boundary test)")
+    when_phrase = ("in each sample's diagnostic pass in the final training epoch"
+                   if aggregation == 'final'
+                   else "averaged across each sample's diagnostic passes in the last E training epochs")
+    print(f"\n=== (d) Trajectory-outcome analysis [{tag}] ===")
+    print(f"(measured {when_phrase}; averaged over {n_seeds} seeds; per-class thresholds; NOT a geometric boundary test)")
     print(f"(Percentile-rank interpretation: HIGH pctl on signed-margin = well-classified;")
     print(f" LOW pctl on |margin| or d_pred = near boundary — proper boundary-proximity measures.)\n")
 
     # Block 1: signed-margin percentile + counts
     print(f"--- Signed-margin percentiles and counts ---")
-    header = (f"{'Rule':<22} {'Correct@end':>14} {'MedPctlGlob':>13} {'MeanPctlGlob':>13} "
+    header = (f"{'Rule':<22} {'Correct(final-pass)':>21} {'MedPctlGlob':>13} {'MeanPctlGlob':>13} "
               f"{'MedPctlCls':>12} {'MeanPctlCls':>12} "
               f"{'WellClsEnd':>13} {'LowMargEnd':>13} {'MisclsEnd':>13}")
     print(header); print('-' * len(header))
     for name, d in agg.items():
         f = lambda k, dg=3: f"{d[k+'_mean']:>6.{dg}f}±{d[k+'_std']:.{dg}f}"
-        print(f"{name:<22} {f('frac_correct_end'):>14} "
+        print(f"{name:<22} {f('frac_correct_end'):>21} "
               f"{f('median_pctl_global',1):>13} {f('mean_pctl_global',1):>13} "
               f"{f('median_pctl_class',1):>12} {f('mean_pctl_class',1):>12} "
               f"{f('well_classified_end'):>13} {f('low_margin_correct_end'):>13} "
@@ -901,6 +1017,24 @@ def print_d2(agg, ovl, n_seeds):
         mu, sd = ovl[key]
         print(f"  {label}: {mu:.3f} ± {sd:.3f}")
 
+    # Item 7: within-selection MEDIAN and IQR (robust stats) for skewed
+    # quantities (absolute margins and feature distances).
+    skewed = ['prob_margin_pred', 'logit_margin_pred', 'abs_logit_margin',
+              'nearest_pair_gap', 'nearest_pair_prob_gap',
+              'd_target_signed', 'd_target_absmin', 'd_pred',
+              'd_on_correct_subset']
+    print(f"\n--- MEDIAN and IQR (robust) for skewed quantities at epoch-E diagnostic pass ---")
+    print(f"(Reported as: within-selection median  ±  cross-seed std of that median;")
+    print(f"              within-selection IQR (P75-P25)  ±  cross-seed std of that IQR.)")
+    for metric in skewed:
+        print(f"\n  {metric}:")
+        print(f"    {'Rule':<22} {'Median':>16} {'IQR':>16}")
+        print(f"    {'-'*22} {'-'*16} {'-'*16}")
+        for name, d in agg.items():
+            med_mu, med_sd = d[f'{metric}_median']
+            iqr_mu, iqr_sd = d[f'{metric}_iqr']
+            print(f"    {name:<22} {med_mu:>7.3f}±{med_sd:.3f}   {iqr_mu:>7.3f}±{iqr_sd:.3f}")
+
 
 def print_c(results, mean_rho, std_rho, E_small, E_large):
     print(f"\n=== (c) Within-seed Spearman: σ² at E={E_small} vs σ² at E={E_large} "
@@ -918,41 +1052,63 @@ def print_c(results, mean_rho, std_rho, E_small, E_large):
 
 def print_b2(agg, per_seed_rows, k_per_class, num_classes, n_seeds):
     print(f"\n=== (b.2) Diagnostic table (averaged over {n_seeds} seeds) ===")
-    print(f"Per-class budget K = {k_per_class}  ({num_classes} classes seen in task 1)\n")
+    print(f"Per-class budget K = {k_per_class}  ({num_classes} classes seen in task 1)")
+    print(f"(Margins are CIL-style: competitors k range over ALL output classes.)\n")
 
     rule_names = list(agg.keys())
-    header = f"{'Rule':<18} {'Margin (mean±std)':>22} {'Forget (mean±std)':>22} {'MeanConf (mean±std)':>22}"
+    has_logit = any('mean_logit_margin_mean' in agg[n] for n in rule_names)
+    if has_logit:
+        header = (f"{'Rule':<18} {'ProbMargin (mean±std)':>24} "
+                  f"{'LogitMargin (mean±std)':>24} "
+                  f"{'Forget (mean±std)':>22} {'MeanConf (mean±std)':>22}")
+    else:
+        header = (f"{'Rule':<18} {'ProbMargin (mean±std)':>24} "
+                  f"{'Forget (mean±std)':>22} {'MeanConf (mean±std)':>22}")
     print(header)
     print('-' * len(header))
     for name in rule_names:
         d = agg[name]
-        print(f"{name:<18} "
-              f"{d['mean_margin_mean']:>7.4f} ± {d['mean_margin_std']:.4f}    "
-              f"{d['mean_forgetting_mean']:>7.3f} ± {d['mean_forgetting_std']:.3f}    "
-              f"{d['mean_target_conf_mean']:>7.4f} ± {d['mean_target_conf_std']:.4f}")
+        parts = [f"{name:<18} ",
+                 f"{d['mean_prob_margin_mean']:>7.4f} ± {d['mean_prob_margin_std']:.4f}    "]
+        if has_logit:
+            parts.append(f"{d['mean_logit_margin_mean']:>7.4f} ± {d['mean_logit_margin_std']:.4f}    ")
+        parts.append(f"{d['mean_forgetting_mean']:>7.3f} ± {d['mean_forgetting_std']:.3f}    ")
+        parts.append(f"{d['mean_target_conf_mean']:>7.4f} ± {d['mean_target_conf_std']:.4f}")
+        print("".join(parts))
 
     print("\nPer-seed breakdown:")
+    metrics_iter = [('prob_margin',  'mean_prob_margin_per_seed'),
+                    ('forget',       'mean_forgetting_per_seed'),
+                    ('conf',         'mean_target_conf_per_seed')]
+    if has_logit:
+        metrics_iter.insert(1, ('logit_margin', 'mean_logit_margin_per_seed'))
     for name in rule_names:
         print(f"  {name}:")
         d = agg[name]
-        for metric_pretty, metric_key in [('margin', 'mean_margin_per_seed'),
-                                          ('forget', 'mean_forgetting_per_seed'),
-                                          ('conf',   'mean_target_conf_per_seed')]:
+        for metric_pretty, metric_key in metrics_iter:
             vals = d[metric_key]
             print(f"    {metric_pretty}: {[f'{v:.4f}' for v in vals]}")
 
     # LaTeX table
     print("\n--- LaTeX (paste into Table tab:diagnostic) ---")
-    print(r"\begin{tabular}{lccc}")
-    print(r"\toprule")
-    print(r"Selection rule & Mean margin $\downarrow$ & Forgetting events $\uparrow$ & Mean target conf. \\")
+    if has_logit:
+        print(r"\begin{tabular}{lcccc}")
+        print(r"\toprule")
+        print(r"Selection rule & Mean prob. margin & Mean logit margin & Forgetting events $\uparrow$ & Mean target conf. \\")
+    else:
+        print(r"\begin{tabular}{lccc}")
+        print(r"\toprule")
+        print(r"Selection rule & Mean prob. margin & Forgetting events $\uparrow$ & Mean target conf. \\")
     print(r"\midrule")
     for name in rule_names:
         d = agg[name]
-        print(f"{name} & "
-              f"${d['mean_margin_mean']:.3f} \\pm {d['mean_margin_std']:.3f}$ & "
-              f"${d['mean_forgetting_mean']:.2f} \\pm {d['mean_forgetting_std']:.2f}$ & "
-              f"${d['mean_target_conf_mean']:.3f} \\pm {d['mean_target_conf_std']:.3f}$ \\\\")
+        parts = [f"{name} & ",
+                 f"${d['mean_prob_margin_mean']:.3f} \\pm {d['mean_prob_margin_std']:.3f}$ & "]
+        if has_logit:
+            parts.append(f"${d['mean_logit_margin_mean']:.3f} \\pm {d['mean_logit_margin_std']:.3f}$ & ")
+        parts.append(f"${d['mean_forgetting_mean']:.2f} \\pm {d['mean_forgetting_std']:.2f}$ & ")
+        parts.append(f"${d['mean_target_conf_mean']:.3f} \\pm {d['mean_target_conf_std']:.3f}$ \\\\")
+        print("".join(parts))
     print(r"\bottomrule")
     print(r"\end{tabular}")
 
@@ -980,6 +1136,54 @@ def main():
     for log in logs:
         print(f"  seed={log['seed']}  E={log['E']}  n_epochs={log['n_epochs']}  "
               f"n_samples={log['n_sample_per_task']}  buffer_size={log['buffer_size']}")
+
+    # ---- Item 3: hard config-vs-log checks. Refuse to proceed on mismatch
+    # (otherwise a wrong --E or --buffer_size silently reconstructs a
+    # different CGR selection). ----
+    for log in logs:
+        seed_id = log.get('seed', '?')
+        if 'E' in log and int(log['E']) != int(args.E):
+            raise ValueError(
+                f"Requested --E={args.E}, but log for seed {seed_id} was "
+                f"recorded with E={int(log['E'])}. Mismatched E would "
+                f"reconstruct a different CGR selection.")
+        if 'buffer_size' in log and int(log['buffer_size']) != int(args.buffer_size):
+            raise ValueError(
+                f"Requested --buffer_size={args.buffer_size}, but log for "
+                f"seed {seed_id} was recorded with "
+                f"buffer_size={int(log['buffer_size'])}.")
+        n_epochs_log = log['diag_margin'].shape[0]
+        if args.E > n_epochs_log:
+            raise ValueError(
+                f"--E={args.E} exceeds n_epochs={n_epochs_log} recorded for seed {seed_id}")
+        if args.E_large > n_epochs_log:
+            raise ValueError(
+                f"--E_large={args.E_large} exceeds n_epochs={n_epochs_log} "
+                f"recorded for seed {seed_id}")
+        # Also verify shape consistency of all diagnostic tensors:
+        expected_shape = (n_epochs_log, int(log['n_sample_per_task']))
+        for k in ('diag_margin', 'diag_logit_margin', 'diag_correct',
+                  'diag_loss', 'diag_feat_dist_pred'):
+            if k in log and tuple(log[k].shape) != expected_shape:
+                raise ValueError(
+                    f"Seed {seed_id}: {k} shape {tuple(log[k].shape)} != "
+                    f"expected {expected_shape}")
+
+    # ---- Item 4a: assert per-sample label vector matches across seeds.
+    # (Item 4b — saving stable dataset indices for label-noise experiments —
+    # was skipped by the user. Item 4c — the ten pairwise correlations from
+    # five seeds are not independent replicates and should be reported as
+    # descriptive dependent comparisons — is a paper-text caveat, not a code
+    # change.) ----
+    ref = logs[0]
+    for log in logs[1:]:
+        if not torch.equal(log['diag_labels'], ref['diag_labels']):
+            raise ValueError(
+                f"diag_labels differ between seed {ref['seed']} and seed "
+                f"{log['seed']}. Cross-seed analyses assume position i "
+                f"refers to the same example across seeds.")
+    print(f"Config checks passed: E, buffer_size, epoch counts, tensor shapes, "
+          f"and diag_labels are consistent across all {len(logs)} seeds.")
 
     # (b.1) cross-seed
     if len(logs) >= 2:
