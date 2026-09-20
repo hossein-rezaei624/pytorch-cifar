@@ -1,4 +1,4 @@
-Loaded 5 seed logs from cgr_diag_logs_new/cgr_diag_logs
+Loaded 5 seed logs from cgr_diag_logs
   seed=0  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
   seed=1  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
   seed=2  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
