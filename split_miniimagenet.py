@@ -46,6 +46,22 @@ Computes ACROSS ALL SEEDS:
         d_target_absmin, d_pred, and d on the correctly-classified subset
         (where d_target = d_pred). Requires the extended log format with
         all diag_* fields produced by the updated cgr_with_diag.py.
+  (d3)  Oscillation-count and monotonicity diagnostics (Concern 2, extended).
+        For each of the five selection rules, counts the number of strict
+        sign changes PER SELECTED SAMPLE (not just existence) in two windows:
+          first-E window  — 3 adjacent pairs for E=4
+          full-trajectory — n_epochs-1 adjacent pairs across all training
+        and classifies the first-E signed-margin and first-E target-confidence
+        trajectories as strictly monotone increasing / strictly monotone
+        decreasing / weakly monotone (allows plateaus, no direction change) /
+        non-monotone (at least one direction change). Backs the §5.3
+        qualification that "at least one sign change" does not establish
+        repeated oscillation or continuous boundary-crossing, and that
+        because the variance score is permutation-invariant, high variance
+        can also arise from strictly monotonically increasing confidence
+        trajectories rather than oscillation. Uses the same five selection
+        rules as (b.2) / (d) / (d2). Does NOT require extended log fields
+        beyond diag_logit_margin and cgr_confidence_by_sample.
 
 Usage:
     python analyze_cgr_diag.py --diag_dir cgr_diag_logs --E 4 --buffer_size 1000
@@ -840,6 +856,202 @@ def selection_time_diagnostics(logs, E, buffer_size):
     return agg, ovl
 
 
+# ---------------- (d3) Oscillation-count and monotonicity diagnostics ----
+#
+# Backs the §5.3 qualification "at least one sign change does not establish
+# repeated oscillation, continuous boundary-crossing, or geometric proximity"
+# and the related note that "confidence variance is insensitive to the
+# ordering of observations, so a monotonic increase in confidence can produce
+# the same variance as an oscillating sequence." (d2) already reports the
+# existence indicator sign_change_strict; (d3) reports the COUNT and the
+# monotonicity shape, which (d2) does not.
+#
+# Design notes:
+#   * Uses the same five selection rules as (b.2) / (d) / (d2); indices are
+#     reconstructed from the per-seed log via the same _top_k_per_class
+#     helper and the same selection scores (sample variance of first-E
+#     confidence for CGR; first-E mean confidence for High-/Low-confidence;
+#     first-E mean cross-entropy for High-loss; a per-seed numpy rng with
+#     the run seed for Random).
+#   * Strict sign change = m[e] * m[e+1] < 0; exact zero ties do not count.
+#     This matches the (d2) strict_sign_change convention.
+#   * Monotonicity is classified from the sequence of adjacent differences
+#     diff[e] = x[e+1] - x[e] over e = 0..T-2:
+#       strictly_inc : all diff > 0
+#       strictly_dec : all diff < 0
+#       weakly_mono  : no direction change AND NOT strictly_inc/dec (plateaus)
+#       non_monotone : at least one direction change (both pos and neg diffs)
+#   * For a window of length E=4, there are only three adjacent-pair
+#     comparisons available in the first-E window.
+
+
+def _monotonicity_class(x_TxS):
+    """x_TxS: (T, S) ndarray of per-sample trajectories (T>=2).
+    Returns (S,) int in {0,1,2,3}:
+       0: strictly monotonically increasing   (all adjacent diffs > 0)
+       1: strictly monotonically decreasing   (all adjacent diffs < 0)
+       2: weakly monotone (no direction change AND NOT strict)
+       3: non-monotone (at least one direction change)
+    """
+    xn = x_TxS.numpy() if hasattr(x_TxS, 'numpy') else x_TxS
+    diff = xn[1:] - xn[:-1]
+    pos = diff > 0
+    neg = diff < 0
+    any_pos = pos.any(axis=0)
+    any_neg = neg.any(axis=0)
+    strict_inc = pos.all(axis=0)
+    strict_dec = neg.all(axis=0)
+    both = any_pos & any_neg
+    weakly_mono = (~both) & (~strict_inc) & (~strict_dec)
+    out = np.full(xn.shape[1], 3, dtype=int)   # default: non-monotone
+    out[strict_inc] = 0
+    out[strict_dec] = 1
+    out[weakly_mono] = 2
+    return out
+
+
+def oscillation_monotonicity_diagnostics(logs, E, buffer_size):
+    """Per selection rule, report:
+      * First-E strict sign-change count distribution per selected sample
+        (mean, median, max; fraction with 0, 1, 2, 3 switches; fraction
+         with >=2 switches).
+      * Full-trajectory strict sign-change count distribution per selected
+        sample (mean, median, max; fraction with 0, 1, 2-3, 4-5, >=6).
+      * First-E signed-margin trajectory shape (fraction in each of the four
+        monotonicity classes).
+      * First-E target-CONFIDENCE trajectory shape — the quantity CGR's
+        variance score is computed on (fraction in each class).
+      * Mean first-E target-confidence sample variance of the selection
+        (sanity: CGR >> others).
+
+    Requires only diag_logit_margin, cgr_confidence_by_sample, diag_labels,
+    diag_loss (for the High-loss rule), and the recorded 'seed'.
+    """
+    rules = ['CGR (high variance)', 'Random', 'High confidence',
+             'Low confidence', 'High loss']
+
+    # Metric keys: percentages are of the selected set per seed.
+    metric_names = [
+        # First-E strict sign-change counts (window has 3 adjacent pairs)
+        'firstE_mean_count', 'firstE_median_count', 'firstE_max_count',
+        'firstE_frac_0_switches', 'firstE_frac_1_switch',
+        'firstE_frac_2_switches', 'firstE_frac_3_switches',
+        'firstE_frac_ge2',
+        # Full-trajectory strict sign-change counts
+        'full_mean_count', 'full_median_count', 'full_max_count',
+        'full_frac_0', 'full_frac_1',
+        'full_frac_2_to_3', 'full_frac_4_to_5', 'full_frac_ge6',
+        # First-E signed-margin monotonicity shape (% of selected set)
+        'margin_mono_strict_inc', 'margin_mono_strict_dec',
+        'margin_mono_weak', 'margin_mono_non',
+        # First-E target-confidence monotonicity shape (% of selected set)
+        'conf_mono_strict_inc', 'conf_mono_strict_dec',
+        'conf_mono_weak', 'conf_mono_non',
+        # Sanity: mean first-E target-confidence sample variance of the selection
+        'mean_firstE_conf_var',
+    ]
+
+    per_seed = {r: {k: [] for k in metric_names} for r in rules}
+
+    for log in logs:
+        for req in ('diag_logit_margin', 'cgr_confidence_by_sample',
+                    'diag_labels', 'diag_loss'):
+            if req not in log:
+                raise KeyError(f"Log for seed {log.get('seed', '?')} missing "
+                               f"'{req}' (required by (d3) oscillation-count "
+                               "diagnostics).")
+
+        conf = log['cgr_confidence_by_sample'].numpy()      # (T, N)
+        logit_m = log['diag_logit_margin'].numpy()          # (T, N)
+        loss = log['diag_loss'].numpy()                     # (T, N)
+        labels = log['diag_labels'].numpy()
+        seed = int(log['seed']) if str(log['seed']).isdigit() else 0
+
+        n_epochs = conf.shape[0]
+        n_classes = len(np.unique(labels))
+        per_class = buffer_size // n_classes
+
+        # Selection rules (identical to (b.2) / (d) / (d2))
+        rng = np.random.default_rng(seed)
+        sigma2 = np.var(conf[:E], axis=0)
+        mean_conf_E = conf[:E].mean(axis=0)
+        mean_loss_E = loss[:E].mean(axis=0)
+        selections = {
+            'CGR (high variance)': _top_k_per_class(sigma2, labels, per_class, descending=True),
+            'Random': np.concatenate([
+                rng.choice(np.where(labels == c)[0],
+                           size=min(per_class, (labels == c).sum()),
+                           replace=False) for c in np.unique(labels)]),
+            'High confidence': _top_k_per_class(mean_conf_E, labels, per_class, descending=True),
+            'Low confidence':  _top_k_per_class(mean_conf_E, labels, per_class, descending=False),
+            'High loss':       _top_k_per_class(mean_loss_E, labels, per_class, descending=True),
+        }
+
+        # Per-sample strict sign-change counts over the full trajectory and
+        # over the first-E window. Shape: (T-1, N) -> (N,).
+        full_prod = logit_m[:-1] * logit_m[1:]
+        full_switch_count = (full_prod < 0).sum(axis=0)             # (N,)
+        firstE_prod = logit_m[:E-1] * logit_m[1:E]
+        firstE_switch_count = (firstE_prod < 0).sum(axis=0)         # (N,)
+
+        # Per-sample monotonicity classes for first-E signed margin and first-E confidence.
+        mono_margin_firstE = _monotonicity_class(logit_m[:E])       # (N,)
+        mono_conf_firstE   = _monotonicity_class(conf[:E])          # (N,)
+
+        # Per-sample first-E confidence sample variance (matches CGR score, sanity).
+        varE = conf[:E].var(axis=0, ddof=1)                         # (N,) sample variance
+
+        for name, idx in selections.items():
+            sc_firstE = firstE_switch_count[idx]
+            sc_full   = full_switch_count[idx]
+            mm        = mono_margin_firstE[idx]
+            mc        = mono_conf_firstE[idx]
+            row = per_seed[name]
+
+            # First-E switch counts
+            row['firstE_mean_count'].append(float(sc_firstE.mean()))
+            row['firstE_median_count'].append(float(np.median(sc_firstE)))
+            row['firstE_max_count'].append(float(sc_firstE.max()))
+            row['firstE_frac_0_switches'].append(100.0 * float((sc_firstE == 0).mean()))
+            row['firstE_frac_1_switch'].append(   100.0 * float((sc_firstE == 1).mean()))
+            row['firstE_frac_2_switches'].append( 100.0 * float((sc_firstE == 2).mean()))
+            row['firstE_frac_3_switches'].append( 100.0 * float((sc_firstE == 3).mean()))
+            row['firstE_frac_ge2'].append(        100.0 * float((sc_firstE >= 2).mean()))
+
+            # Full-trajectory switch counts
+            row['full_mean_count'].append(float(sc_full.mean()))
+            row['full_median_count'].append(float(np.median(sc_full)))
+            row['full_max_count'].append(float(sc_full.max()))
+            row['full_frac_0'].append(   100.0 * float((sc_full == 0).mean()))
+            row['full_frac_1'].append(   100.0 * float((sc_full == 1).mean()))
+            row['full_frac_2_to_3'].append(100.0 * float(((sc_full >= 2) & (sc_full <= 3)).mean()))
+            row['full_frac_4_to_5'].append(100.0 * float(((sc_full >= 4) & (sc_full <= 5)).mean()))
+            row['full_frac_ge6'].append( 100.0 * float((sc_full >= 6).mean()))
+
+            # Monotonicity shapes (fractions of the selected set)
+            row['margin_mono_strict_inc'].append(100.0 * float((mm == 0).mean()))
+            row['margin_mono_strict_dec'].append(100.0 * float((mm == 1).mean()))
+            row['margin_mono_weak'].append(      100.0 * float((mm == 2).mean()))
+            row['margin_mono_non'].append(       100.0 * float((mm == 3).mean()))
+            row['conf_mono_strict_inc'].append(100.0 * float((mc == 0).mean()))
+            row['conf_mono_strict_dec'].append(100.0 * float((mc == 1).mean()))
+            row['conf_mono_weak'].append(      100.0 * float((mc == 2).mean()))
+            row['conf_mono_non'].append(       100.0 * float((mc == 3).mean()))
+
+            # Sanity: mean first-E confidence sample variance of the selection
+            row['mean_firstE_conf_var'].append(float(varE[idx].mean()))
+
+    # Aggregate mean ± sample std (ddof=1) across seeds, per rule and per metric.
+    agg = {}
+    for name, dd in per_seed.items():
+        agg[name] = {}
+        for k, v in dd.items():
+            arr = np.array(v, dtype=float)
+            agg[name][k] = (float(np.mean(arr)),
+                             float(np.std(arr, ddof=1)) if len(arr) > 1 else float('nan'))
+    return agg
+
+
 # ------------------------- Reporting -------------------------
 
 def print_b1(mean_rho, std_rho, all_rhos, pairs, n_seeds):
@@ -1036,6 +1248,102 @@ def print_d2(agg, ovl, n_seeds):
             print(f"    {name:<22} {med_mu:>7.3f}±{med_sd:.3f}   {iqr_mu:>7.3f}±{iqr_sd:.3f}")
 
 
+def print_d3(agg, n_seeds):
+    """Print the oscillation-count and monotonicity diagnostics."""
+    rules_order = ['CGR (high variance)', 'Random', 'High confidence',
+                   'Low confidence', 'High loss']
+    print(f"\n=== (d3) Oscillation-count and monotonicity diagnostics [Concern 2, extended] ===")
+    print(f"(mean ± sample SD across {n_seeds} seeds; percentages are of the selected set per seed.")
+    print(f" Strict sign change: m[e]*m[e+1] < 0; exact zero ties do not count.)")
+
+    def _fmt(d, k, dg=2):
+        mu, sd = d[k]
+        if np.isnan(sd):
+            return f"{mu:>7.{dg}f}       "
+        return f"{mu:>5.{dg}f}±{sd:.{dg}f}"
+
+    # [A] First-E sign changes per sample (3 adjacent pairs for E=4)
+    print(f"\n[A] First-E sign changes per sample (strict, over E-1 adjacent pairs in the first-E window)")
+    cols_A = [
+        ('firstE_mean_count',       'MeanCount',    2),
+        ('firstE_median_count',     'MedianCount',  2),
+        ('firstE_max_count',        'MaxCount',     2),
+        ('firstE_frac_0_switches',  '0 switches%',  2),
+        ('firstE_frac_1_switch',    '1 switch%',    2),
+        ('firstE_frac_2_switches',  '2 switches%',  2),
+        ('firstE_frac_3_switches',  '3 switches%',  2),
+        ('firstE_frac_ge2',         '>=2 switches%',2),
+    ]
+    print(f"{'Rule':<22} " + "  ".join(f"{lbl:>14}" for _, lbl, _ in cols_A))
+    for name in rules_order:
+        d = agg[name]
+        print(f"{name:<22} " + "  ".join(f"{_fmt(d, k, dg):>14}" for k, _, dg in cols_A))
+
+    # [B] Full-trajectory sign changes per sample
+    print(f"\n[B] Full-50 sign changes per sample (strict, over n_epochs-1 adjacent pairs in the full trajectory)")
+    cols_B = [
+        ('full_mean_count',    'MeanCount',   2),
+        ('full_median_count',  'MedianCount', 2),
+        ('full_max_count',     'MaxCount',    2),
+        ('full_frac_0',        '0%',          2),
+        ('full_frac_1',        '1%',          2),
+        ('full_frac_2_to_3',   '2-3%',        2),
+        ('full_frac_4_to_5',   '4-5%',        2),
+        ('full_frac_ge6',      '>=6%',        2),
+    ]
+    print(f"{'Rule':<22} " + "  ".join(f"{lbl:>14}" for _, lbl, _ in cols_B))
+    for name in rules_order:
+        d = agg[name]
+        print(f"{name:<22} " + "  ".join(f"{_fmt(d, k, dg):>14}" for k, _, dg in cols_B))
+
+    # [C] First-E signed-margin trajectory shape
+    print(f"\n[C] First-E signed-margin trajectory shape (% of selected set)")
+    cols_C = [
+        ('margin_mono_strict_inc', 'strict-inc%', 2),
+        ('margin_mono_strict_dec', 'strict-dec%', 2),
+        ('margin_mono_weak',       'weakly-mono%',2),
+        ('margin_mono_non',        'non-monotone%',2),
+    ]
+    print(f"{'Rule':<22} " + "  ".join(f"{lbl:>14}" for _, lbl, _ in cols_C))
+    for name in rules_order:
+        d = agg[name]
+        print(f"{name:<22} " + "  ".join(f"{_fmt(d, k, dg):>14}" for k, _, dg in cols_C))
+
+    # [D] First-E target-confidence trajectory shape
+    print(f"\n[D] First-E target-CONFIDENCE trajectory shape — the quantity CGR's variance is computed on (% of selected set)")
+    cols_D = [
+        ('conf_mono_strict_inc', 'strict-inc%',  2),
+        ('conf_mono_strict_dec', 'strict-dec%',  2),
+        ('conf_mono_weak',       'weakly-mono%', 2),
+        ('conf_mono_non',        'non-monotone%',2),
+    ]
+    print(f"{'Rule':<22} " + "  ".join(f"{lbl:>14}" for _, lbl, _ in cols_D))
+    for name in rules_order:
+        d = agg[name]
+        print(f"{name:<22} " + "  ".join(f"{_fmt(d, k, dg):>14}" for k, _, dg in cols_D))
+
+    # [E] Sanity: mean first-E confidence sample variance of the selection
+    print(f"\n[E] Mean first-E target-confidence sample variance of the selection (sanity)")
+    cols_E = [('mean_firstE_conf_var', 'MeanConfVar', 4)]
+    print(f"{'Rule':<22} " + "  ".join(f"{lbl:>14}" for _, lbl, _ in cols_E))
+    for name in rules_order:
+        d = agg[name]
+        print(f"{name:<22} " + "  ".join(f"{_fmt(d, k, dg):>14}" for k, _, dg in cols_E))
+
+    print()
+    print("Interpretation notes (not reported in the manuscript; for internal use):")
+    print(" - firstE_frac_ge2  is the fraction of selected samples with >=2 strict sign")
+    print("                    changes in the first-E window ((E-1) adjacent pairs available).")
+    print("                    'Repeated oscillation' at the measured observations would need")
+    print("                    many samples with 2 or 3 switches, not just 1.")
+    print(" - full_frac_ge6    full-trajectory sign-change counts; 'continuous boundary-")
+    print("                    crossing' would need large counts throughout training.")
+    print(" - conf_mono_strict_inc = fraction of selected samples whose first-E confidence")
+    print("                    monotonically increased; a high fraction here means the")
+    print("                    variance score is dominated by monotonic rising trajectories,")
+    print("                    consistent with 'variance is insensitive to ordering'.")
+
+
 def print_c(results, mean_rho, std_rho, E_small, E_large):
     print(f"\n=== (c) Within-seed Spearman: σ² at E={E_small} vs σ² at E={E_large} "
           f"[Concern 4 anchor] ===")
@@ -1230,6 +1538,16 @@ def main():
         print_d2(agg_d2, ovl_d2, len(logs))
     except KeyError as e:
         print(f"\n[Skipping (d2)] {e}")
+
+    # (d3) oscillation-count and monotonicity diagnostics -- Concern 2, extended
+    # (does NOT require extended log format beyond diag_logit_margin and
+    # cgr_confidence_by_sample; backs the §5.3 "One switch, not repeated
+    # oscillation or continuous boundary-crossing" qualification.)
+    try:
+        agg_d3 = oscillation_monotonicity_diagnostics(logs, args.E, args.buffer_size)
+        print_d3(agg_d3, len(logs))
+    except KeyError as e:
+        print(f"\n[Skipping (d3)] {e}")
 
 
 if __name__ == '__main__':
