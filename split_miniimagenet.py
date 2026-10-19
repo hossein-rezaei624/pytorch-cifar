@@ -371,3 +371,59 @@ High loss                  0.62±0.05     8.08±6.02     7.64±5.94     4.10±3.
     High confidence          1.964±0.177     1.662±0.129
     Low confidence           0.243±0.033     0.335±0.113
     High loss                0.779±0.126     1.303±0.236
+
+=== (d3) Oscillation-count and monotonicity diagnostics [Concern 2, extended] ===
+(mean ± sample SD across 5 seeds; percentages are of the selected set per seed.
+ Strict sign change: m[e]*m[e+1] < 0; exact zero ties do not count.)
+
+[A] First-E sign changes per sample (strict, over E-1 adjacent pairs in the first-E window)
+Rule                        MeanCount     MedianCount        MaxCount     0 switches%       1 switch%     2 switches%     3 switches%   >=2 switches%
+CGR (high variance)         1.42±0.02       1.00±0.00       3.00±0.00       3.10±0.56      62.72±1.72      23.20±1.44      10.98±1.11      34.18±1.64
+Random                      0.98±0.01       1.00±0.00       3.00±0.00      36.62±0.47      35.48±0.75      21.26±0.69       6.64±0.87      27.90±0.67
+High confidence             0.94±0.03       1.00±0.00       3.00±0.00      34.12±0.32      43.74±1.51      16.52±1.11       5.62±0.86      22.14±1.64
+Low confidence              0.16±0.02       0.00±0.00       3.00±0.00      88.74±1.48       6.38±1.25       4.66±0.30       0.22±0.08       4.88±0.31
+High loss                   0.36±0.05       0.00±0.00       3.00±0.00      75.60±2.83      13.88±1.77       9.00±0.65       1.52±0.65      10.52±1.22
+
+[B] Full-50 sign changes per sample (strict, over n_epochs-1 adjacent pairs in the full trajectory)
+Rule                        MeanCount     MedianCount        MaxCount              0%              1%            2-3%            4-5%            >=6%
+CGR (high variance)         6.90±0.52       5.00±0.00      29.80±2.39       1.60±0.41      20.40±2.41      20.26±1.37      13.32±1.28      44.42±3.93
+Random                      8.68±0.44       7.40±0.55      28.60±2.07       4.20±0.78       8.48±0.79      13.84±1.77      12.26±0.59      61.22±2.85
+High confidence             5.54±0.61       3.40±0.55      30.20±2.59      15.96±1.38      14.94±2.23      20.24±2.50      12.24±1.68      36.62±4.69
+Low confidence             10.82±0.45      10.60±0.89      27.80±1.30       0.02±0.04       2.92±1.12       6.46±1.24      10.20±1.68      80.40±3.50
+High loss                  10.74±0.50      10.60±0.89      29.40±1.52       0.02±0.04       3.44±0.88       7.32±1.04      10.12±1.43      79.10±3.13
+
+[C] First-E signed-margin trajectory shape (% of selected set)
+Rule                      strict-inc%     strict-dec%    weakly-mono%   non-monotone%
+CGR (high variance)        20.14±1.37       0.66±0.36       0.00±0.00      79.20±1.24
+Random                     10.76±0.94       3.26±0.67       0.00±0.00      85.98±1.01
+High confidence            19.22±1.89       1.04±0.26       0.00±0.00      79.74±1.80
+Low confidence              3.42±0.63       7.56±1.49       0.00±0.00      89.02±1.33
+High loss                   5.16±2.37       7.00±1.92       0.00±0.00      87.84±2.12
+
+[D] First-E target-CONFIDENCE trajectory shape — the quantity CGR's variance is computed on (% of selected set)
+Rule                      strict-inc%     strict-dec%    weakly-mono%   non-monotone%
+CGR (high variance)        25.74±2.07       0.50±0.37       0.00±0.00      73.76±1.95
+Random                     14.56±0.81       2.08±0.33       0.00±0.00      83.36±0.96
+High confidence            24.62±1.81       0.72±0.43       0.00±0.00      74.66±1.68
+Low confidence              5.66±0.52       5.12±0.64       0.00±0.00      89.22±0.68
+High loss                   7.22±2.22       4.60±0.91       0.00±0.00      88.18±1.73
+
+[E] Mean first-E target-confidence sample variance of the selection (sanity)
+Rule                      MeanConfVar
+CGR (high variance)     0.1275±0.0061
+Random                  0.0489±0.0029
+High confidence         0.0808±0.0038
+Low confidence          0.0049±0.0008
+High loss               0.0193±0.0039
+
+Interpretation notes (not reported in the manuscript; for internal use):
+ - firstE_frac_ge2  is the fraction of selected samples with >=2 strict sign
+                    changes in the first-E window ((E-1) adjacent pairs available).
+                    'Repeated oscillation' at the measured observations would need
+                    many samples with 2 or 3 switches, not just 1.
+ - full_frac_ge6    full-trajectory sign-change counts; 'continuous boundary-
+                    crossing' would need large counts throughout training.
+ - conf_mono_strict_inc = fraction of selected samples whose first-E confidence
+                    monotonically increased; a high fraction here means the
+                    variance score is dominated by monotonic rising trajectories,
+                    consistent with 'variance is insensitive to ordering'.
