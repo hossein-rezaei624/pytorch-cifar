@@ -1,1554 +1,373 @@
-"""
-Analysis script for CGR diagnostic logs produced by cgr_with_diag.py
-(when run with --cgr_diag_log).
-
-Computes ACROSS ALL SEEDS:
-  (b.1) Cross-seed Spearman rank correlation of per-sample variance vectors
-        --> mean ± std over the 10 pairs of seeds.
-  (a.2) Variance vs forgetting-event Spearman correlation
-        --> computed separately for EACH seed; reported as mean ± std over seeds.
-  (b.2) Diagnostic table comparing CGR vs random / high-loss / low-confidence
-        --> each cell computed separately for EACH seed; reported as mean ± std.
-  (c)   Within-seed Spearman rank correlation between per-sample variance
-        computed with a small window (E_small, default 2) and a larger window
-        (E_large, default 5). Anchors the sanity check for the E=2 selection
-        (Concern 4). Computed separately for EACH seed; reported as mean ± std.
-  (d)   Boundary-intuition verification (Concern 2): for five selection rules,
-        characterizes the margin and correctness distribution of the selected
-        samples as observed during each example's diagnostic pass in the final
-        training epoch (or averaged over the last E such passes), plus the
-        overlap between CGR and a direct low-|margin| selection. Shows that
-        CGR selects Swayamdipta-style ambiguous samples (variability-based,
-        migrating from low margin to high margin during a single task), not
-        persistently-near-boundary samples. Computed separately for EACH seed;
-        reported as mean ± std. (d) has been reframed as a TRAJECTORY-OUTCOME
-        analysis (NOT a geometric boundary analysis). Renamed categories:
-            well_classified_end     — correct AND top-80% margin within class
-            low_margin_correct_end  — correct AND bottom-20% margin within class
-            misclassified_end       — incorrect
-        ("_end" here refers to the final-epoch diagnostic pass or the last-E
-        window average per `aggregation`.) Configurable via margin_type
-        ('prob' | 'logit') and aggregation ('final' | 'last_E'). Percentile
-        ranks use scipy.stats.rankdata with method='average' (ties handled)
-        and are reported both globally and per-class, with mean and median;
-        supplementary boundary-proximity families computed over |margin| and
-        d_pred are also emitted.
-  (d2)  Selection-time boundary diagnostics (Concern 2, extended). For five
-        selection rules, characterizes selected samples DURING THAT SAMPLE'S
-        DIAGNOSTIC PASS in epoch E (NOT a common end-of-epoch checkpoint —
-        see cgr_with_diag.py module docstring for the timing caveat).
-        Reports point-in-time snapshots AS PRIMARY, plus first-E-window
-        mean/range as complementary statistics. Metrics include: strict
-        sign-change rate (logit_m[:-1]*logit_m[1:] < 0), correctness, prob
-        margin (signed target + predicted top-two), logit margin (signed
-        target + predicted top-two), nearest pairwise |z_y - z_k| (target
-        and predicted), feature-space distances d_target_signed,
-        d_target_absmin, d_pred, and d on the correctly-classified subset
-        (where d_target = d_pred). Requires the extended log format with
-        all diag_* fields produced by the updated cgr_with_diag.py.
-  (d3)  Oscillation-count and monotonicity diagnostics (Concern 2, extended).
-        For each of the five selection rules, counts the number of strict
-        sign changes PER SELECTED SAMPLE (not just existence) in two windows:
-          first-E window  — 3 adjacent pairs for E=4
-          full-trajectory — n_epochs-1 adjacent pairs across all training
-        and classifies the first-E signed-margin and first-E target-confidence
-        trajectories as strictly monotone increasing / strictly monotone
-        decreasing / weakly monotone (allows plateaus, no direction change) /
-        non-monotone (at least one direction change). Backs the §5.3
-        qualification that "at least one sign change" does not establish
-        repeated oscillation or continuous boundary-crossing, and that
-        because the variance score is permutation-invariant, high variance
-        can also arise from strictly monotonically increasing confidence
-        trajectories rather than oscillation. Uses the same five selection
-        rules as (b.2) / (d) / (d2). Does NOT require extended log fields
-        beyond diag_logit_margin and cgr_confidence_by_sample.
-
-Usage:
-    python analyze_cgr_diag.py --diag_dir cgr_diag_logs --E 4 --buffer_size 1000
-    # optional: --E_small 2 --E_large 5   (defaults shown)
-"""
-
-import argparse
-import os
-from pathlib import Path
-
-import numpy as np
-import torch
-from scipy.stats import spearmanr, rankdata
-
-
-# ----------------------------- I/O -----------------------------
-
-def load_seed_logs(diag_dir):
-    paths = sorted(Path(diag_dir).glob('cgr_diag_seed*.pt'))
-    if not paths:
-        raise FileNotFoundError(f"No 'cgr_diag_seed*.pt' files found in {diag_dir}")
-    # weights_only=False is required for torch >=2.6 to load the numpy scalars in the log.
-    # Only run this script on trusted .pt files you produced yourself.
-    return [torch.load(p, map_location='cpu', weights_only=False) for p in paths]
-
-
-# ------------------------- Metrics ---------------------------
-
-def variance_from_eval_confidence(log, E):
-    """CGR's actual variance signal: variance of eval-mode confidence over first E epochs."""
-    conf = log['cgr_confidence_by_sample']
-    return conf[:E].var(dim=0).numpy()
-
-
-def forgetting_events(correct):
-    """Toneva-style forgetting events: # of correct -> incorrect transitions over training."""
-    correct = correct.bool()
-    transitions = correct[:-1] & ~correct[1:]
-    return transitions.sum(dim=0).numpy()
-
-
-# --------------------- (b.1) Cross-seed -----------------------
-
-def cross_seed_spearman(logs, E):
-    variances = [variance_from_eval_confidence(log, E) for log in logs]
-    lens = {v.shape[0] for v in variances}
-    if len(lens) != 1:
-        raise ValueError(f"Variance vectors differ across seeds: {lens}")
-
-    rhos = []
-    pairs = []
-    n = len(variances)
-    for i in range(n):
-        for j in range(i + 1, n):
-            r, _ = spearmanr(variances[i], variances[j])
-            rhos.append(r)
-            pairs.append((logs[i]['seed'], logs[j]['seed']))
-    return float(np.mean(rhos)), float(np.std(rhos, ddof=1)), rhos, pairs
-
-
-# ---------------- (a.2) Variance vs forgetting (all seeds) ----------------
-
-def variance_vs_forgetting_per_seed(logs, E):
-    """Compute Spearman ρ between variance and forgetting events for EACH seed."""
-    results = []
-    for log in logs:
-        variance = variance_from_eval_confidence(log, E)
-        forgetting = forgetting_events(log['diag_correct'])
-        r, p = spearmanr(variance, forgetting)
-        results.append({'seed': log['seed'], 'rho': float(r), 'p': float(p)})
-    rhos = [r['rho'] for r in results]
-    return results, float(np.mean(rhos)), float(np.std(rhos, ddof=1))
-
-
-# ---------------- (c) Within-seed E_small vs E_large (Concern 4) ---------
-
-def within_seed_E_small_vs_E_large_spearman(logs, E_small, E_large):
-    """Per-seed Spearman ρ between per-sample σ² computed over the first
-    E_small epochs and over the first E_large epochs. Anchors the sanity
-    check for the E=2 selection (AE Concern 4)."""
-    if E_small >= E_large:
-        raise ValueError(f"E_small ({E_small}) must be < E_large ({E_large})")
-    results = []
-    for log in logs:
-        n_epochs = log['cgr_confidence_by_sample'].shape[0]
-        if E_large > n_epochs:
-            raise ValueError(f"E_large={E_large} exceeds recorded epochs ({n_epochs}) "
-                             f"for seed {log['seed']}")
-        v_small = variance_from_eval_confidence(log, E_small)
-        v_large = variance_from_eval_confidence(log, E_large)
-        r, p = spearmanr(v_small, v_large)
-        results.append({'seed': log['seed'], 'rho': float(r), 'p': float(p)})
-    rhos = [r['rho'] for r in results]
-    return results, float(np.mean(rhos)), float(np.std(rhos, ddof=1))
-
-
-# ---------------- (b.2) Diagnostic table (all seeds) ----------------------
-
-def diagnostic_table_one_seed(log, E, buffer_size, random_seed):
-    target_conf_all = log['cgr_confidence_by_sample']  # (n_epochs, n_samples)
-    n_epochs = target_conf_all.shape[0]
-    labels = log['diag_labels'].numpy()
-
-    # Per-sample selection scores (first E epochs, matching CGR's window and Figure 3 b.1)
-    variance = variance_from_eval_confidence(log, E)
-    mean_conf_E = target_conf_all[:E].mean(dim=0).numpy()
-    mean_loss_E = log['diag_loss'][:E].mean(dim=0).numpy()
-
-    # Per-sample reporting metrics.
-    #   prob margin & logit margin: averaged over the FIRST E epochs (matches
-    #     CGR's selection window and Figure 3 b.1). End-of-training margin
-    #     would be uninformative because the model has converged and margins
-    #     are large for almost all samples. Both variants reported because
-    #     they share sign but differ in magnitude and cross-sample ranks
-    #     (competitors range over ALL output classes → CIL-style margins).
-    #   forgetting events: over ALL training epochs (Toneva's definition;
-    #     needs the full trajectory — first E would give at most E-1 transitions).
-    #   mean target confidence: over the FIRST E epochs (matches Figure 3 b.1
-    #     and CGR's selection window).
-    prob_margin_first_E  = log['diag_margin'][:E].mean(dim=0).numpy()  # target probability margin
-    logit_margin_first_E = log['diag_logit_margin'][:E].mean(dim=0).numpy() if 'diag_logit_margin' in log else None
-    forgetting = forgetting_events(log['diag_correct'])
-    mean_conf_report = mean_conf_E  # = target_conf_all[:E].mean(dim=0).numpy()
-
-    # Per-class top-K (K = buffer_size // num_classes seen in task 1)
-    unique_classes = np.unique(labels[labels >= 0])
-    num_classes = len(unique_classes)
-    k_per_class = buffer_size // num_classes
-
-    def top_k_per_class(score, descending=True):
-        out = []
-        for c in unique_classes:
-            idx = np.where(labels == c)[0]
-            order = np.argsort(score[idx])
-            if descending:
-                order = order[::-1]
-            out.append(idx[order[:k_per_class]])
-        return np.concatenate(out)
-
-    rng = np.random.default_rng(random_seed)
-    rules = {
-        'Random':          np.concatenate([
-                               rng.choice(np.where(labels == c)[0],
-                                          size=min(k_per_class, (labels == c).sum()),
-                                          replace=False)
-                               for c in unique_classes
-                           ]),
-        'High loss':       top_k_per_class(mean_loss_E, descending=True),
-        'High confidence': top_k_per_class(mean_conf_E, descending=True),
-        'Low confidence':  top_k_per_class(mean_conf_E, descending=False),
-        'CGR (variance)':  top_k_per_class(variance, descending=True),
-    }
-
-    row_dict = {}
-    for name, idx in rules.items():
-        row_dict[name] = {
-            'mean_prob_margin':   float(prob_margin_first_E[idx].mean()),
-            'mean_forgetting':    float(forgetting[idx].mean()),
-            'mean_target_conf':   float(mean_conf_report[idx].mean()),
-        }
-        if logit_margin_first_E is not None:
-            row_dict[name]['mean_logit_margin'] = float(logit_margin_first_E[idx].mean())
-    return row_dict, k_per_class, num_classes
-
-
-def diagnostic_table_all_seeds(logs, E, buffer_size):
-    """Compute the diagnostic table per seed, then aggregate to mean ± std."""
-    per_seed_rows = []
-    k_per_class, num_classes = None, None
-    for log in logs:
-        row_dict, k, nc = diagnostic_table_one_seed(
-            log, E, buffer_size,
-            random_seed=int(log['seed']) if str(log['seed']).isdigit() else 0
-        )
-        per_seed_rows.append(row_dict)
-        k_per_class, num_classes = k, nc
-
-    # Aggregate across seeds
-    rule_names = list(per_seed_rows[0].keys())
-    # Metric names — mean_margin was renamed to mean_prob_margin for clarity;
-    # mean_logit_margin may or may not be present (depends on log format).
-    metric_names = ['mean_prob_margin', 'mean_forgetting', 'mean_target_conf']
-    if any('mean_logit_margin' in per_seed_rows[i][rule_names[0]]
-           for i in range(len(per_seed_rows))):
-        metric_names.append('mean_logit_margin')
-    agg = {}
-    for name in rule_names:
-        agg[name] = {}
-        for metric in metric_names:
-            vals = [seed_row[name].get(metric, float('nan'))
-                    for seed_row in per_seed_rows]
-            vals = [v for v in vals if not (isinstance(v, float) and np.isnan(v))]
-            if len(vals) == 0:
-                continue
-            agg[name][metric + '_mean'] = float(np.mean(vals))
-            agg[name][metric + '_std']  = (float(np.std(vals, ddof=1))
-                                            if len(vals) > 1 else float('nan'))
-            agg[name][metric + '_per_seed'] = [float(v) for v in vals]
-    return agg, per_seed_rows, k_per_class, num_classes
-
-
-# ---------------- (d) Boundary-intuition verification (Concern 2) --------
-
-def _top_k_per_class(scores, labels, k, descending=True):
-    """Per-class top-K selection helper (respects class-balance constraint)."""
-    out = []
-    for c in np.unique(labels):
-        ci = np.where(labels == c)[0]
-        order = np.argsort(-scores[ci] if descending else scores[ci])[:k]
-        out.append(ci[order])
-    return np.concatenate(out)
-
-
-def _percentile_ranks(values):
-    """Return percentile ranks in [0, 100], handling ties via average ranks
-    (rankdata method='average'), scaled by (N-1) so min→0, max→100.
-    Per GPT Point 5."""
-    n = len(values)
-    if n == 1:
-        return np.array([50.0])
-    ranks = rankdata(values, method='average') - 1
-    return 100.0 * ranks / (n - 1)
-
-
-def _percentile_ranks_per_class(values, labels):
-    """Percentile ranks computed WITHIN each class (matches CGR's per-class
-    selection budget). Per GPT Point 5."""
-    out = np.zeros(len(values), dtype=np.float64)
-    for c in np.unique(labels):
-        ci = np.where(labels == c)[0]
-        out[ci] = _percentile_ranks(values[ci])
-    return out
-
-
-def boundary_intuition_test(logs, E, buffer_size, margin_type='prob',
-                             aggregation='final', margin_pctl_threshold=None):
-    """TRAJECTORY-OUTCOME analysis (not a geometric boundary analysis).
-    For each of five selection rules, characterize the correctness and margin
-    distribution of the selected samples as observed during each example's
-    diagnostic pass in the final training epoch (aggregation='final') or
-    averaged over each example's diagnostic passes in the last E training
-    epochs (aggregation='last_E'). See cgr_with_diag.py module docstring for
-    the in-loop measurement timing caveat: values are recorded BEFORE that
-    batch's SGD update, so different samples within an epoch see slightly
-    different model states — this is NOT a common end-of-epoch checkpoint.
-    Answers the question "what happens to CGR-selected samples by late in
-    task-1 training?" — NOT "are they near the decision boundary?" (see
-    selection_time_diagnostics and overlap_with_direct_boundary for the
-    boundary-diagnostic analyses).
-
-    Category renaming (was resolved/still_boundary/outlier):
-      well_classified_end     — correct AND margin in top-80% within class
-      low_margin_correct_end  — correct AND margin in bottom-20% within class
-      misclassified_end       — incorrect (regardless of margin)
-    ("_end" here means "at final-epoch diagnostic pass" or "over last-E passes"
-    depending on `aggregation`.)
-
-    Percentile-rank families (three families, each with median + mean, and
-    both global and per-class scaling):
-      *_pctl_*          — over SIGNED margin. HIGH = well-classified within
-                          class; LOW = near boundary from correct side, or
-                          misclassified. Not a boundary-proximity measure.
-      *_absmarg_pctl_*  — over |signed margin| (margin-space distance to sign
-                          flip). LOW = close to boundary. Boundary-proximity
-                          measure in margin space. For 'last_E' aggregation,
-                          |m| is averaged over epochs BEFORE ranking, i.e.
-                          mean_e |m_{i,e}| — the correct window-averaged
-                          boundary proximity (not |mean_e m_{i,e}|, which
-                          would collapse to ~0 for oscillating samples).
-      *_dpred_pctl_*    — over d_pred (feature-space signed distance to
-                          predicted-region boundary; always >= 0). LOW =
-                          close to boundary in feature space.
-
-    Note that competitors k range over ALL output classes (CIL-style margins),
-    not just classes seen so far in task 1.
-
-    On misclassified samples, d_target_absmin (reported in selection_time_
-    diagnostics) is the distance to the nearest complete target-versus-
-    competitor hyperplane; it is generally a LOWER BOUND on the distance to
-    the full target-class region (see cgr_with_diag.py _diag_feat_distances
-    docstring for the geometric explanation).
-
-    Args:
-        margin_type: 'prob' → diag_margin (signed prob margin, p_y - max_{k!=y} p_k)
-                     'logit' → diag_logit_margin (signed logit margin, z_y - max_{k!=y} z_k)
-                     Both share sign but differ in magnitude and cross-sample ranks.
-        aggregation: 'final' → margin[n_epochs-1] and correct[n_epochs-1]
-                     'last_E' → margin over the last E epochs (signed mean for
-                                trajectory outcome; mean of |m| for boundary
-                                proximity); correctness by STRICT majority
-                                (> 0.5 fraction of last E epochs correct).
-        margin_pctl_threshold: percentile threshold used to define the "low
-                     margin" cut. If None (default), auto-derived as
-                     100 * buffer_size / n_samples so it exactly matches CGR's
-                     per-class selection quota (20.0 for Split CIFAR-100 task 1
-                     with buffer 1000). Pass an explicit value to override.
-    """
-    if margin_type not in ('prob', 'logit'):
-        raise ValueError(f"margin_type must be 'prob' or 'logit', got {margin_type}")
-    if aggregation not in ('final', 'last_E'):
-        raise ValueError(f"aggregation must be 'final' or 'last_E', got {aggregation}")
-
-    margin_key = 'diag_margin' if margin_type == 'prob' else 'diag_logit_margin'
-    per_seed_records = []
-
-    for log in logs:
-        conf   = log['cgr_confidence_by_sample'].numpy()
-        margin = log[margin_key].numpy()
-        correct = log['diag_correct'].numpy().astype(bool)
-        loss   = log['diag_loss'].numpy()
-        labels = log['diag_labels'].numpy()
-        seed   = int(log['seed']) if str(log['seed']).isdigit() else 0
-        # Supplementary quantities for boundary-proximity percentile ranks:
-        #   |signed margin| = distance to sign flip in margin space
-        #   d_pred          = feature-space signed distance to predicted-region
-        #                     boundary (always >= 0)
-        # Low percentile of either  ==>  near the boundary (proper boundary-
-        # proximity measure, unlike the signed-margin percentile which measures
-        # position within the class's signed-margin distribution).
-        d_pred_all = log['diag_feat_dist_pred'].numpy()
-
-        n_epochs = conf.shape[0]
-        n_samples = len(labels)
-        # Item 10: auto-derive threshold from the buffer's per-class quota so
-        # the "low margin" cut matches CGR's selection budget across buffer sizes.
-        # For Split CIFAR-100 task 1 with buffer 1000: 100.0 * 1000 / 5000 = 20.0.
-        eff_threshold = (margin_pctl_threshold
-                          if margin_pctl_threshold is not None
-                          else 100.0 * buffer_size / n_samples)
-
-        if aggregation == 'final':
-            end_margin = margin[n_epochs - 1]                          # signed
-            end_correct = correct[n_epochs - 1]
-            end_d_pred = d_pred_all[n_epochs - 1]
-            # For 'final', |end_margin| coincides with mean-of-abs trivially.
-            abs_end_margin = np.abs(end_margin)
-        else:  # 'last_E'
-            last_margin = margin[n_epochs - E : n_epochs]              # (E, N)
-            end_margin = last_margin.mean(axis=0)                      # signed trajectory outcome
-            # Item 2: mean(|m|), NOT |mean(m)|. For a sample oscillating around 0,
-            # |mean| collapses to ~0 (false "near boundary") while mean(|m|) reports
-            # the true window-averaged distance to the sign-flip point.
-            abs_end_margin = np.abs(last_margin).mean(axis=0)
-            # Item 1: strict majority (> 0.5); a sample correct in exactly E/2 epochs
-            # is NOT counted as correct in this window.
-            end_correct = correct[n_epochs - E : n_epochs].mean(axis=0) > 0.5
-            end_d_pred = d_pred_all[n_epochs - E : n_epochs].mean(axis=0)
-
-        n_classes = len(np.unique(labels))
-        per_class = buffer_size // n_classes
-
-        # Per-class low-margin threshold (matches CGR's class-balanced selection).
-        low_thr_per_class = np.zeros(len(labels))
-        for c in np.unique(labels):
-            ci = np.where(labels == c)[0]
-            low_thr_per_class[ci] = np.percentile(end_margin[ci], eff_threshold)
-
-        pctl_global = _percentile_ranks(end_margin)
-        pctl_class  = _percentile_ranks_per_class(end_margin, labels)
-        # Supplementary boundary-proximity percentile ranks (address GPT Point 2a:
-        # signed-margin percentile is not a boundary-proximity measure). Low pctl
-        # of |margin| or d_pred = near boundary.
-        absmarg_pctl_global = _percentile_ranks(abs_end_margin)
-        absmarg_pctl_class  = _percentile_ranks_per_class(abs_end_margin, labels)
-        dpred_pctl_global   = _percentile_ranks(end_d_pred)
-        dpred_pctl_class    = _percentile_ranks_per_class(end_d_pred, labels)
-
-        rng = np.random.default_rng(seed)
-        sigma2 = np.var(conf[:E], axis=0)
-        mean_conf_E = conf[:E].mean(axis=0)
-        mean_loss_E = loss[:E].mean(axis=0)
-        rules = {
-            'CGR (high variance)': _top_k_per_class(sigma2, labels, per_class, descending=True),
-            'Random': np.concatenate([
-                rng.choice(np.where(labels == c)[0],
-                           size=min(per_class, (labels == c).sum()),
-                           replace=False) for c in np.unique(labels)]),
-            'High confidence': _top_k_per_class(mean_conf_E, labels, per_class, descending=True),
-            'Low confidence':  _top_k_per_class(mean_conf_E, labels, per_class, descending=False),
-            'High loss':       _top_k_per_class(mean_loss_E, labels, per_class, descending=True),
-        }
-
-        seed_row = {}
-        for name, idx in rules.items():
-            sfm = end_margin[idx]
-            sfc = end_correct[idx]
-            in_low = sfm < low_thr_per_class[idx]
-            seed_row[name] = {
-                'frac_correct_end':               float(sfc.mean()),
-                # Signed-margin percentile: within-class position in signed-margin
-                # distribution. HIGH = well-classified within class.
-                'median_pctl_global':             float(np.median(pctl_global[idx])),
-                'mean_pctl_global':               float(np.mean(pctl_global[idx])),
-                'median_pctl_class':              float(np.median(pctl_class[idx])),
-                'mean_pctl_class':                float(np.mean(pctl_class[idx])),
-                # |margin| percentile (boundary-proximity in margin space).
-                # LOW = close to boundary (small |signed margin|).
-                'median_absmarg_pctl_global':     float(np.median(absmarg_pctl_global[idx])),
-                'mean_absmarg_pctl_global':       float(np.mean(absmarg_pctl_global[idx])),
-                'median_absmarg_pctl_class':      float(np.median(absmarg_pctl_class[idx])),
-                'mean_absmarg_pctl_class':        float(np.mean(absmarg_pctl_class[idx])),
-                # d_pred percentile (boundary-proximity in feature space).
-                # LOW = close to predicted-region boundary.
-                'median_dpred_pctl_global':       float(np.median(dpred_pctl_global[idx])),
-                'mean_dpred_pctl_global':         float(np.mean(dpred_pctl_global[idx])),
-                'median_dpred_pctl_class':        float(np.median(dpred_pctl_class[idx])),
-                'mean_dpred_pctl_class':          float(np.mean(dpred_pctl_class[idx])),
-                'well_classified_end':            float((sfc & ~in_low).mean()),
-                'low_margin_correct_end':         float((sfc &  in_low).mean()),
-                'misclassified_end':              float((~sfc).mean()),
-            }
-        per_seed_records.append(seed_row)
-
-    agg = {}
-    metrics = ['frac_correct_end',
-               'median_pctl_global', 'mean_pctl_global',
-               'median_pctl_class', 'mean_pctl_class',
-               'median_absmarg_pctl_global', 'mean_absmarg_pctl_global',
-               'median_absmarg_pctl_class', 'mean_absmarg_pctl_class',
-               'median_dpred_pctl_global', 'mean_dpred_pctl_global',
-               'median_dpred_pctl_class', 'mean_dpred_pctl_class',
-               'well_classified_end', 'low_margin_correct_end', 'misclassified_end']
-    for name in per_seed_records[0]:
-        agg[name] = {}
-        for metric in metrics:
-            vals = [r[name][metric] for r in per_seed_records]
-            agg[name][f'{metric}_mean'] = float(np.mean(vals))
-            agg[name][f'{metric}_std']  = float(np.std(vals, ddof=1))
-    return agg, per_seed_records
-
-
-def overlap_with_direct_boundary(logs, E, buffer_size):
-    """Fraction of CGR-selected samples that also appear in an alternative
-    per-class bottom-K selection under various "direct boundary proximity"
-    criteria. Small overlap means CGR's variability-based selection differs
-    from what these criteria would pick.
-
-    Reports overlap for five criteria, each computed both AT epoch E (index
-    E-1, i.e. from that sample's diagnostic pass in epoch E) and OVER the
-    first-E window (mean across epochs 0..E-1):
-      d_pred:    feature-space signed distance to predicted-region boundary
-      m_pred:    predicted top-two logit gap z_yhat - max_{k!=yhat} z_k (>=0)
-      nearest_pair_logit_gap: min_{k!=y} |z_y - z_k| (>=0, target-based)
-      abs_m_tgt: |z_y - max_{k!=y} z_k|  (>=0)
-      signed_m_tgt: z_y - max_{k!=y} z_k (signed; smallest = most confidently
-                    misclassified, NOT closest boundary — kept for comparison)
-
-    Requires the extended log format with diag_logit_margin_pred,
-    diag_nearest_pair_logit_gap, and diag_feat_dist_pred present.
-    """
-    criteria_names = ['d_pred', 'm_pred', 'nearest_pair_gap',
-                      'abs_m_tgt', 'signed_m_tgt']
-    result = {f'{c}_at_E': [] for c in criteria_names}
-    result.update({f'{c}_over_E': [] for c in criteria_names})
-
-    for log in logs:
-        for req in ('diag_logit_margin_pred', 'diag_nearest_pair_logit_gap',
-                    'diag_feat_dist_pred', 'diag_logit_margin'):
-            if req not in log:
-                raise KeyError(f"Log missing '{req}'. Re-run cgr_with_diag.py "
-                               "after the Concern-2 extended update.")
-
-        conf     = log['cgr_confidence_by_sample'].numpy()
-        labels   = log['diag_labels'].numpy()
-        d_pred   = log['diag_feat_dist_pred'].numpy()
-        m_pred   = log['diag_logit_margin_pred'].numpy()
-        nearest  = log['diag_nearest_pair_logit_gap'].numpy()
-        logit_m  = log['diag_logit_margin'].numpy()
-
-        n_classes = len(np.unique(labels))
-        per_class = buffer_size // n_classes
-        sigma2 = np.var(conf[:E], axis=0)
-        cgr_sel = set(_top_k_per_class(sigma2, labels, per_class, descending=True))
-
-        # Score = the quantity by which we pick the "smallest per class".
-        # For always-non-negative quantities, smallest = nearest to boundary.
-        # For signed_m_tgt, smallest = most confidently misclassified.
-        score_at_E = {
-            'd_pred':           d_pred[E-1],
-            'm_pred':           m_pred[E-1],
-            'nearest_pair_gap': nearest[E-1],
-            'abs_m_tgt':        np.abs(logit_m[E-1]),
-            'signed_m_tgt':     logit_m[E-1],
-        }
-        score_over_E = {
-            'd_pred':           d_pred[:E].mean(axis=0),
-            'm_pred':           m_pred[:E].mean(axis=0),
-            'nearest_pair_gap': nearest[:E].mean(axis=0),
-            'abs_m_tgt':        np.abs(logit_m[:E]).mean(axis=0),
-            'signed_m_tgt':     logit_m[:E].mean(axis=0),
-        }
-
-        for name, sc in score_at_E.items():
-            alt = set(_top_k_per_class(sc, labels, per_class, descending=False))
-            result[f'{name}_at_E'].append(len(cgr_sel & alt) / len(cgr_sel))
-        for name, sc in score_over_E.items():
-            alt = set(_top_k_per_class(sc, labels, per_class, descending=False))
-            result[f'{name}_over_E'].append(len(cgr_sel & alt) / len(cgr_sel))
-
-    return {k: (float(np.mean(v)), float(np.std(v, ddof=1))) for k, v in result.items()}
-
-
-def cgr_margin_trajectory(logs, E, buffer_size, late_window=None):
-    """For CGR-selected samples, compute mean margin early (first E epochs) vs
-    late (last `late_window` epochs). Descriptive training-dynamics result —
-    NOT a geometric boundary verification (see overlap_with_direct_boundary
-    and selection_time_diagnostics for those).
-
-    By default late_window equals E for symmetry with the early window.
-    Uses both prob and logit margin.
-    """
-    if late_window is None:
-        late_window = E
-
-    out = {}
-    for label, key in [('prob', 'diag_margin'), ('logit', 'diag_logit_margin')]:
-        early_all, late_all = [], []
-        for log in logs:
-            conf = log['cgr_confidence_by_sample'].numpy()
-            m = log[key].numpy()
-            labels = log['diag_labels'].numpy()
-            n_epochs = m.shape[0]
-            n_classes = len(np.unique(labels))
-            per_class = buffer_size // n_classes
-            sigma2 = np.var(conf[:E], axis=0)
-            selected = _top_k_per_class(sigma2, labels, per_class, descending=True)
-            early_all.append(float(m[:E, selected].mean()))
-            late_all.append(float(m[n_epochs - late_window : n_epochs, selected].mean()))
-        out[label] = {
-            'early_mean': float(np.mean(early_all)),
-            'early_std':  float(np.std(early_all, ddof=1)),
-            'late_mean':  float(np.mean(late_all)),
-            'late_std':   float(np.std(late_all, ddof=1)),
-            'late_window': late_window,
-        }
-    return out
-
-
-# ---------------- (d2) Selection-time boundary diagnostics (Concern 2, extended) ----
-
-def selection_time_diagnostics(logs, E, buffer_size):
-    """Per selection rule, characterize the samples PRIMARILY during each
-    sample's diagnostic pass in epoch E (see cgr_with_diag.py module docstring for the timing caveat: this is NOT a common end-of-epoch
-    checkpoint), and COMPLEMENTARILY over the first-E window (mean across
-    epochs 0..E-1). Uses all margin variants + feature-space distances +
-    correctly-classified-subset d.
-
-    CIL-STYLE MARGINS (item 9). All margins and feature distances here are
-    CIL-style: the competitor set k ranges over ALL output classes seen by
-    the model, not just classes seen so far in task 1.
-
-    ON d_target_absmin FOR MISCLASSIFIED SAMPLES (item 8). d_target_absmin is
-    the Euclidean feature-space distance to the nearest complete target-vs-
-    competitor pairwise hyperplane. For correctly-classified samples it
-    coincides with d_target_signed and d_pred, and equals the signed distance
-    to the boundary of the (correct) target-class region. For MISCLASSIFIED
-    samples it is generally a LOWER BOUND on the distance from phi(x_i) to
-    the full target-class region: the target region is the intersection of
-    many half-spaces, and the nearest pairwise hyperplane can be closer than
-    the region itself (and may correspond to an inactive pairwise constraint).
-    On the misclassified subset, interpret d_target_absmin as "distance to
-    nearest target-competitor hyperplane," not "distance to target region."
-
-    ITEM 7 — MEDIAN AND IQR ALONGSIDE MEAN. For skewed quantities (absolute
-    margins and feature distances), the per-seed WITHIN-SELECTION median and
-    IQR (75th - 25th percentile) are reported alongside the within-selection
-    mean; then aggregated across seeds as mean±std of those per-seed
-    statistics. These distributions can be right-skewed by a few high-margin
-    or far-from-boundary samples, and the median is more robust.
-
-    Sign-change definition (strict, per GPT Point 4):
-        (logit_m[:E-1] * logit_m[1:E] < 0).any(axis=0)
-    counts a change only when the sign STRICTLY crosses zero.
-
-    Requires the extended log format with keys diag_margin, diag_margin_pred,
-    diag_logit_margin, diag_logit_margin_pred, diag_nearest_pair_logit_gap,
-    diag_nearest_pair_probability_gap, diag_feat_dist_target,
-    diag_feat_dist_target_absmin, diag_feat_dist_pred (produced by the updated
-    cgr_with_diag.py).
-    """
-    required = ['diag_margin', 'diag_margin_pred',
-                'diag_logit_margin', 'diag_logit_margin_pred',
-                'diag_nearest_pair_logit_gap', 'diag_nearest_pair_probability_gap',
-                'diag_feat_dist_target', 'diag_feat_dist_target_absmin',
-                'diag_feat_dist_pred', 'diag_correct']
-
-    rules = ['CGR (high variance)', 'Random', 'High confidence',
-             'Low confidence', 'High loss']
-
-    # Metric keys: <at_E | over_E>_<metric_name>. See paper insertion.
-    # "Skewed" quantities (absolute margins + feature distances) also get
-    # _median and _iqr suffixed variants (per GPT item 7).
-    metric_names_at_E = [
-        'sign_change_strict',   # strict sign-change during epochs 0..E-1
-        'frac_correct_at_E',    # correctness during diagnostic pass in epoch E (diag_correct[E-1])
-        'prob_margin_signed',   # p_y - max_{k!=y} p_k
-        'prob_margin_pred',     # p_yhat - max_{k!=yhat} p_k (>=0)
-        'logit_margin_signed',  # z_y - max_{k!=y} z_k
-        'abs_logit_margin',     # |z_y - max_{k!=y} z_k|
-        'logit_margin_pred',    # z_yhat - max_{k!=yhat} z_k (>=0)
-        'nearest_pair_gap',     # min_{k!=y}    |z_y - z_k|
-        'nearest_pair_prob_gap',# min_{k!=y}    |p_y    - p_k| (target-based, prob space)
-        'd_target_signed',      # signed feat-space distance to target
-        'd_target_absmin',      # feat-space distance to nearest tgt-vs-competitor
-        'd_pred',               # feat-space distance to predicted-region boundary
-        'd_on_correct_subset',  # d = d_pred = d_target on correctly-classified subset only
-        'frac_low_absm_class',  # per-class bottom-20% by |logit margin| membership
-        'frac_low_dpred_class', # per-class bottom-20% by d_pred membership
-    ]
-    # Skewed metrics — add per-seed within-selection median and IQR alongside mean
-    skewed_metrics = ['prob_margin_pred', 'logit_margin_pred', 'abs_logit_margin',
-                      'nearest_pair_gap', 'nearest_pair_prob_gap',
-                      'd_target_signed', 'd_target_absmin', 'd_pred',
-                      'd_on_correct_subset']
-    for m in skewed_metrics:
-        metric_names_at_E += [f'{m}_median', f'{m}_iqr']
-    metric_names_over_E = [
-        'prob_margin_signed_mean', 'prob_margin_signed_range',
-        'prob_margin_pred_mean',   'prob_margin_pred_range',
-        'logit_margin_signed_mean','logit_margin_signed_range',
-        'abs_logit_margin_mean',   'abs_logit_margin_range',
-        'logit_margin_pred_mean',  'logit_margin_pred_range',
-        'nearest_pair_gap_mean',   'nearest_pair_gap_range',
-        'nearest_pair_prob_gap_mean','nearest_pair_prob_gap_range',
-        'd_target_signed_mean',    'd_target_signed_range',
-        'd_target_absmin_mean',    'd_target_absmin_range',
-        'd_pred_mean',             'd_pred_range',
-    ]
-
-    per_seed = {r: {k: [] for k in metric_names_at_E + metric_names_over_E}
-                for r in rules}
-    ovl_keys = ['CGR_vs_low_absm_at_E', 'CGR_vs_low_dpred_at_E',
-                'CGR_vs_low_nearest_pair_gap_at_E',
-                'CGR_vs_low_m_pred_at_E']
-    ovl_all = {k: [] for k in ovl_keys}
-
-    for log in logs:
-        for req in required:
-            if req not in log:
-                raise KeyError(f"Log for seed {log.get('seed', '?')} missing "
-                               f"'{req}'. Re-run cgr_with_diag.py after the "
-                               "Concern-2 extended update.")
-
-        conf     = log['cgr_confidence_by_sample'].numpy()
-        loss     = log['diag_loss'].numpy()
-        labels   = log['diag_labels'].numpy()
-        correct  = log['diag_correct'].numpy().astype(bool)
-        prob_m   = log['diag_margin'].numpy()
-        prob_m_p = log['diag_margin_pred'].numpy()
-        logit_m  = log['diag_logit_margin'].numpy()
-        logit_mp = log['diag_logit_margin_pred'].numpy()
-        near_g   = log['diag_nearest_pair_logit_gap'].numpy()
-        near_pg  = log['diag_nearest_pair_probability_gap'].numpy()
-        d_tgt_s  = log['diag_feat_dist_target'].numpy()
-        d_tgt_a  = log['diag_feat_dist_target_absmin'].numpy()
-        d_prd    = log['diag_feat_dist_pred'].numpy()
-        seed = int(log['seed']) if str(log['seed']).isdigit() else 0
-
-        n_classes = len(np.unique(labels))
-        per_class = buffer_size // n_classes
-
-        # Selection rules
-        rng = np.random.default_rng(seed)
-        sigma2 = np.var(conf[:E], axis=0)
-        mean_conf_E = conf[:E].mean(axis=0)
-        mean_loss_E = loss[:E].mean(axis=0)
-        selections = {
-            'CGR (high variance)': _top_k_per_class(sigma2, labels, per_class, descending=True),
-            'Random': np.concatenate([
-                rng.choice(np.where(labels == c)[0],
-                           size=min(per_class, (labels == c).sum()),
-                           replace=False) for c in np.unique(labels)]),
-            'High confidence': _top_k_per_class(mean_conf_E, labels, per_class, descending=True),
-            'Low confidence':  _top_k_per_class(mean_conf_E, labels, per_class, descending=False),
-            'High loss':       _top_k_per_class(mean_loss_E, labels, per_class, descending=True),
-        }
-
-        # ---- Point-in-time snapshots at epoch index E-1 ----
-        prob_m_E   = prob_m[E-1];   prob_mp_E = prob_m_p[E-1]
-        logit_m_E  = logit_m[E-1];  logit_mp_E = logit_mp[E-1]
-        near_g_E   = near_g[E-1];   near_pg_E  = near_pg[E-1]
-        d_tgt_s_E  = d_tgt_s[E-1];  d_tgt_a_E  = d_tgt_a[E-1]
-        d_prd_E    = d_prd[E-1]
-        corr_E     = correct[E-1]
-        abs_lm_E   = np.abs(logit_m_E)
-
-        # Strict sign change over first E epochs (per GPT Point 4)
-        strict_sign_change = np.any(
-            logit_m[:E-1] * logit_m[1:E] < 0, axis=0
-        )
-
-        # Per-class bottom-20% membership indicators
-        def _bot20(scores, labels):
-            out = np.zeros(len(labels), dtype=bool)
-            for c in np.unique(labels):
-                ci = np.where(labels == c)[0]
-                out[ci] = scores[ci] <= np.percentile(scores[ci], 20)
-            return out
-        low_absm_class = _bot20(abs_lm_E, labels)
-        low_dp_class   = _bot20(d_prd_E, labels)
-
-        # ---- Window aggregates over first E epochs ----
-        def _mean_range_over_E(arr_epochs_samples, idx):
-            """Given (E, N) array and indices, return per-selection mean and
-            range (max-min per sample, then averaged)."""
-            slice_ = arr_epochs_samples[:E, idx]  # (E, |idx|)
-            per_sample_mean = slice_.mean(axis=0)
-            per_sample_range = slice_.max(axis=0) - slice_.min(axis=0)
-            return float(per_sample_mean.mean()), float(per_sample_range.mean())
-
-        for name, idx in selections.items():
-            row = per_seed[name]
-            # AT epoch E (mean)
-            row['sign_change_strict'].append(float(strict_sign_change[idx].mean()))
-            row['frac_correct_at_E'].append(float(corr_E[idx].mean()))
-            row['prob_margin_signed'].append(float(prob_m_E[idx].mean()))
-            row['prob_margin_pred'].append(float(prob_mp_E[idx].mean()))
-            row['logit_margin_signed'].append(float(logit_m_E[idx].mean()))
-            row['abs_logit_margin'].append(float(abs_lm_E[idx].mean()))
-            row['logit_margin_pred'].append(float(logit_mp_E[idx].mean()))
-            row['nearest_pair_gap'].append(float(near_g_E[idx].mean()))
-            row['nearest_pair_prob_gap'].append(float(near_pg_E[idx].mean()))
-            row['d_target_signed'].append(float(d_tgt_s_E[idx].mean()))
-            row['d_target_absmin'].append(float(d_tgt_a_E[idx].mean()))
-            row['d_pred'].append(float(d_prd_E[idx].mean()))
-            # d on correctly-classified subset (d_pred == d_target there)
-            idx_corr = idx[corr_E[idx]]
-            d_on_correct = d_prd_E[idx_corr]  # may be empty
-            row['d_on_correct_subset'].append(
-                float(d_on_correct.mean()) if len(d_on_correct) > 0 else float('nan'))
-            row['frac_low_absm_class'].append(float(low_absm_class[idx].mean()))
-            row['frac_low_dpred_class'].append(float(low_dp_class[idx].mean()))
-            # Item 7: per-seed within-selection MEDIAN and IQR for skewed quantities.
-            for base_name, arr in [
-                ('prob_margin_pred',      prob_mp_E[idx]),
-                ('logit_margin_pred',     logit_mp_E[idx]),
-                ('abs_logit_margin',      abs_lm_E[idx]),
-                ('nearest_pair_gap',      near_g_E[idx]),
-                ('nearest_pair_prob_gap', near_pg_E[idx]),
-                ('d_target_signed',       d_tgt_s_E[idx]),
-                ('d_target_absmin',       d_tgt_a_E[idx]),
-                ('d_pred',                d_prd_E[idx]),
-                ('d_on_correct_subset',   d_on_correct),
-            ]:
-                if len(arr) > 0:
-                    row[f'{base_name}_median'].append(float(np.median(arr)))
-                    row[f'{base_name}_iqr'].append(
-                        float(np.percentile(arr, 75) - np.percentile(arr, 25)))
-                else:
-                    row[f'{base_name}_median'].append(float('nan'))
-                    row[f'{base_name}_iqr'].append(float('nan'))
-            # OVER first-E window (mean and range across epochs, per sample)
-            for arr, key_base in [
-                (prob_m,           'prob_margin_signed'),
-                (prob_m_p,         'prob_margin_pred'),
-                (logit_m,          'logit_margin_signed'),
-                (np.abs(logit_m),  'abs_logit_margin'),
-                (logit_mp,         'logit_margin_pred'),
-                (near_g,           'nearest_pair_gap'),
-                (near_pg,          'nearest_pair_prob_gap'),
-                (d_tgt_s,          'd_target_signed'),
-                (d_tgt_a,          'd_target_absmin'),
-                (d_prd,            'd_pred'),
-            ]:
-                mn, rg = _mean_range_over_E(arr, idx)
-                row[f'{key_base}_mean'].append(mn)
-                row[f'{key_base}_range'].append(rg)
-
-        # Overlaps: CGR vs bottom-K under various criteria during epoch E's diagnostic pass
-        cgr_set = set(selections['CGR (high variance)'])
-        for name, sc in [
-            ('CGR_vs_low_absm_at_E',              abs_lm_E),
-            ('CGR_vs_low_dpred_at_E',             d_prd_E),
-            ('CGR_vs_low_nearest_pair_gap_at_E',  near_g_E),
-            ('CGR_vs_low_m_pred_at_E',            logit_mp_E),
-        ]:
-            alt = set(_top_k_per_class(sc, labels, per_class, descending=False))
-            ovl_all[name].append(len(cgr_set & alt) / len(cgr_set))
-
-    # Aggregate mean±std with ddof=1
-    agg = {}
-    for name, dd in per_seed.items():
-        agg[name] = {}
-        for k, v in dd.items():
-            vals = np.array(v, dtype=float)
-            # Handle NaN (e.g., d_on_correct_subset when no correct samples)
-            good = vals[~np.isnan(vals)]
-            agg[name][k] = (float(np.mean(good)) if len(good) > 0 else float('nan'),
-                             float(np.std(good, ddof=1)) if len(good) > 1 else float('nan'))
-    ovl = {k: (float(np.mean(v)), float(np.std(v, ddof=1)))
-           for k, v in ovl_all.items()}
-    return agg, ovl
-
-
-# ---------------- (d3) Oscillation-count and monotonicity diagnostics ----
-#
-# Backs the §5.3 qualification "at least one sign change does not establish
-# repeated oscillation, continuous boundary-crossing, or geometric proximity"
-# and the related note that "confidence variance is insensitive to the
-# ordering of observations, so a monotonic increase in confidence can produce
-# the same variance as an oscillating sequence." (d2) already reports the
-# existence indicator sign_change_strict; (d3) reports the COUNT and the
-# monotonicity shape, which (d2) does not.
-#
-# Design notes:
-#   * Uses the same five selection rules as (b.2) / (d) / (d2); indices are
-#     reconstructed from the per-seed log via the same _top_k_per_class
-#     helper and the same selection scores (sample variance of first-E
-#     confidence for CGR; first-E mean confidence for High-/Low-confidence;
-#     first-E mean cross-entropy for High-loss; a per-seed numpy rng with
-#     the run seed for Random).
-#   * Strict sign change = m[e] * m[e+1] < 0; exact zero ties do not count.
-#     This matches the (d2) strict_sign_change convention.
-#   * Monotonicity is classified from the sequence of adjacent differences
-#     diff[e] = x[e+1] - x[e] over e = 0..T-2:
-#       strictly_inc : all diff > 0
-#       strictly_dec : all diff < 0
-#       weakly_mono  : no direction change AND NOT strictly_inc/dec (plateaus)
-#       non_monotone : at least one direction change (both pos and neg diffs)
-#   * For a window of length E=4, there are only three adjacent-pair
-#     comparisons available in the first-E window.
-
-
-def _monotonicity_class(x_TxS):
-    """x_TxS: (T, S) ndarray of per-sample trajectories (T>=2).
-    Returns (S,) int in {0,1,2,3}:
-       0: strictly monotonically increasing   (all adjacent diffs > 0)
-       1: strictly monotonically decreasing   (all adjacent diffs < 0)
-       2: weakly monotone (no direction change AND NOT strict)
-       3: non-monotone (at least one direction change)
-    """
-    xn = x_TxS.numpy() if hasattr(x_TxS, 'numpy') else x_TxS
-    diff = xn[1:] - xn[:-1]
-    pos = diff > 0
-    neg = diff < 0
-    any_pos = pos.any(axis=0)
-    any_neg = neg.any(axis=0)
-    strict_inc = pos.all(axis=0)
-    strict_dec = neg.all(axis=0)
-    both = any_pos & any_neg
-    weakly_mono = (~both) & (~strict_inc) & (~strict_dec)
-    out = np.full(xn.shape[1], 3, dtype=int)   # default: non-monotone
-    out[strict_inc] = 0
-    out[strict_dec] = 1
-    out[weakly_mono] = 2
-    return out
-
-
-def oscillation_monotonicity_diagnostics(logs, E, buffer_size):
-    """Per selection rule, report:
-      * First-E strict sign-change count distribution per selected sample
-        (mean, median, max; fraction with 0, 1, 2, 3 switches; fraction
-         with >=2 switches).
-      * Full-trajectory strict sign-change count distribution per selected
-        sample (mean, median, max; fraction with 0, 1, 2-3, 4-5, >=6).
-      * First-E signed-margin trajectory shape (fraction in each of the four
-        monotonicity classes).
-      * First-E target-CONFIDENCE trajectory shape — the quantity CGR's
-        variance score is computed on (fraction in each class).
-      * Mean first-E target-confidence sample variance of the selection
-        (sanity: CGR >> others).
-
-    Requires only diag_logit_margin, cgr_confidence_by_sample, diag_labels,
-    diag_loss (for the High-loss rule), and the recorded 'seed'.
-    """
-    rules = ['CGR (high variance)', 'Random', 'High confidence',
-             'Low confidence', 'High loss']
-
-    # Metric keys: percentages are of the selected set per seed.
-    metric_names = [
-        # First-E strict sign-change counts (window has 3 adjacent pairs)
-        'firstE_mean_count', 'firstE_median_count', 'firstE_max_count',
-        'firstE_frac_0_switches', 'firstE_frac_1_switch',
-        'firstE_frac_2_switches', 'firstE_frac_3_switches',
-        'firstE_frac_ge2',
-        # Full-trajectory strict sign-change counts
-        'full_mean_count', 'full_median_count', 'full_max_count',
-        'full_frac_0', 'full_frac_1',
-        'full_frac_2_to_3', 'full_frac_4_to_5', 'full_frac_ge6',
-        # First-E signed-margin monotonicity shape (% of selected set)
-        'margin_mono_strict_inc', 'margin_mono_strict_dec',
-        'margin_mono_weak', 'margin_mono_non',
-        # First-E target-confidence monotonicity shape (% of selected set)
-        'conf_mono_strict_inc', 'conf_mono_strict_dec',
-        'conf_mono_weak', 'conf_mono_non',
-        # Sanity: mean first-E target-confidence sample variance of the selection
-        'mean_firstE_conf_var',
-    ]
-
-    per_seed = {r: {k: [] for k in metric_names} for r in rules}
-
-    for log in logs:
-        for req in ('diag_logit_margin', 'cgr_confidence_by_sample',
-                    'diag_labels', 'diag_loss'):
-            if req not in log:
-                raise KeyError(f"Log for seed {log.get('seed', '?')} missing "
-                               f"'{req}' (required by (d3) oscillation-count "
-                               "diagnostics).")
-
-        conf = log['cgr_confidence_by_sample'].numpy()      # (T, N)
-        logit_m = log['diag_logit_margin'].numpy()          # (T, N)
-        loss = log['diag_loss'].numpy()                     # (T, N)
-        labels = log['diag_labels'].numpy()
-        seed = int(log['seed']) if str(log['seed']).isdigit() else 0
-
-        n_epochs = conf.shape[0]
-        n_classes = len(np.unique(labels))
-        per_class = buffer_size // n_classes
-
-        # Selection rules (identical to (b.2) / (d) / (d2))
-        rng = np.random.default_rng(seed)
-        sigma2 = np.var(conf[:E], axis=0)
-        mean_conf_E = conf[:E].mean(axis=0)
-        mean_loss_E = loss[:E].mean(axis=0)
-        selections = {
-            'CGR (high variance)': _top_k_per_class(sigma2, labels, per_class, descending=True),
-            'Random': np.concatenate([
-                rng.choice(np.where(labels == c)[0],
-                           size=min(per_class, (labels == c).sum()),
-                           replace=False) for c in np.unique(labels)]),
-            'High confidence': _top_k_per_class(mean_conf_E, labels, per_class, descending=True),
-            'Low confidence':  _top_k_per_class(mean_conf_E, labels, per_class, descending=False),
-            'High loss':       _top_k_per_class(mean_loss_E, labels, per_class, descending=True),
-        }
-
-        # Per-sample strict sign-change counts over the full trajectory and
-        # over the first-E window. Shape: (T-1, N) -> (N,).
-        full_prod = logit_m[:-1] * logit_m[1:]
-        full_switch_count = (full_prod < 0).sum(axis=0)             # (N,)
-        firstE_prod = logit_m[:E-1] * logit_m[1:E]
-        firstE_switch_count = (firstE_prod < 0).sum(axis=0)         # (N,)
-
-        # Per-sample monotonicity classes for first-E signed margin and first-E confidence.
-        mono_margin_firstE = _monotonicity_class(logit_m[:E])       # (N,)
-        mono_conf_firstE   = _monotonicity_class(conf[:E])          # (N,)
-
-        # Per-sample first-E confidence sample variance (matches CGR score, sanity).
-        varE = conf[:E].var(axis=0, ddof=1)                         # (N,) sample variance
-
-        for name, idx in selections.items():
-            sc_firstE = firstE_switch_count[idx]
-            sc_full   = full_switch_count[idx]
-            mm        = mono_margin_firstE[idx]
-            mc        = mono_conf_firstE[idx]
-            row = per_seed[name]
-
-            # First-E switch counts
-            row['firstE_mean_count'].append(float(sc_firstE.mean()))
-            row['firstE_median_count'].append(float(np.median(sc_firstE)))
-            row['firstE_max_count'].append(float(sc_firstE.max()))
-            row['firstE_frac_0_switches'].append(100.0 * float((sc_firstE == 0).mean()))
-            row['firstE_frac_1_switch'].append(   100.0 * float((sc_firstE == 1).mean()))
-            row['firstE_frac_2_switches'].append( 100.0 * float((sc_firstE == 2).mean()))
-            row['firstE_frac_3_switches'].append( 100.0 * float((sc_firstE == 3).mean()))
-            row['firstE_frac_ge2'].append(        100.0 * float((sc_firstE >= 2).mean()))
-
-            # Full-trajectory switch counts
-            row['full_mean_count'].append(float(sc_full.mean()))
-            row['full_median_count'].append(float(np.median(sc_full)))
-            row['full_max_count'].append(float(sc_full.max()))
-            row['full_frac_0'].append(   100.0 * float((sc_full == 0).mean()))
-            row['full_frac_1'].append(   100.0 * float((sc_full == 1).mean()))
-            row['full_frac_2_to_3'].append(100.0 * float(((sc_full >= 2) & (sc_full <= 3)).mean()))
-            row['full_frac_4_to_5'].append(100.0 * float(((sc_full >= 4) & (sc_full <= 5)).mean()))
-            row['full_frac_ge6'].append( 100.0 * float((sc_full >= 6).mean()))
-
-            # Monotonicity shapes (fractions of the selected set)
-            row['margin_mono_strict_inc'].append(100.0 * float((mm == 0).mean()))
-            row['margin_mono_strict_dec'].append(100.0 * float((mm == 1).mean()))
-            row['margin_mono_weak'].append(      100.0 * float((mm == 2).mean()))
-            row['margin_mono_non'].append(       100.0 * float((mm == 3).mean()))
-            row['conf_mono_strict_inc'].append(100.0 * float((mc == 0).mean()))
-            row['conf_mono_strict_dec'].append(100.0 * float((mc == 1).mean()))
-            row['conf_mono_weak'].append(      100.0 * float((mc == 2).mean()))
-            row['conf_mono_non'].append(       100.0 * float((mc == 3).mean()))
-
-            # Sanity: mean first-E confidence sample variance of the selection
-            row['mean_firstE_conf_var'].append(float(varE[idx].mean()))
-
-    # Aggregate mean ± sample std (ddof=1) across seeds, per rule and per metric.
-    agg = {}
-    for name, dd in per_seed.items():
-        agg[name] = {}
-        for k, v in dd.items():
-            arr = np.array(v, dtype=float)
-            agg[name][k] = (float(np.mean(arr)),
-                             float(np.std(arr, ddof=1)) if len(arr) > 1 else float('nan'))
-    return agg
-
-
-# ------------------------- Reporting -------------------------
-
-def print_b1(mean_rho, std_rho, all_rhos, pairs, n_seeds):
-    n_pairs = len(all_rhos)
-    print(f"\n=== (b.1) Cross-seed Spearman correlation of variance vectors ===")
-    print(f"Number of seeds: {n_seeds}  ({n_pairs} pairs)")
-    print(f"Mean ρ ± std: {mean_rho:.4f} ± {std_rho:.4f}")
-    print(f"Per-pair ρ values:")
-    for (s1, s2), r in zip(pairs, all_rhos):
-        print(f"  (seed {s1}, seed {s2}): ρ = {r:.4f}")
-    print(f"\n  Paper insertion: \\bar\\rho = {mean_rho:.2f} \\pm {std_rho:.2f}")
-
-
-def print_a2(results, mean_rho, std_rho):
-    print(f"\n=== (a.2) Variance vs forgetting events (ALL seeds) ===")
-    print(f"Per-seed ρ values:")
-    for r in results:
-        sig = '***' if r['p'] < 1e-50 else ('**' if r['p'] < 1e-10 else '')
-        print(f"  seed {r['seed']}: ρ = {r['rho']:.4f}  (p = {r['p']:.3e})  {sig}")
-    print(f"\nMean ρ ± std over {len(results)} seeds: {mean_rho:.4f} ± {std_rho:.4f}")
-    print(f"\n  Paper insertion: \\rho = {mean_rho:.2f} \\pm {std_rho:.2f}")
-
-
-def print_d(agg, margin_type, aggregation, n_seeds):
-    """Print the trajectory-outcome analysis (was: boundary-intuition test)."""
-    tag = f"margin={margin_type}, aggregation={aggregation}"
-    when_phrase = ("in each sample's diagnostic pass in the final training epoch"
-                   if aggregation == 'final'
-                   else "averaged across each sample's diagnostic passes in the last E training epochs")
-    print(f"\n=== (d) Trajectory-outcome analysis [{tag}] ===")
-    print(f"(measured {when_phrase}; averaged over {n_seeds} seeds; per-class thresholds; NOT a geometric boundary test)")
-    print(f"(Percentile-rank interpretation: HIGH pctl on signed-margin = well-classified;")
-    print(f" LOW pctl on |margin| or d_pred = near boundary — proper boundary-proximity measures.)\n")
-
-    # Block 1: signed-margin percentile + counts
-    print(f"--- Signed-margin percentiles and counts ---")
-    header = (f"{'Rule':<22} {'Correct(final-pass)':>21} {'MedPctlGlob':>13} {'MeanPctlGlob':>13} "
-              f"{'MedPctlCls':>12} {'MeanPctlCls':>12} "
-              f"{'WellClsEnd':>13} {'LowMargEnd':>13} {'MisclsEnd':>13}")
-    print(header); print('-' * len(header))
-    for name, d in agg.items():
-        f = lambda k, dg=3: f"{d[k+'_mean']:>6.{dg}f}±{d[k+'_std']:.{dg}f}"
-        print(f"{name:<22} {f('frac_correct_end'):>21} "
-              f"{f('median_pctl_global',1):>13} {f('mean_pctl_global',1):>13} "
-              f"{f('median_pctl_class',1):>12} {f('mean_pctl_class',1):>12} "
-              f"{f('well_classified_end'):>13} {f('low_margin_correct_end'):>13} "
-              f"{f('misclassified_end'):>13}")
-
-    # Block 2: |margin| boundary-proximity percentiles
-    print(f"\n--- |margin| percentiles (boundary-proximity in margin space; LOW = near boundary) ---")
-    header2 = (f"{'Rule':<22} {'MedAbsMargGlob':>16} {'MeanAbsMargGlob':>17} "
-               f"{'MedAbsMargCls':>15} {'MeanAbsMargCls':>16}")
-    print(header2); print('-' * len(header2))
-    for name, d in agg.items():
-        f = lambda k, dg=1: f"{d[k+'_mean']:>6.{dg}f}±{d[k+'_std']:.{dg}f}"
-        print(f"{name:<22} {f('median_absmarg_pctl_global'):>16} "
-              f"{f('mean_absmarg_pctl_global'):>17} "
-              f"{f('median_absmarg_pctl_class'):>15} "
-              f"{f('mean_absmarg_pctl_class'):>16}")
-
-    # Block 3: d_pred boundary-proximity percentiles
-    print(f"\n--- d_pred percentiles (boundary-proximity in feature space; LOW = near boundary) ---")
-    header3 = (f"{'Rule':<22} {'MedDpredGlob':>14} {'MeanDpredGlob':>15} "
-               f"{'MedDpredCls':>13} {'MeanDpredCls':>14}")
-    print(header3); print('-' * len(header3))
-    for name, d in agg.items():
-        f = lambda k, dg=1: f"{d[k+'_mean']:>6.{dg}f}±{d[k+'_std']:.{dg}f}"
-        print(f"{name:<22} {f('median_dpred_pctl_global'):>14} "
-              f"{f('mean_dpred_pctl_global'):>15} "
-              f"{f('median_dpred_pctl_class'):>13} "
-              f"{f('mean_dpred_pctl_class'):>14}")
-
-
-def print_overlap(ovl_dict):
-    """Print the overlap-with-direct-boundary results (multi-criterion,
-    both at-epoch-E and over-first-E-window)."""
-    print(f"\n=== Overlap of CGR selection with per-class bottom-K under alternative criteria ===")
-    print(f"(Chance overlap under Random selection ≈ 20% for K/N_class = 0.2.)")
-    print(f"\n{'Criterion':<24} {'in epoch-E pass':>18} {'over first-E window':>22}")
-    print('-' * 66)
-    criteria = ['d_pred', 'm_pred', 'nearest_pair_gap', 'abs_m_tgt', 'signed_m_tgt']
-    for c in criteria:
-        at_E = ovl_dict.get(f'{c}_at_E', (float('nan'), float('nan')))
-        ov_E = ovl_dict.get(f'{c}_over_E', (float('nan'), float('nan')))
-        print(f"{c:<24} {at_E[0]:>10.3f}±{at_E[1]:.3f}    {ov_E[0]:>13.3f}±{ov_E[1]:.3f}")
-    print("(signed_m_tgt shows the ordering pathology GPT flagged: 'smallest' picks "
-          "confidently-wrong samples, not near-boundary. Included for comparison.)")
-
-
-def print_trajectory(traj):
-    """Print the CGR-selected early-vs-late margin trajectory (both prob and logit)."""
-    print(f"\n=== (d-descriptive) CGR-selected samples: margin trajectory ===")
-    for label, key in [('probability margin', 'prob'), ('logit margin', 'logit')]:
-        r = traj[key]
-        print(f"  {label:<20}: early (first E) = {r['early_mean']:.3f} ± {r['early_std']:.3f}    "
-              f"late (last {r['late_window']}) = {r['late_mean']:.3f} ± {r['late_std']:.3f}")
-    print("  (Descriptive training dynamics — NOT a geometric boundary claim.)")
-
-
-def print_d2(agg, ovl, n_seeds):
-    print(f"\n=== (d2) Selection-time boundary diagnostics [Concern 2, extended] ===")
-    print(f"(measured during each sample's diagnostic pass in epoch E; NOT a common")
-    print(f" end-of-epoch checkpoint. Averaged over {n_seeds} seeds.)\n")
-
-    print("--- POINT-IN-TIME snapshots during each sample's diagnostic pass in epoch E (primary) ---")
-    header = (f"{'Rule':<22} {'SignChgSt 1..E':>15} {'Correct@E':>12} "
-              f"{'ProbMSgn':>11} {'ProbMPrd':>11} {'LogitMSgn':>11} "
-              f"{'|LogitM|':>11} {'LogitMPrd':>11}")
-    print(header); print('-' * len(header))
-    for name, d in agg.items():
-        def f(k, dg=3):
-            mu, sd = d[k]
-            return f"{mu:>5.{dg}f}±{sd:.{dg}f}"
-        print(f"{name:<22} {f('sign_change_strict'):>15} {f('frac_correct_at_E'):>12} "
-              f"{f('prob_margin_signed'):>11} {f('prob_margin_pred'):>11} "
-              f"{f('logit_margin_signed',2):>11} {f('abs_logit_margin',2):>11} "
-              f"{f('logit_margin_pred',2):>11}")
-
-    print()
-    header2 = (f"{'Rule':<22} {'NearPairLogitGap':>18} {'NearPairProbGap':>18} "
-               f"{'d_tgt_signed':>13} {'d_tgt_absmin':>13} {'d_pred':>13} "
-               f"{'d_on_correct':>13}")
-    print(header2); print('-' * len(header2))
-    for name, d in agg.items():
-        def f(k, dg=3):
-            mu, sd = d[k]
-            return f"{mu:>5.{dg}f}±{sd:.{dg}f}"
-        print(f"{name:<22} {f('nearest_pair_gap',2):>18} {f('nearest_pair_prob_gap',3):>18} "
-              f"{f('d_target_signed',2):>13} {f('d_target_absmin',2):>13} "
-              f"{f('d_pred',2):>13} {f('d_on_correct_subset',2):>13}")
-
-    print()
-    header3 = (f"{'Rule':<22} {'bot20% |m|':>13} {'bot20% d_pred':>15}")
-    print(header3); print('-' * len(header3))
-    for name, d in agg.items():
-        def f(k, dg=3):
-            mu, sd = d[k]
-            return f"{mu:>5.{dg}f}±{sd:.{dg}f}"
-        print(f"{name:<22} {f('frac_low_absm_class'):>13} {f('frac_low_dpred_class'):>15}")
-
-    print(f"\n--- WINDOW aggregates over first E epochs (complementary) ---")
-    print(f"(Per-sample mean and range across epochs 0..E-1; then averaged across selection.)")
-    keys_pairs = [
-        ('prob_margin_signed', 'ProbMSgn'),
-        ('logit_margin_signed', 'LogitMSgn'),
-        ('abs_logit_margin', '|LogitM|'),
-        ('logit_margin_pred', 'LogitMPrd'),
-        ('nearest_pair_gap', 'NearPairGap'),
-        ('d_pred', 'd_pred'),
-    ]
-    print(f"\n{'Rule':<22} " + " ".join(f"{lbl+' mean':>13}" for _, lbl in keys_pairs))
-    print('-' * (23 + 14*len(keys_pairs)))
-    for name, d in agg.items():
-        def f(k, dg=3):
-            mu, sd = d[k]
-            return f"{mu:>5.{dg}f}±{sd:.{dg}f}"
-        row = f"{name:<22} " + " ".join(f"{f(kk+'_mean',2):>13}" for kk, _ in keys_pairs)
-        print(row)
-    print(f"\n{'Rule':<22} " + " ".join(f"{lbl+' rng':>13}" for _, lbl in keys_pairs))
-    print('-' * (23 + 14*len(keys_pairs)))
-    for name, d in agg.items():
-        def f(k, dg=3):
-            mu, sd = d[k]
-            return f"{mu:>5.{dg}f}±{sd:.{dg}f}"
-        row = f"{name:<22} " + " ".join(f"{f(kk+'_range',2):>13}" for kk, _ in keys_pairs)
-        print(row)
-
-    print(f"\n--- Overlaps of CGR selection with per-class bottom-K during epoch-E diagnostic pass ---")
-    for label, key in [
-        ('by |logit margin|         ', 'CGR_vs_low_absm_at_E'),
-        ('by d_pred (feat-space)    ', 'CGR_vs_low_dpred_at_E'),
-        ('by nearest_pair_logit_gap ', 'CGR_vs_low_nearest_pair_gap_at_E'),
-        ('by logit_margin_pred      ', 'CGR_vs_low_m_pred_at_E'),
-    ]:
-        mu, sd = ovl[key]
-        print(f"  {label}: {mu:.3f} ± {sd:.3f}")
-
-    # Item 7: within-selection MEDIAN and IQR (robust stats) for skewed
-    # quantities (absolute margins and feature distances).
-    skewed = ['prob_margin_pred', 'logit_margin_pred', 'abs_logit_margin',
-              'nearest_pair_gap', 'nearest_pair_prob_gap',
-              'd_target_signed', 'd_target_absmin', 'd_pred',
-              'd_on_correct_subset']
-    print(f"\n--- MEDIAN and IQR (robust) for skewed quantities at epoch-E diagnostic pass ---")
-    print(f"(Reported as: within-selection median  ±  cross-seed std of that median;")
-    print(f"              within-selection IQR (P75-P25)  ±  cross-seed std of that IQR.)")
-    for metric in skewed:
-        print(f"\n  {metric}:")
-        print(f"    {'Rule':<22} {'Median':>16} {'IQR':>16}")
-        print(f"    {'-'*22} {'-'*16} {'-'*16}")
-        for name, d in agg.items():
-            med_mu, med_sd = d[f'{metric}_median']
-            iqr_mu, iqr_sd = d[f'{metric}_iqr']
-            print(f"    {name:<22} {med_mu:>7.3f}±{med_sd:.3f}   {iqr_mu:>7.3f}±{iqr_sd:.3f}")
-
-
-def print_d3(agg, n_seeds):
-    """Print the oscillation-count and monotonicity diagnostics."""
-    rules_order = ['CGR (high variance)', 'Random', 'High confidence',
-                   'Low confidence', 'High loss']
-    print(f"\n=== (d3) Oscillation-count and monotonicity diagnostics [Concern 2, extended] ===")
-    print(f"(mean ± sample SD across {n_seeds} seeds; percentages are of the selected set per seed.")
-    print(f" Strict sign change: m[e]*m[e+1] < 0; exact zero ties do not count.)")
-
-    def _fmt(d, k, dg=2):
-        mu, sd = d[k]
-        if np.isnan(sd):
-            return f"{mu:>7.{dg}f}       "
-        return f"{mu:>5.{dg}f}±{sd:.{dg}f}"
-
-    # [A] First-E sign changes per sample (3 adjacent pairs for E=4)
-    print(f"\n[A] First-E sign changes per sample (strict, over E-1 adjacent pairs in the first-E window)")
-    cols_A = [
-        ('firstE_mean_count',       'MeanCount',    2),
-        ('firstE_median_count',     'MedianCount',  2),
-        ('firstE_max_count',        'MaxCount',     2),
-        ('firstE_frac_0_switches',  '0 switches%',  2),
-        ('firstE_frac_1_switch',    '1 switch%',    2),
-        ('firstE_frac_2_switches',  '2 switches%',  2),
-        ('firstE_frac_3_switches',  '3 switches%',  2),
-        ('firstE_frac_ge2',         '>=2 switches%',2),
-    ]
-    print(f"{'Rule':<22} " + "  ".join(f"{lbl:>14}" for _, lbl, _ in cols_A))
-    for name in rules_order:
-        d = agg[name]
-        print(f"{name:<22} " + "  ".join(f"{_fmt(d, k, dg):>14}" for k, _, dg in cols_A))
-
-    # [B] Full-trajectory sign changes per sample
-    print(f"\n[B] Full-50 sign changes per sample (strict, over n_epochs-1 adjacent pairs in the full trajectory)")
-    cols_B = [
-        ('full_mean_count',    'MeanCount',   2),
-        ('full_median_count',  'MedianCount', 2),
-        ('full_max_count',     'MaxCount',    2),
-        ('full_frac_0',        '0%',          2),
-        ('full_frac_1',        '1%',          2),
-        ('full_frac_2_to_3',   '2-3%',        2),
-        ('full_frac_4_to_5',   '4-5%',        2),
-        ('full_frac_ge6',      '>=6%',        2),
-    ]
-    print(f"{'Rule':<22} " + "  ".join(f"{lbl:>14}" for _, lbl, _ in cols_B))
-    for name in rules_order:
-        d = agg[name]
-        print(f"{name:<22} " + "  ".join(f"{_fmt(d, k, dg):>14}" for k, _, dg in cols_B))
-
-    # [C] First-E signed-margin trajectory shape
-    print(f"\n[C] First-E signed-margin trajectory shape (% of selected set)")
-    cols_C = [
-        ('margin_mono_strict_inc', 'strict-inc%', 2),
-        ('margin_mono_strict_dec', 'strict-dec%', 2),
-        ('margin_mono_weak',       'weakly-mono%',2),
-        ('margin_mono_non',        'non-monotone%',2),
-    ]
-    print(f"{'Rule':<22} " + "  ".join(f"{lbl:>14}" for _, lbl, _ in cols_C))
-    for name in rules_order:
-        d = agg[name]
-        print(f"{name:<22} " + "  ".join(f"{_fmt(d, k, dg):>14}" for k, _, dg in cols_C))
-
-    # [D] First-E target-confidence trajectory shape
-    print(f"\n[D] First-E target-CONFIDENCE trajectory shape — the quantity CGR's variance is computed on (% of selected set)")
-    cols_D = [
-        ('conf_mono_strict_inc', 'strict-inc%',  2),
-        ('conf_mono_strict_dec', 'strict-dec%',  2),
-        ('conf_mono_weak',       'weakly-mono%', 2),
-        ('conf_mono_non',        'non-monotone%',2),
-    ]
-    print(f"{'Rule':<22} " + "  ".join(f"{lbl:>14}" for _, lbl, _ in cols_D))
-    for name in rules_order:
-        d = agg[name]
-        print(f"{name:<22} " + "  ".join(f"{_fmt(d, k, dg):>14}" for k, _, dg in cols_D))
-
-    # [E] Sanity: mean first-E confidence sample variance of the selection
-    print(f"\n[E] Mean first-E target-confidence sample variance of the selection (sanity)")
-    cols_E = [('mean_firstE_conf_var', 'MeanConfVar', 4)]
-    print(f"{'Rule':<22} " + "  ".join(f"{lbl:>14}" for _, lbl, _ in cols_E))
-    for name in rules_order:
-        d = agg[name]
-        print(f"{name:<22} " + "  ".join(f"{_fmt(d, k, dg):>14}" for k, _, dg in cols_E))
-
-    print()
-    print("Interpretation notes (not reported in the manuscript; for internal use):")
-    print(" - firstE_frac_ge2  is the fraction of selected samples with >=2 strict sign")
-    print("                    changes in the first-E window ((E-1) adjacent pairs available).")
-    print("                    'Repeated oscillation' at the measured observations would need")
-    print("                    many samples with 2 or 3 switches, not just 1.")
-    print(" - full_frac_ge6    full-trajectory sign-change counts; 'continuous boundary-")
-    print("                    crossing' would need large counts throughout training.")
-    print(" - conf_mono_strict_inc = fraction of selected samples whose first-E confidence")
-    print("                    monotonically increased; a high fraction here means the")
-    print("                    variance score is dominated by monotonic rising trajectories,")
-    print("                    consistent with 'variance is insensitive to ordering'.")
-
-
-def print_c(results, mean_rho, std_rho, E_small, E_large):
-    print(f"\n=== (c) Within-seed Spearman: σ² at E={E_small} vs σ² at E={E_large} "
-          f"[Concern 4 anchor] ===")
-    print(f"Per-seed ρ values:")
-    for r in results:
-        sig = '***' if r['p'] < 1e-50 else ('**' if r['p'] < 1e-10 else '')
-        print(f"  seed {r['seed']}: ρ = {r['rho']:.4f}  (p = {r['p']:.3e})  {sig}")
-    rhos = [r['rho'] for r in results]
-    print(f"\nMean ρ ± std over {len(results)} seeds: {mean_rho:.4f} ± {std_rho:.4f}")
-    print(f"Range: [{min(rhos):.4f}, {max(rhos):.4f}]")
-    print(f"\n  Paper insertion: "
-          f"\\bar\\rho_{{E={E_small},E={E_large}}} = {mean_rho:.3f} \\pm {std_rho:.3f}")
-
-
-def print_b2(agg, per_seed_rows, k_per_class, num_classes, n_seeds):
-    print(f"\n=== (b.2) Diagnostic table (averaged over {n_seeds} seeds) ===")
-    print(f"Per-class budget K = {k_per_class}  ({num_classes} classes seen in task 1)")
-    print(f"(Margins are CIL-style: competitors k range over ALL output classes.)\n")
-
-    rule_names = list(agg.keys())
-    has_logit = any('mean_logit_margin_mean' in agg[n] for n in rule_names)
-    if has_logit:
-        header = (f"{'Rule':<18} {'ProbMargin (mean±std)':>24} "
-                  f"{'LogitMargin (mean±std)':>24} "
-                  f"{'Forget (mean±std)':>22} {'MeanConf (mean±std)':>22}")
-    else:
-        header = (f"{'Rule':<18} {'ProbMargin (mean±std)':>24} "
-                  f"{'Forget (mean±std)':>22} {'MeanConf (mean±std)':>22}")
-    print(header)
-    print('-' * len(header))
-    for name in rule_names:
-        d = agg[name]
-        parts = [f"{name:<18} ",
-                 f"{d['mean_prob_margin_mean']:>7.4f} ± {d['mean_prob_margin_std']:.4f}    "]
-        if has_logit:
-            parts.append(f"{d['mean_logit_margin_mean']:>7.4f} ± {d['mean_logit_margin_std']:.4f}    ")
-        parts.append(f"{d['mean_forgetting_mean']:>7.3f} ± {d['mean_forgetting_std']:.3f}    ")
-        parts.append(f"{d['mean_target_conf_mean']:>7.4f} ± {d['mean_target_conf_std']:.4f}")
-        print("".join(parts))
-
-    print("\nPer-seed breakdown:")
-    metrics_iter = [('prob_margin',  'mean_prob_margin_per_seed'),
-                    ('forget',       'mean_forgetting_per_seed'),
-                    ('conf',         'mean_target_conf_per_seed')]
-    if has_logit:
-        metrics_iter.insert(1, ('logit_margin', 'mean_logit_margin_per_seed'))
-    for name in rule_names:
-        print(f"  {name}:")
-        d = agg[name]
-        for metric_pretty, metric_key in metrics_iter:
-            vals = d[metric_key]
-            print(f"    {metric_pretty}: {[f'{v:.4f}' for v in vals]}")
-
-    # LaTeX table
-    print("\n--- LaTeX (paste into Table tab:diagnostic) ---")
-    if has_logit:
-        print(r"\begin{tabular}{lcccc}")
-        print(r"\toprule")
-        print(r"Selection rule & Mean prob. margin & Mean logit margin & Forgetting events $\uparrow$ & Mean target conf. \\")
-    else:
-        print(r"\begin{tabular}{lccc}")
-        print(r"\toprule")
-        print(r"Selection rule & Mean prob. margin & Forgetting events $\uparrow$ & Mean target conf. \\")
-    print(r"\midrule")
-    for name in rule_names:
-        d = agg[name]
-        parts = [f"{name} & ",
-                 f"${d['mean_prob_margin_mean']:.3f} \\pm {d['mean_prob_margin_std']:.3f}$ & "]
-        if has_logit:
-            parts.append(f"${d['mean_logit_margin_mean']:.3f} \\pm {d['mean_logit_margin_std']:.3f}$ & ")
-        parts.append(f"${d['mean_forgetting_mean']:.2f} \\pm {d['mean_forgetting_std']:.2f}$ & ")
-        parts.append(f"${d['mean_target_conf_mean']:.3f} \\pm {d['mean_target_conf_std']:.3f}$ \\\\")
-        print("".join(parts))
-    print(r"\bottomrule")
-    print(r"\end{tabular}")
-
-
-# ---------------------------- Main ----------------------------
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--diag_dir', type=str, required=True,
-                        help='Directory containing cgr_diag_seed*.pt files.')
-    parser.add_argument('--E', type=int, default=4,
-                        help='CGR variance window (should match what was used in training).')
-    parser.add_argument('--buffer_size', type=int, default=1000,
-                        help='Buffer size used in the run; controls per-class top-K.')
-    parser.add_argument('--E_small', type=int, default=2,
-                        help='Small window for the within-seed E_small-vs-E_large check (Concern 4). '
-                             'Default 2.')
-    parser.add_argument('--E_large', type=int, default=5,
-                        help='Large window for the within-seed E_small-vs-E_large check (Concern 4). '
-                             'Default 5.')
-    args = parser.parse_args()
-
-    logs = load_seed_logs(args.diag_dir)
-    print(f"Loaded {len(logs)} seed logs from {args.diag_dir}")
-    for log in logs:
-        print(f"  seed={log['seed']}  E={log['E']}  n_epochs={log['n_epochs']}  "
-              f"n_samples={log['n_sample_per_task']}  buffer_size={log['buffer_size']}")
-
-    # ---- Item 3: hard config-vs-log checks. Refuse to proceed on mismatch
-    # (otherwise a wrong --E or --buffer_size silently reconstructs a
-    # different CGR selection). ----
-    for log in logs:
-        seed_id = log.get('seed', '?')
-        if 'E' in log and int(log['E']) != int(args.E):
-            raise ValueError(
-                f"Requested --E={args.E}, but log for seed {seed_id} was "
-                f"recorded with E={int(log['E'])}. Mismatched E would "
-                f"reconstruct a different CGR selection.")
-        if 'buffer_size' in log and int(log['buffer_size']) != int(args.buffer_size):
-            raise ValueError(
-                f"Requested --buffer_size={args.buffer_size}, but log for "
-                f"seed {seed_id} was recorded with "
-                f"buffer_size={int(log['buffer_size'])}.")
-        n_epochs_log = log['diag_margin'].shape[0]
-        if args.E > n_epochs_log:
-            raise ValueError(
-                f"--E={args.E} exceeds n_epochs={n_epochs_log} recorded for seed {seed_id}")
-        if args.E_large > n_epochs_log:
-            raise ValueError(
-                f"--E_large={args.E_large} exceeds n_epochs={n_epochs_log} "
-                f"recorded for seed {seed_id}")
-        # Also verify shape consistency of all diagnostic tensors:
-        expected_shape = (n_epochs_log, int(log['n_sample_per_task']))
-        for k in ('diag_margin', 'diag_logit_margin', 'diag_correct',
-                  'diag_loss', 'diag_feat_dist_pred'):
-            if k in log and tuple(log[k].shape) != expected_shape:
-                raise ValueError(
-                    f"Seed {seed_id}: {k} shape {tuple(log[k].shape)} != "
-                    f"expected {expected_shape}")
-
-    # ---- Item 4a: assert per-sample label vector matches across seeds.
-    # (Item 4b — saving stable dataset indices for label-noise experiments —
-    # was skipped by the user. Item 4c — the ten pairwise correlations from
-    # five seeds are not independent replicates and should be reported as
-    # descriptive dependent comparisons — is a paper-text caveat, not a code
-    # change.) ----
-    ref = logs[0]
-    for log in logs[1:]:
-        if not torch.equal(log['diag_labels'], ref['diag_labels']):
-            raise ValueError(
-                f"diag_labels differ between seed {ref['seed']} and seed "
-                f"{log['seed']}. Cross-seed analyses assume position i "
-                f"refers to the same example across seeds.")
-    print(f"Config checks passed: E, buffer_size, epoch counts, tensor shapes, "
-          f"and diag_labels are consistent across all {len(logs)} seeds.")
-
-    # (b.1) cross-seed
-    if len(logs) >= 2:
-        mean_rho, std_rho, all_rhos, pairs = cross_seed_spearman(logs, args.E)
-        print_b1(mean_rho, std_rho, all_rhos, pairs, len(logs))
-    else:
-        print("\n(b.1) Cross-seed correlation skipped: need >= 2 seeds.")
-
-    # (c) within-seed E_small vs E_large -- anchors Concern 4 sanity check
-    c_results, c_mean, c_std = within_seed_E_small_vs_E_large_spearman(
-        logs, args.E_small, args.E_large
-    )
-    print_c(c_results, c_mean, c_std, args.E_small, args.E_large)
-
-    # (b.2) diagnostic table -- averaged across all seeds
-    agg, per_seed_rows, k_per_class, num_classes = diagnostic_table_all_seeds(
-        logs, args.E, args.buffer_size
-    )
-    print_b2(agg, per_seed_rows, k_per_class, num_classes, len(logs))
-
-    # (d) trajectory-outcome analysis -- Concern 2 (was boundary-intuition test).
-    # Report all four combinations: {prob, logit} margin × {final, last_E} aggregation.
-    for margin_type in ('prob', 'logit'):
-        for aggregation in ('final', 'last_E'):
-            agg_d, _ = boundary_intuition_test(
-                logs, args.E, args.buffer_size,
-                margin_type=margin_type, aggregation=aggregation,
-            )
-            print_d(agg_d, margin_type, aggregation, len(logs))
-    # Overlap-with-direct-boundary: multi-criterion (Concern 2, extended per GPT Point 6)
-    try:
-        ovl_dict = overlap_with_direct_boundary(logs, args.E, args.buffer_size)
-        print_overlap(ovl_dict)
-    except KeyError as e:
-        print(f"\n[Skipping overlap analysis] {e}")
-    # CGR-selected sample margin trajectory (early vs late; both prob and logit)
-    traj = cgr_margin_trajectory(logs, args.E, args.buffer_size)
-    print_trajectory(traj)
-
-    # (d2) selection-time boundary diagnostics -- Concern 2, extended
-    # (requires extended log format with diag_logit_margin and diag_feat_dist_pred)
-    try:
-        agg_d2, ovl_d2 = selection_time_diagnostics(logs, args.E, args.buffer_size)
-        print_d2(agg_d2, ovl_d2, len(logs))
-    except KeyError as e:
-        print(f"\n[Skipping (d2)] {e}")
-
-    # (d3) oscillation-count and monotonicity diagnostics -- Concern 2, extended
-    # (does NOT require extended log format beyond diag_logit_margin and
-    # cgr_confidence_by_sample; backs the §5.3 "One switch, not repeated
-    # oscillation or continuous boundary-crossing" qualification.)
-    try:
-        agg_d3 = oscillation_monotonicity_diagnostics(logs, args.E, args.buffer_size)
-        print_d3(agg_d3, len(logs))
-    except KeyError as e:
-        print(f"\n[Skipping (d3)] {e}")
-
-
-if __name__ == '__main__':
-    main()
+Loaded 5 seed logs from cgr_diag_logs
+  seed=0  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+  seed=1  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+  seed=2  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+  seed=3  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+  seed=4  E=4  n_epochs=50  n_samples=5000  buffer_size=1000
+Config checks passed: E, buffer_size, epoch counts, tensor shapes, and diag_labels are consistent across all 5 seeds.
+
+=== (b.1) Cross-seed Spearman correlation of variance vectors ===
+Number of seeds: 5  (10 pairs)
+Mean ρ ± std: 0.4887 ± 0.0141
+Per-pair ρ values:
+  (seed 0, seed 1): ρ = 0.5023
+  (seed 0, seed 2): ρ = 0.4941
+  (seed 0, seed 3): ρ = 0.4898
+  (seed 0, seed 4): ρ = 0.4845
+  (seed 1, seed 2): ρ = 0.4708
+  (seed 1, seed 3): ρ = 0.5049
+  (seed 1, seed 4): ρ = 0.5110
+  (seed 2, seed 3): ρ = 0.4786
+  (seed 2, seed 4): ρ = 0.4724
+  (seed 3, seed 4): ρ = 0.4785
+
+  Paper insertion: \bar\rho = 0.49 \pm 0.01
+
+=== (c) Within-seed Spearman: σ² at E=2 vs σ² at E=5 [Concern 4 anchor] ===
+Per-seed ρ values:
+  seed 0: ρ = 0.4412  (p = 2.559e-237)  ***
+  seed 1: ρ = 0.4508  (p = 7.322e-249)  ***
+  seed 2: ρ = 0.4279  (p = 7.662e-222)  ***
+  seed 3: ρ = 0.4509  (p = 5.051e-249)  ***
+  seed 4: ρ = 0.4680  (p = 1.229e-270)  ***
+
+Mean ρ ± std over 5 seeds: 0.4478 ± 0.0147
+Range: [0.4279, 0.4680]
+
+  Paper insertion: \bar\rho_{E=2,E=5} = 0.448 \pm 0.015
+
+=== (b.2) Diagnostic table (averaged over 5 seeds) ===
+Per-class budget K = 100  (10 classes seen in task 1)
+(Margins are CIL-style: competitors k range over ALL output classes.)
+
+Rule                  ProbMargin (mean±std)   LogitMargin (mean±std)      Forget (mean±std)    MeanConf (mean±std)
+------------------------------------------------------------------------------------------------------------------
+Random             -0.0168 ± 0.0106    -0.5191 ± 0.2200      3.989 ± 0.222     0.3015 ± 0.0063
+High loss          -0.3543 ± 0.0108    -3.3493 ± 1.4244      4.929 ± 0.250     0.0972 ± 0.0104
+High confidence     0.3685 ± 0.0210     1.3148 ± 0.1566      2.544 ± 0.306     0.5622 ± 0.0141
+Low confidence     -0.3673 ± 0.0091    -2.4876 ± 0.3353      4.966 ± 0.226     0.0719 ± 0.0037
+CGR (variance)      0.1840 ± 0.0193     0.2365 ± 0.4347      3.067 ± 0.272     0.4433 ± 0.0091
+
+Per-seed breakdown:
+  Random:
+    prob_margin: ['-0.0121', '-0.0206', '-0.0062', '-0.0333', '-0.0115']
+    logit_margin: ['-0.3117', '-0.4113', '-0.3588', '-0.7460', '-0.7675']
+    forget: ['3.6310', '3.9940', '3.9740', '4.1800', '4.1670']
+    conf: ['0.3092', '0.2974', '0.3065', '0.2941', '0.3004']
+  High loss:
+    prob_margin: ['-0.3635', '-0.3587', '-0.3523', '-0.3607', '-0.3364']
+    logit_margin: ['-2.2538', '-2.5406', '-2.3037', '-4.1850', '-5.4636']
+    forget: ['4.5160', '4.9340', '5.0960', '5.1570', '4.9440']
+    conf: ['0.0886', '0.0936', '0.0883', '0.1036', '0.1121']
+  High confidence:
+    prob_margin: ['0.4005', '0.3567', '0.3755', '0.3639', '0.3457']
+    logit_margin: ['1.5110', '1.3249', '1.4173', '1.1873', '1.1337']
+    forget: ['2.0660', '2.7270', '2.4170', '2.6970', '2.8150']
+    conf: ['0.5851', '0.5544', '0.5643', '0.5590', '0.5480']
+  Low confidence:
+    prob_margin: ['-0.3717', '-0.3713', '-0.3571', '-0.3780', '-0.3585']
+    logit_margin: ['-2.2086', '-2.3658', '-2.1819', '-2.7577', '-2.9243']
+    forget: ['4.6010', '4.8870', '5.1160', '5.1240', '5.1010']
+    conf: ['0.0770', '0.0700', '0.0738', '0.0674', '0.0713']
+  CGR (variance):
+    prob_margin: ['0.2125', '0.1787', '0.1936', '0.1649', '0.1703']
+    logit_margin: ['0.6717', '0.4127', '0.5559', '-0.2383', '-0.2195']
+    forget: ['2.6100', '3.1080', '3.0850', '3.2050', '3.3260']
+    conf: ['0.4575', '0.4392', '0.4471', '0.4355', '0.4372']
+
+--- LaTeX (paste into Table tab:diagnostic) ---
+\begin{tabular}{lcccc}
+\toprule
+Selection rule & Mean prob. margin & Mean logit margin & Forgetting events $\uparrow$ & Mean target conf. \\
+\midrule
+Random & $-0.017 \pm 0.011$ & $-0.519 \pm 0.220$ & $3.99 \pm 0.22$ & $0.302 \pm 0.006$ \\
+High loss & $-0.354 \pm 0.011$ & $-3.349 \pm 1.424$ & $4.93 \pm 0.25$ & $0.097 \pm 0.010$ \\
+High confidence & $0.368 \pm 0.021$ & $1.315 \pm 0.157$ & $2.54 \pm 0.31$ & $0.562 \pm 0.014$ \\
+Low confidence & $-0.367 \pm 0.009$ & $-2.488 \pm 0.335$ & $4.97 \pm 0.23$ & $0.072 \pm 0.004$ \\
+CGR (variance) & $0.184 \pm 0.019$ & $0.237 \pm 0.435$ & $3.07 \pm 0.27$ & $0.443 \pm 0.009$ \\
+\bottomrule
+\end{tabular}
+
+=== (d) Trajectory-outcome analysis [margin=prob, aggregation=final] ===
+(measured in each sample's diagnostic pass in the final training epoch; averaged over 5 seeds; per-class thresholds; NOT a geometric boundary test)
+(Percentile-rank interpretation: HIGH pctl on signed-margin = well-classified;
+ LOW pctl on |margin| or d_pred = near boundary — proper boundary-proximity measures.)
+
+--- Signed-margin percentiles and counts ---
+Rule                     Correct(final-pass)   MedPctlGlob  MeanPctlGlob   MedPctlCls  MeanPctlCls    WellClsEnd    LowMargEnd     MisclsEnd
+--------------------------------------------------------------------------------------------------------------------------------------------
+CGR (high variance)              0.973±0.011      62.8±1.3      58.9±0.4     63.4±1.0     59.5±0.5   0.884±0.007   0.088±0.010   0.027±0.011
+Random                           0.960±0.007      50.1±0.8      50.2±0.5     49.7±1.7     50.1±0.7   0.805±0.008   0.154±0.015   0.040±0.007
+High confidence                  0.975±0.009      65.5±1.8      60.9±0.8     67.0±1.4     61.9±0.7   0.902±0.004   0.073±0.008   0.025±0.009
+Low confidence                   0.927±0.010      34.7±0.8      38.0±0.8     33.0±1.3     37.4±0.9   0.670±0.010   0.258±0.013   0.073±0.010
+High loss                        0.932±0.012      36.7±1.3      39.5±0.9     35.1±1.1     39.0±1.0   0.686±0.014   0.246±0.020   0.068±0.012
+
+--- |margin| percentiles (boundary-proximity in margin space; LOW = near boundary) ---
+Rule                     MedAbsMargGlob   MeanAbsMargGlob   MedAbsMargCls   MeanAbsMargCls
+------------------------------------------------------------------------------------------
+CGR (high variance)            62.8±1.4          59.0±0.5        63.4±1.0         59.6±0.7
+Random                         50.1±0.9          50.2±0.6        49.6±1.7         50.1±0.7
+High confidence                65.5±1.8          61.0±0.9        67.0±1.4         61.9±0.8
+Low confidence                 34.8±0.8          38.1±0.9        33.1±1.3         37.4±1.0
+High loss                      36.7±1.4          39.6±1.0        35.2±1.1         39.1±1.0
+
+--- d_pred percentiles (boundary-proximity in feature space; LOW = near boundary) ---
+Rule                     MedDpredGlob   MeanDpredGlob   MedDpredCls   MeanDpredCls
+----------------------------------------------------------------------------------
+CGR (high variance)          63.0±1.3        59.2±0.5      63.5±1.0       59.7±0.7
+Random                       50.1±0.9        50.2±0.6      49.8±1.4       50.1±0.7
+High confidence              65.8±1.4        61.3±0.9      67.0±1.3       62.1±0.8
+Low confidence               34.5±0.9        37.7±0.8      33.1±1.2       37.1±1.0
+High loss                    36.4±1.1        39.2±0.9      35.1±1.1       38.8±0.9
+
+=== (d) Trajectory-outcome analysis [margin=prob, aggregation=last_E] ===
+(measured averaged across each sample's diagnostic passes in the last E training epochs; averaged over 5 seeds; per-class thresholds; NOT a geometric boundary test)
+(Percentile-rank interpretation: HIGH pctl on signed-margin = well-classified;
+ LOW pctl on |margin| or d_pred = near boundary — proper boundary-proximity measures.)
+
+--- Signed-margin percentiles and counts ---
+Rule                     Correct(final-pass)   MedPctlGlob  MeanPctlGlob   MedPctlCls  MeanPctlCls    WellClsEnd    LowMargEnd     MisclsEnd
+--------------------------------------------------------------------------------------------------------------------------------------------
+CGR (high variance)              0.981±0.009      63.9±0.5      59.5±0.3     64.3±0.8     60.1±0.4   0.886±0.012   0.095±0.008   0.019±0.009
+Random                           0.968±0.008      50.2±1.8      50.4±1.0     50.6±2.4     50.4±1.2   0.812±0.010   0.156±0.014   0.032±0.008
+High confidence                  0.984±0.008      67.3±1.8      61.8±1.0     68.8±1.5     62.9±1.3   0.898±0.011   0.086±0.009   0.016±0.008
+Low confidence                   0.938±0.011      33.4±0.4      36.8±0.5     31.7±0.9     35.9±0.6   0.657±0.011   0.281±0.015   0.062±0.011
+High loss                        0.943±0.014      34.9±0.9      38.2±0.7     33.1±1.3     37.6±0.8   0.679±0.017   0.264±0.024   0.057±0.014
+
+--- |margin| percentiles (boundary-proximity in margin space; LOW = near boundary) ---
+Rule                     MedAbsMargGlob   MeanAbsMargGlob   MedAbsMargCls   MeanAbsMargCls
+------------------------------------------------------------------------------------------
+CGR (high variance)            63.9±0.4          59.5±0.5        64.3±0.8         60.2±0.6
+Random                         50.1±1.8          50.3±1.1        50.6±2.1         50.3±1.2
+High confidence                67.4±1.7          61.9±1.0        68.9±1.5         63.0±1.2
+Low confidence                 33.5±0.3          36.9±0.6        31.7±0.7         36.0±0.7
+High loss                      35.0±0.7          38.4±0.7        33.5±1.3         37.7±0.9
+
+--- d_pred percentiles (boundary-proximity in feature space; LOW = near boundary) ---
+Rule                     MedDpredGlob   MeanDpredGlob   MedDpredCls   MeanDpredCls
+----------------------------------------------------------------------------------
+CGR (high variance)          65.1±0.9        60.5±0.6      65.7±1.2       61.3±0.8
+Random                       50.0±1.9        50.2±0.9      50.2±2.1       50.3±1.1
+High confidence              68.9±1.7        62.9±1.0      70.1±1.7       64.2±1.1
+Low confidence               31.7±1.1        35.5±0.9      29.8±1.5       34.5±0.9
+High loss                    33.7±1.2        37.3±0.8      32.3±1.4       36.6±1.0
+
+=== (d) Trajectory-outcome analysis [margin=logit, aggregation=final] ===
+(measured in each sample's diagnostic pass in the final training epoch; averaged over 5 seeds; per-class thresholds; NOT a geometric boundary test)
+(Percentile-rank interpretation: HIGH pctl on signed-margin = well-classified;
+ LOW pctl on |margin| or d_pred = near boundary — proper boundary-proximity measures.)
+
+--- Signed-margin percentiles and counts ---
+Rule                     Correct(final-pass)   MedPctlGlob  MeanPctlGlob   MedPctlCls  MeanPctlCls    WellClsEnd    LowMargEnd     MisclsEnd
+--------------------------------------------------------------------------------------------------------------------------------------------
+CGR (high variance)              0.973±0.011      62.8±1.2      58.9±0.4     63.1±1.0     59.5±0.5   0.885±0.008   0.088±0.010   0.027±0.011
+Random                           0.960±0.007      50.1±1.0      50.2±0.5     49.6±1.8     50.1±0.7   0.806±0.009   0.153±0.016   0.040±0.007
+High confidence                  0.975±0.009      65.4±1.7      61.0±0.8     66.7±1.2     61.9±0.7   0.901±0.003   0.074±0.007   0.025±0.009
+Low confidence                   0.927±0.010      35.0±1.0      38.1±0.7     33.2±1.2     37.4±0.9   0.671±0.011   0.256±0.013   0.073±0.010
+High loss                        0.932±0.012      37.0±1.3      39.6±0.9     35.3±1.5     39.1±0.9   0.687±0.015   0.245±0.021   0.068±0.012
+
+--- |margin| percentiles (boundary-proximity in margin space; LOW = near boundary) ---
+Rule                     MedAbsMargGlob   MeanAbsMargGlob   MedAbsMargCls   MeanAbsMargCls
+------------------------------------------------------------------------------------------
+CGR (high variance)            62.9±1.3          58.9±0.5        63.1±1.0         59.5±0.7
+Random                         50.1±1.1          50.2±0.6        49.6±1.9         50.1±0.7
+High confidence                65.4±1.7          61.0±0.8        66.7±1.3         61.9±0.8
+Low confidence                 35.0±1.1          38.2±0.9        33.4±1.4         37.5±1.0
+High loss                      37.0±1.2          39.7±0.9        35.4±1.5         39.2±1.0
+
+--- d_pred percentiles (boundary-proximity in feature space; LOW = near boundary) ---
+Rule                     MedDpredGlob   MeanDpredGlob   MedDpredCls   MeanDpredCls
+----------------------------------------------------------------------------------
+CGR (high variance)          63.0±1.3        59.2±0.5      63.5±1.0       59.7±0.7
+Random                       50.1±0.9        50.2±0.6      49.8±1.4       50.1±0.7
+High confidence              65.8±1.4        61.3±0.9      67.0±1.3       62.1±0.8
+Low confidence               34.5±0.9        37.7±0.8      33.1±1.2       37.1±1.0
+High loss                    36.4±1.1        39.2±0.9      35.1±1.1       38.8±0.9
+
+=== (d) Trajectory-outcome analysis [margin=logit, aggregation=last_E] ===
+(measured averaged across each sample's diagnostic passes in the last E training epochs; averaged over 5 seeds; per-class thresholds; NOT a geometric boundary test)
+(Percentile-rank interpretation: HIGH pctl on signed-margin = well-classified;
+ LOW pctl on |margin| or d_pred = near boundary — proper boundary-proximity measures.)
+
+--- Signed-margin percentiles and counts ---
+Rule                     Correct(final-pass)   MedPctlGlob  MeanPctlGlob   MedPctlCls  MeanPctlCls    WellClsEnd    LowMargEnd     MisclsEnd
+--------------------------------------------------------------------------------------------------------------------------------------------
+CGR (high variance)              0.981±0.009      64.8±0.9      60.1±0.5     65.5±1.0     61.1±0.6   0.897±0.012   0.085±0.015   0.019±0.009
+Random                           0.968±0.008      50.2±1.5      50.3±0.9     50.4±2.6     50.3±1.0   0.804±0.006   0.164±0.014   0.032±0.008
+High confidence                  0.984±0.008      68.0±1.8      62.5±0.9     69.9±1.5     64.0±1.0   0.910±0.006   0.073±0.011   0.016±0.008
+Low confidence                   0.938±0.011      32.4±1.1      36.1±0.7     30.2±1.3     34.8±0.8   0.640±0.013   0.299±0.009   0.062±0.011
+High loss                        0.943±0.014      34.0±0.7      37.7±0.8     32.6±1.5     36.8±1.0   0.664±0.013   0.279±0.016   0.057±0.014
+
+--- |margin| percentiles (boundary-proximity in margin space; LOW = near boundary) ---
+Rule                     MedAbsMargGlob   MeanAbsMargGlob   MedAbsMargCls   MeanAbsMargCls
+------------------------------------------------------------------------------------------
+CGR (high variance)            64.8±0.9          60.1±0.6        65.4±1.2         61.1±0.8
+Random                         50.2±1.5          50.3±0.9        50.1±2.5         50.3±1.1
+High confidence                68.2±1.7          62.4±0.9        69.9±1.4         64.0±1.0
+Low confidence                 32.6±0.9          36.2±0.8        30.4±1.4         35.0±0.9
+High loss                      34.4±0.8          37.9±0.7        32.7±1.4         37.0±0.9
+
+--- d_pred percentiles (boundary-proximity in feature space; LOW = near boundary) ---
+Rule                     MedDpredGlob   MeanDpredGlob   MedDpredCls   MeanDpredCls
+----------------------------------------------------------------------------------
+CGR (high variance)          65.1±0.9        60.5±0.6      65.7±1.2       61.3±0.8
+Random                       50.0±1.9        50.2±0.9      50.2±2.1       50.3±1.1
+High confidence              68.9±1.7        62.9±1.0      70.1±1.7       64.2±1.1
+Low confidence               31.7±1.1        35.5±0.9      29.8±1.5       34.5±0.9
+High loss                    33.7±1.2        37.3±0.8      32.3±1.4       36.6±1.0
+
+=== Overlap of CGR selection with per-class bottom-K under alternative criteria ===
+(Chance overlap under Random selection ≈ 20% for K/N_class = 0.2.)
+
+Criterion                   in epoch-E pass    over first-E window
+------------------------------------------------------------------
+d_pred                        0.066±0.006            0.011±0.006
+m_pred                        0.066±0.005            0.008±0.004
+nearest_pair_gap              0.059±0.004            0.001±0.001
+abs_m_tgt                     0.077±0.006            0.024±0.006
+signed_m_tgt                  0.071±0.010            0.055±0.035
+(signed_m_tgt shows the ordering pathology GPT flagged: 'smallest' picks confidently-wrong samples, not near-boundary. Included for comparison.)
+
+=== (d-descriptive) CGR-selected samples: margin trajectory ===
+  probability margin  : early (first E) = 0.184 ± 0.019    late (last 4) = 0.929 ± 0.016
+  logit margin        : early (first E) = 0.237 ± 0.435    late (last 4) = 11.038 ± 1.024
+  (Descriptive training dynamics — NOT a geometric boundary claim.)
+
+=== (d2) Selection-time boundary diagnostics [Concern 2, extended] ===
+(measured during each sample's diagnostic pass in epoch E; NOT a common
+ end-of-epoch checkpoint. Averaged over 5 seeds.)
+
+--- POINT-IN-TIME snapshots during each sample's diagnostic pass in epoch E (primary) ---
+Rule                    SignChgSt 1..E    Correct@E    ProbMSgn    ProbMPrd   LogitMSgn    |LogitM|   LogitMPrd
+---------------------------------------------------------------------------------------------------------------
+CGR (high variance)        0.969±0.006  0.826±0.011 0.500±0.025 0.633±0.027   1.83±0.13   2.46±0.16   2.35±0.15
+Random                     0.634±0.005  0.503±0.015 0.073±0.012 0.405±0.025   0.05±0.07   1.85±0.12   1.43±0.10
+High confidence            0.659±0.003  0.925±0.004 0.596±0.033 0.635±0.029   2.29±0.17   2.44±0.15   2.43±0.15
+Low confidence             0.113±0.015  0.033±0.006 -0.425±0.024 0.317±0.029  -2.44±0.12   2.47±0.12   1.08±0.10
+High loss                  0.244±0.028  0.116±0.034 -0.368±0.056 0.351±0.022  -2.28±0.30   2.62±0.18   1.23±0.08
+
+Rule                     NearPairLogitGap    NearPairProbGap  d_tgt_signed  d_tgt_absmin        d_pred  d_on_correct
+--------------------------------------------------------------------------------------------------------------------
+CGR (high variance)             2.23±0.15        0.582±0.025     1.55±0.14     1.89±0.13     1.99±0.13     2.20±0.16
+Random                          1.13±0.08        0.279±0.015     0.04±0.06     0.94±0.06     1.20±0.08     1.57±0.11
+High confidence                 2.40±0.16        0.623±0.031     1.93±0.15     2.02±0.14     2.05±0.13     2.16±0.15
+Low confidence                  0.33±0.02        0.023±0.002    -1.97±0.08     0.26±0.01     0.91±0.09     0.34±0.07
+High loss                       0.47±0.05        0.062±0.017    -1.82±0.21     0.38±0.04     1.04±0.06     1.18±0.19
+
+Rule                      bot20% |m|   bot20% d_pred
+----------------------------------------------------
+CGR (high variance)      0.077±0.006     0.066±0.006
+Random                   0.198±0.012     0.201±0.016
+High confidence          0.092±0.008     0.053±0.011
+Low confidence           0.090±0.011     0.262±0.008
+High loss                0.103±0.012     0.244±0.009
+
+--- WINDOW aggregates over first E epochs (complementary) ---
+(Per-sample mean and range across epochs 0..E-1; then averaged across selection.)
+
+Rule                   ProbMSgn mean LogitMSgn mean |LogitM| mean LogitMPrd mean NearPairGap mean   d_pred mean
+-----------------------------------------------------------------------------------------------------------
+CGR (high variance)        0.18±0.02     0.24±0.43     2.30±0.55     1.84±0.34     1.43±0.11     1.90±0.47
+Random                    -0.02±0.01    -0.52±0.22     1.80±0.24     1.23±0.17     0.82±0.03     1.28±0.23
+High confidence            0.37±0.02     1.31±0.16     1.98±0.16     1.85±0.11     1.72±0.05     1.88±0.18
+Low confidence            -0.37±0.01    -2.49±0.34     2.51±0.33     1.04±0.16     0.28±0.01     1.10±0.23
+High loss                 -0.35±0.01    -3.35±1.42     3.56±1.49     1.63±0.86     0.44±0.12     1.81±1.10
+
+Rule                    ProbMSgn rng LogitMSgn rng  |LogitM| rng LogitMPrd rng NearPairGap rng    d_pred rng
+-----------------------------------------------------------------------------------------------------------
+CGR (high variance)        1.15±0.02     6.74±2.23     4.67±2.23     3.84±1.32     3.26±0.44     3.97±1.82
+Random                     0.70±0.02     4.05±0.98     3.19±0.99     2.36±0.66     1.59±0.10     2.45±0.90
+High confidence            0.83±0.01     4.24±0.70     3.24±0.67     3.04±0.43     2.92±0.15     3.02±0.65
+Low confidence             0.46±0.02     3.77±1.26     3.69±1.27     2.08±0.65     0.56±0.05     2.24±0.89
+High loss                  0.62±0.05     8.08±6.02     7.64±5.94     4.10±3.34     0.96±0.34     4.75±4.28
+
+--- Overlaps of CGR selection with per-class bottom-K during epoch-E diagnostic pass ---
+  by |logit margin|         : 0.077 ± 0.006
+  by d_pred (feat-space)    : 0.066 ± 0.006
+  by nearest_pair_logit_gap : 0.059 ± 0.004
+  by logit_margin_pred      : 0.066 ± 0.005
+
+--- MEDIAN and IQR (robust) for skewed quantities at epoch-E diagnostic pass ---
+(Reported as: within-selection median  ±  cross-seed std of that median;
+              within-selection IQR (P75-P25)  ±  cross-seed std of that IQR.)
+
+  prob_margin_pred:
+    Rule                             Median              IQR
+    ---------------------- ---------------- ----------------
+    CGR (high variance)      0.701±0.046     0.444±0.027
+    Random                   0.343±0.035     0.522±0.041
+    High confidence          0.694±0.044     0.467±0.027
+    Low confidence           0.243±0.032     0.396±0.040
+    High loss                0.272±0.033     0.444±0.027
+
+  logit_margin_pred:
+    Rule                             Median              IQR
+    ---------------------- ---------------- ----------------
+    CGR (high variance)      2.163±0.174     2.046±0.171
+    Random                   1.022±0.074     1.580±0.155
+    High confidence          2.133±0.210     2.201±0.166
+    Low confidence           0.778±0.091     1.163±0.108
+    High loss                0.847±0.083     1.313±0.081
+
+  abs_logit_margin:
+    Rule                             Median              IQR
+    ---------------------- ---------------- ----------------
+    CGR (high variance)      2.263±0.163     1.945±0.126
+    Random                   1.474±0.121     1.907±0.161
+    High confidence          2.151±0.201     2.182±0.160
+    Low confidence           2.192±0.074     1.964±0.153
+    High loss                2.334±0.140     2.270±0.126
+
+  nearest_pair_gap:
+    Rule                             Median              IQR
+    ---------------------- ---------------- ----------------
+    CGR (high variance)      2.070±0.168     2.196±0.160
+    Random                   0.578±0.052     1.383±0.096
+    High confidence          2.118±0.212     2.227±0.158
+    Low confidence           0.206±0.014     0.352±0.029
+    High loss                0.240±0.007     0.443±0.029
+
+  nearest_pair_prob_gap:
+    Rule                             Median              IQR
+    ---------------------- ---------------- ----------------
+    CGR (high variance)      0.675±0.047     0.563±0.023
+    Random                   0.106±0.006     0.504±0.041
+    High confidence          0.689±0.047     0.486±0.026
+    Low confidence           0.008±0.000     0.022±0.001
+    High loss                0.008±0.001     0.031±0.006
+
+  d_target_signed:
+    Rule                             Median              IQR
+    ---------------------- ---------------- ----------------
+    CGR (high variance)      1.810±0.148     1.891±0.146
+    Random                   0.014±0.057     2.506±0.180
+    High confidence          1.842±0.163     1.770±0.139
+    Low confidence          -1.813±0.067     1.604±0.076
+    High loss               -1.829±0.132     1.979±0.124
+
+  d_target_absmin:
+    Rule                             Median              IQR
+    ---------------------- ---------------- ----------------
+    CGR (high variance)      1.821±0.144     1.781±0.145
+    Random                   0.494±0.052     1.180±0.058
+    High confidence          1.847±0.158     1.754±0.145
+    Low confidence           0.168±0.013     0.288±0.029
+    High loss                0.195±0.012     0.367±0.030
+
+  d_pred:
+    Rule                             Median              IQR
+    ---------------------- ---------------- ----------------
+    CGR (high variance)      1.892±0.151     1.631±0.158
+    Random                   0.891±0.060     1.336±0.126
+    High confidence          1.860±0.153     1.726±0.150
+    Low confidence           0.656±0.075     0.992±0.087
+    High loss                0.716±0.079     1.099±0.075
+
+  d_on_correct_subset:
+    Rule                             Median              IQR
+    ---------------------- ---------------- ----------------
+    CGR (high variance)      2.077±0.159     1.439±0.140
+    Random                   1.289±0.079     1.587±0.140
+    High confidence          1.964±0.177     1.662±0.129
+    Low confidence           0.243±0.033     0.335±0.113
+    High loss                0.779±0.126     1.303±0.236
