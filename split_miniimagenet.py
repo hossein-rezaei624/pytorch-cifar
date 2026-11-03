@@ -35,6 +35,11 @@ Mean ρ ± std over 5 seeds: 0.4478 ± 0.0147
 Range: [0.4279, 0.4680]
 
   Paper insertion: \bar\rho_{E=2,E=5} = 0.448 \pm 0.015
+aaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 === (b.2) Diagnostic table (averaged over 5 seeds) ===
 Per-class budget K = 100  (10 classes seen in task 1)
