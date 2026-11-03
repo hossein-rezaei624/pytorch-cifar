@@ -209,12 +209,12 @@ def diagnostic_table_one_seed(log, E, buffer_size, random_seed):
                                           replace=False)
                                for c in unique_classes
                            ]),
-        'High loss':       _top_k_per_class(mean_loss_E, labels, k_per_class, descending=True),
-        'High confidence': _top_k_per_class(mean_conf_E, labels, k_per_class, descending=True),
-        'Low confidence':  _top_k_per_class(mean_conf_E, labels, k_per_class, descending=False),
-        'CGR (variance)':  _top_k_per_class(variance, labels, k_per_class, descending=True),
+        'High loss':       top_k_per_class(mean_loss_E, descending=True),
+        'High confidence': top_k_per_class(mean_conf_E, descending=True),
+        'Low confidence':  top_k_per_class(mean_conf_E, descending=False),
+        'CGR (variance)':  top_k_per_class(variance, descending=True),
     }
-    print("aaaaaaaaaaaaaaaaaaaaaaaaaaa")
+
     row_dict = {}
     for name, idx in rules.items():
         row_dict[name] = {
